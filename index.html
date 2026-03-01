@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>八友電工 見積システム</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+
+  <!-- Excel DB読み込みオーバーレイ -->
+  <div id="dbOverlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:16px;padding:40px;max-width:500px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+      <div style="font-size:48px;margin-bottom:16px;">📊</div>
+      <h2 style="margin:0 0 8px;font-size:20px;">マスタDB読み込み</h2>
+      <p style="color:#666;margin:0 0 20px;font-size:13px;">見積マスタDB.xlsx をドラッグ＆ドロップ<br>または「ファイル選択」で読み込み</p>
+      <div id="dbDropZone" style="border:3px dashed #3b82f6;border-radius:12px;padding:40px 20px;margin-bottom:16px;cursor:pointer;transition:all 0.2s;"
+           ondragover="event.preventDefault();this.style.background='#eff6ff';this.style.borderColor='#2563eb';"
+           ondragleave="this.style.background='';this.style.borderColor='#3b82f6';"
+           ondrop="event.preventDefault();this.style.background='';loadExcelDB(event.dataTransfer.files[0]);">
+        <div style="font-size:32px;margin-bottom:8px;">📁</div>
+        <div style="font-weight:600;color:#3b82f6;">ここにドロップ</div>
+        <input type="file" id="dbFileInput" accept=".xlsx,.xls" style="display:none;" onchange="loadExcelDB(this.files[0]);">
+        <button onclick="document.getElementById('dbFileInput').click();" style="margin-top:12px;padding:8px 20px;background:#3b82f6;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;">ファイル選択</button>
+      </div>
+      <div id="dbLoadStatus" style="font-size:12px;color:#888;margin-bottom:12px;"></div>
+      <button onclick="closeDbOverlay()" style="padding:8px 24px;background:#e5e7eb;border:none;border-radius:8px;cursor:pointer;font-size:13px;">内蔵DBで続行</button>
+    </div>
+  </div>
+
+
+<div class="app" id="app">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-brand">
+      <h1>八友電工</h1>
+      <p>見積管理システム v2.0</p>
+      <div id="dbBadge" style="margin-top:6px;padding:2px 8px;border-radius:6px;font-size:10px;background:#fef3c7;color:#92400e;cursor:pointer;display:inline-block;" onclick="showDbOverlay()">内蔵DB</div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">メイン</div>
+      <div class="sidebar-item active" onclick="navigate('project', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+        <span>物件情報</span>
+      </div>
+      <div class="sidebar-item" onclick="navigate('items', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+        <span>明細入力</span>
+      </div>
+      <div class="sidebar-item" onclick="navigate('summary', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+        <span>内訳書</span>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">参照</div>
+      <div class="sidebar-item" onclick="navigate('reference', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z"/></svg>
+        <span>類似物件</span>
+        <span class="sidebar-badge" id="refBadge">0</span>
+      </div>
+      <div class="sidebar-item" onclick="navigate('check', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+        <span>妥当性チェック</span>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">データ</div>
+      <div class="sidebar-item" onclick="navigate('database', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        <span>実績DB</span>
+        <span class="sidebar-badge">33</span>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <p>Phase 2 — 基本機能</p>
+    </div>
+  </nav>
+
+  <!-- Main content -->
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title" id="topbarTitle">物件情報</span>
+      <span class="topbar-breadcrumb" id="topbarBread">新規見積作成</span>
+      <div class="topbar-actions">
+        <button class="btn btn-secondary btn-sm" onclick="saveToLocalStorage()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1-2 2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+          保存
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="exportEstimate()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>
+          Excel出力
+        </button>
+      </div>
+    </div>
+
+    <div class="content" id="content">
+
+      <!-- ===== Panel: Project Info ===== -->
+      <div class="panel active" id="panel-project">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+              物件基本情報
+            </span>
+          </div>
+          <div class="card-body">
+            <div class="form-grid">
+              <div class="form-group" style="grid-column:span 2">
+                <label class="form-label">物件名 *</label>
+                <input type="text" class="form-input" id="pj-name" placeholder="例：（仮称）○○邸新築工事" oninput="updateProject()">
+              </div>
+              <div class="form-group">
+                <label class="form-label">見積番号</label>
+                <input type="text" class="form-input" id="pj-number" placeholder="0000-01" oninput="updateProject()">
+              </div>
+              <div class="form-group">
+                <label class="form-label">見積日</label>
+                <input type="date" class="form-input" id="pj-date" oninput="updateProject()">
+              </div>
+              <div class="form-group">
+                <label class="form-label">得意先（元請） *</label>
+                <input type="text" class="form-input" id="pj-client" placeholder="例：○○工務店" oninput="updateProject()">
+              </div>
+              <div class="form-group">
+                <label class="form-label">構造 *</label>
+                <select class="form-select" id="pj-struct" onchange="updateProject(); searchSimilar();">
+                  <option value="">選択</option>
+                  <option value="木造">木造</option>
+                  <option value="S造">S造</option>
+                  <option value="RC造">RC造</option>
+                  <option value="RC+木造">RC+木造</option>
+                  <option value="SRC造">SRC造</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">用途</label>
+                <select class="form-select" id="pj-usage" onchange="updateProject(); searchSimilar();">
+                  <option value="">選択</option>
+                  <option value="住宅">住宅</option>
+                  <option value="集合住宅">集合住宅</option>
+                  <option value="事務所">事務所</option>
+                  <option value="店舗">店舗</option>
+                  <option value="倉庫">倉庫</option>
+                  <option value="工場">工場</option>
+                  <option value="保育園">保育園</option>
+                  <option value="スポーツ施設">スポーツ施設</option>
+                  <option value="その他">その他</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">新築/改修 *</label>
+                <select class="form-select" id="pj-type" onchange="updateProject(); searchSimilar();">
+                  <option value="">選択</option>
+                  <option value="新築">新築</option>
+                  <option value="改修">改修</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">階数</label>
+                <input type="number" class="form-input" id="pj-floors" placeholder="2" min="1" max="50" oninput="updateProject()">
+              </div>
+              <div class="form-group">
+                <label class="form-label">延床面積（㎡）</label>
+                <input type="number" class="form-input" id="pj-area-sqm" placeholder="120.5" step="0.1" oninput="syncArea('sqm'); updateProject(); searchSimilar();">
+              </div>
+              <div class="form-group">
+                <label class="form-label">延床面積（坪）</label>
+                <input type="number" class="form-input" id="pj-area-tsubo" placeholder="36.4" step="0.1" oninput="syncArea('tsubo'); updateProject();">
+              </div>
+              <div class="form-group">
+                <label class="form-label">施工場所</label>
+                <input type="text" class="form-input" id="pj-location" placeholder="例：東京都品川区" oninput="updateProject()">
+              </div>
+              <div class="form-group">
+                <label class="form-label">担当者</label>
+                <input type="text" class="form-input" id="pj-person" value="八木橋　友和" oninput="updateProject()">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6m-9-9h6m6 0h6"/></svg>
+              計算パラメータ
+            </span>
+          </div>
+          <div class="card-body">
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">労務費 原価率（デフォルト72%）</label>
+                <input type="number" class="form-input" id="pj-labor-rate" value="72" step="0.1" min="50" max="100" oninput="recalcAll()">
+              </div>
+              <div class="form-group">
+                <label class="form-label">基準労務売価（円/人工）</label>
+                <input type="number" class="form-input" id="pj-labor-sell" value="33000" step="1000" oninput="recalcAll()">
+              </div>
+              <div class="form-group">
+                <label class="form-label">消費税率（%）</label>
+                <input type="number" class="form-input" id="pj-tax" value="10" step="1">
+              </div>
+              <div class="form-group">
+                <label class="form-label">銅建値（円/kg）参考</label>
+                <input type="number" class="form-input" id="pj-copper" placeholder="1400" step="10">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Panel: Item Entry ===== -->
+      <div class="panel" id="panel-items">
+        <!-- Summary -->
+        
+          <!-- 労務費セクション (本丸EX準拠) -->
+          <div class="card" id="laborSection" style="margin-top:16px;display:none;">
+            <div style="padding:10px 16px;background:linear-gradient(135deg,#f0fdf4,#dcfce7);display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #d1d5db;">
+              <span style="font-weight:700;color:#16a34a;font-size:14px;">👷 労務費・経費</span>
+              <div>
+                <button class="btn btn-sm" style="background:#16a34a;color:#fff;font-size:11px;" onclick="showLaborDetail()">📋 内訳詳細</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr style="background:#f0fdf4;">
+                    <th style="width:24px">No</th>
+                    <th style="width:220px">項目名</th>
+                    <th style="width:160px">算出根拠</th>
+                    <th style="width:90px;text-align:right">見積金額</th>
+                    <th style="width:90px;text-align:right">原価金額</th>
+                    <th style="width:50px;text-align:right">率</th>
+                  </tr>
+                </thead>
+                <tbody id="laborBody"></tbody>
+                <tfoot>
+                  <tr style="font-weight:700;background:#dcfce7;">
+                    <td colspan="3" style="text-align:right;padding-right:8px;">労務費・経費 小計</td>
+                    <td class="td-right" id="laborSellTotal">-</td>
+                    <td class="td-right" id="laborCostTotal">-</td>
+                    <td class="td-right" id="laborRatioTotal">-</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          <div class="summary-bar">
+          <div class="summary-item highlight">
+            <div class="summary-label">見積合計（税抜）</div>
+            <div class="summary-value" id="sum-total">¥0</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-label">原価合計</div>
+            <div class="summary-value" id="sum-cost">¥0</div>
+          </div>
+          <div class="summary-item ok">
+            <div class="summary-label">利益率</div>
+            <div class="summary-value" id="sum-profit">0%</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-label">坪単価</div>
+            <div class="summary-value" id="sum-tsubo">—</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-label">㎡単価</div>
+            <div class="summary-value" id="sum-sqm">—</div>
+          </div>
+        </div>
+
+        <!-- Category tabs -->
+        <div class="category-tabs" id="catTabs"></div>
+
+        <!-- Item table per category -->
+        <div class="card" id="itemTableCard">
+          <div class="card-header">
+            <span class="card-title" id="catTitle">工種を選択してください</span>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-secondary btn-sm" onclick="openSearchModal(null)">🔍 DB検索</button>
+              <button class="btn btn-secondary btn-sm" onclick="showDbOverlay()" title="マスタDB読み込み">💾 DB</button>
+              <button class="btn btn-primary btn-sm" onclick="addItem()">＋ 行追加</button>
+              <button class="btn btn-secondary btn-sm" onclick="addAutoCalcRows()">⚙ 自動行追加</button>
+              <button class="btn btn-success btn-sm" onclick="calcAutoRows()">♻ 自動計算</button>
+            </div>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="table-wrap" style="max-height:calc(100vh - 340px); overflow-y:auto;">
+              <table id="itemTable">
+                <thead>
+                  <tr>
+                    <th style="width:28px">#</th>
+                    <th style="width:240px">品名</th>
+                    <th style="width:180px">規格</th>
+                    <th style="width:55px">数量</th>
+                    <th style="width:50px">単位</th>
+                    <th style="width:90px">見積単価</th>
+                    <th style="width:100px">見積金額</th>
+                    <th style="width:90px">備考(定価)</th>
+                    <th style="width:28px"></th>
+                  </tr>
+                </thead>
+                <tbody id="itemBody"></tbody>
+                <tfoot>
+                  <tr style="background:var(--bg); font-weight:600;">
+                    <td colspan="6" style="text-align:right; padding-right:12px;">合　計</td>
+                    <td class="td-right" id="catTotal" style="font-weight:700;">¥0</td>
+                    <td colspan="2"></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Panel: Summary (内訳書) ===== -->
+      <div class="panel" id="panel-summary">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">内訳書プレビュー</span>
+            <button class="btn btn-primary btn-sm" onclick="exportEstimate()">Excel出力</button>
+          </div>
+          <div class="card-body">
+            <div style="max-width:700px; margin:0 auto; font-family:'Noto Sans JP',sans-serif;">
+              <div style="text-align:center; margin-bottom:20px;">
+                <div style="font-size:11px; color:var(--text-sub);" id="prev-projname"></div>
+              </div>
+              <table style="width:100%;">
+                <thead>
+                  <tr>
+                    <th style="width:40%">工事内訳</th>
+                    <th style="width:12%">数量</th>
+                    <th style="width:12%">単位</th>
+                    <th style="width:18%">金額</th>
+                    <th style="width:18%">備考</th>
+                  </tr>
+                </thead>
+                <tbody id="summaryBody"></tbody>
+                <tfoot>
+                  <tr style="font-weight:700; background:var(--bg);">
+                    <td colspan="3" style="text-align:right; padding-right:12px;">合　計</td>
+                    <td class="td-right" id="summaryTotal">¥0</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Panel: Similar Projects ===== -->
+      <div class="panel" id="panel-reference">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">類似物件参照（実績DBより自動検索）</span>
+          </div>
+          <div class="card-body" id="refContent">
+            <p style="color:var(--text-sub);">物件情報（構造・用途・新築/改修）を入力すると、自動的に類似物件を検索します。</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Panel: Validation Check ===== -->
+      <div class="panel" id="panel-check">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">妥当性チェック</span>
+            <button class="btn btn-primary btn-sm" onclick="runValidation()">チェック実行</button>
+          </div>
+          <div class="card-body" id="checkContent">
+            <p style="color:var(--text-sub);">見積入力後に「チェック実行」で、実績DBとの比較診断を行います。</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Panel: Database ===== -->
+      <div class="panel" id="panel-database">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">実績データベース（33物件）</span>
+          </div>
+          <div class="card-body">
+            <div class="table-wrap" style="max-height:60vh; overflow-y:auto;">
+              <table id="dbTable">
+                <thead>
+                  <tr>
+                    <th>物件名</th><th>構造</th><th>新/改</th><th style="text-align:right">見積合計</th><th style="text-align:right">利益率</th><th style="text-align:right">坪単価</th>
+                  </tr>
+                </thead>
+                <tbody id="dbBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Material Search Modal -->
+<div class="modal-overlay" id="searchModal">
+  <div class="modal" style="max-width:780px;">
+    <div class="modal-header">
+      <span class="modal-title">📦 材料DBから検索</span>
+      <button class="modal-close" onclick="closeSearchModal()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:12px 20px;">
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <input type="text" class="form-input" id="searchQuery" placeholder="品名・規格で検索（例：VVF, コンセント, PF-S）" style="flex:1;font-size:13px;" oninput="searchMaterial()" autofocus>
+        <select class="form-select" id="searchCatFilter" onchange="searchMaterial()" style="width:130px;">
+          <option value="">全カテゴリ</option>
+          <option value="cable">電線・ケーブル</option>
+          <option value="conduit">電線管</option>
+          <option value="device">配線器具</option>
+          <option value="box">ボックス類</option>
+          <option value="panel">分電盤</option>
+          <option value="fixture">照明器具</option>
+          <option value="dimmer">調光器</option>
+          <option value="fire">火災報知器</option>
+          <option value="ground">接地工事</option>
+        </select>
+      </div>
+      <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px;" id="searchCount">540品目から検索</div>
+      <div class="table-wrap" style="max-height:400px;overflow-y:auto;">
+        <table id="searchResults">
+          <thead>
+            <tr>
+              <th style="width:200px">品名</th>
+              <th style="width:160px">規格</th>
+              <th style="width:40px">単位</th>
+              <th style="width:75px;text-align:right">見積単価</th>
+              <th style="width:75px;text-align:right">原価単価</th>
+              <th style="width:55px;text-align:right">原価率</th>
+              <th style="width:35px"></th>
+            </tr>
+          </thead>
+          <tbody id="searchBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Labor Detail Modal -->
+<div class="modal-overlay" id="laborModal">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-header">
+      <span class="modal-title">👷 歩掛計算 内訳詳細</span>
+      <button class="modal-close" onclick="document.getElementById('laborModal').classList.remove('show')">✕</button>
+    </div>
+    <div class="modal-body" id="laborModalBody" style="padding:0;"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+
+
+
+<!-- JS modules (読み込み順序が重要) -->
+<script src="js/data.js"></script>
+<script src="js/labor.js"></script>
+<script src="js/material-search.js"></script>
+<script src="js/calc-engine.js"></script>
+<script src="js/excel-loader.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>

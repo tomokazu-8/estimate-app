@@ -1,0 +1,14 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Node (if using npx serve)
+node_modules/
+
+# Temporary
+*.tmp
+*.bak
