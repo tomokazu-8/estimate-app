@@ -27,6 +27,12 @@ const AUTO_NAMES = [
   '機器取付け及び試験調整費', 'UTPケーブル試験費',
 ];
 
+// 労務費・経費から自動算出され価格が固定される行（手動変更不可）
+const LABOR_LOCKED_NAMES = [
+  '電工労務費', '器具取付費', '機器取付費',
+  '機器取付け及び試験調整費', '埋込器具用天井材開口費',
+];
+
 // ===== AUTO-CALC RULES =====
 const AUTO_CALC = {
   miscRate: { trunk: 0.05, lighting_fix: 0.04, outlet: 0.03, weak: 0.10, fire: 0.05 },
@@ -36,15 +42,15 @@ const AUTO_CALC = {
 
 // ===== DATA MODEL =====
 const CATEGORIES = [
-  { id: 'trunk', name: '1　幹線・分電盤工事', short: '幹線・分電盤' },
-  { id: 'lighting_fix', name: '2　照明器具供給取付工事', short: '照明器具' },
-  { id: 'outlet', name: '3　電灯コンセント設備工事', short: '電灯コンセント' },
-  { id: 'weak', name: '4　弱電設備工事', short: '弱電設備' },
-  { id: 'fire', name: '5　住宅用火災報知器', short: '火報' },
-  { id: 'apply', name: '6　電力会社協議及び申請費', short: '申請費' },
-  { id: 'temp', name: '7　仮設工事', short: '仮設工事' },
-  { id: 'overhead', name: '8　諸経費', short: '諸経費' },
-  { id: 'discount', name: '△　値引き', short: '値引き' },
+  { id: 'trunk',        name: '1　幹線・分電盤工事',       short: '幹線・分電盤',   rateMode: false },
+  { id: 'lighting_fix', name: '2　照明器具供給取付工事',    short: '照明器具',       rateMode: false },
+  { id: 'outlet',       name: '3　電灯コンセント設備工事',  short: '電灯コンセント', rateMode: false },
+  { id: 'weak',         name: '4　弱電設備工事',           short: '弱電設備',       rateMode: false },
+  { id: 'fire',         name: '5　住宅用火災報知器',       short: '火報',           rateMode: false },
+  { id: 'apply',        name: '6　電力会社協議及び申請費',  short: '申請費',         rateMode: true  },
+  { id: 'temp',         name: '7　仮設工事',               short: '仮設工事',       rateMode: true  },
+  { id: 'overhead',     name: '8　諸経費',                 short: '諸経費',         rateMode: true  },
+  { id: 'discount',     name: '△　値引き',                short: '値引き',         rateMode: true  },
 ];
 
 const UNITS = ['式','ｍ','台','個','面','箇所','本','枚','組','ｾｯﾄ','系統'];
@@ -90,3 +96,25 @@ CATEGORIES.forEach(c => items[c.id] = []);
 
 let currentCat = 'trunk';
 let itemIdCounter = 1;
+
+// 有効工種リスト（プリセット＋カスタム、localStorageから復元）
+let activeCategories = (function() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('activeCategories'));
+    if (Array.isArray(saved) && saved.length > 0) {
+      // 旧データに rateMode/ratePct/rateIncludeLabor がない場合はマイグレーション
+      return saved.map(c => {
+        const preset = CATEGORIES.find(p => p.id === c.id);
+        return {
+          ratePct: 0,
+          rateIncludeLabor: false,
+          rateMode: preset ? preset.rateMode : false,
+          ...c,
+        };
+      });
+    }
+  } catch(e) {}
+  return CATEGORIES.map(c => ({ ...c, active: true, custom: false, ratePct: 0, rateIncludeLabor: false }));
+})();
+
+let customCatCounter = parseInt(localStorage.getItem('customCatCounter') || '10', 10);

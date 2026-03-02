@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>八友電工 見積システム - コード構造図</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'Segoe UI', 'Noto Sans JP', sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; padding: 32px; }
+  h1 { text-align: center; font-size: 24px; margin-bottom: 8px; color: #f1f5f9; }
+  .subtitle { text-align: center; font-size: 13px; color: #64748b; margin-bottom: 32px; }
+
+  .diagram { max-width: 1200px; margin: 0 auto; }
+
+  /* File Tree */
+  .section { margin-bottom: 40px; }
+  .section-title { font-size: 16px; font-weight: 700; color: #38bdf8; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #1e3a5f; }
+
+  /* Architecture Diagram */
+  .arch-grid { display: grid; grid-template-columns: 200px 1fr; gap: 24px; margin-bottom: 40px; }
+
+  .layer { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+  .layer-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #94a3b8; margin-bottom: 10px; }
+
+  .file-card { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; transition: all 0.2s; cursor: default; }
+  .file-card:hover { border-color: #60a5fa; transform: translateX(4px); }
+  .file-name { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; font-weight: 600; color: #f1f5f9; margin-bottom: 4px; }
+  .file-desc { font-size: 11px; color: #94a3b8; line-height: 1.5; }
+  .file-lines { font-size: 10px; color: #475569; margin-top: 4px; font-family: monospace; }
+  .file-tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 9px; font-weight: 600; margin-right: 4px; }
+  .tag-html { background: #7c3aed20; color: #a78bfa; border: 1px solid #7c3aed40; }
+  .tag-js { background: #eab30820; color: #fbbf24; border: 1px solid #eab30840; }
+  .tag-css { background: #06b6d420; color: #22d3ee; border: 1px solid #06b6d440; }
+  .tag-json { background: #10b98120; color: #34d399; border: 1px solid #10b98140; }
+  .tag-entry { background: #f4364420; color: #f87171; border: 1px solid #f4364440; }
+
+  /* Dependency Flow */
+  .flow-container { position: relative; }
+  .flow-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .flow-box { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 10px 16px; font-size: 12px; font-weight: 500; text-align: center; min-width: 140px; }
+  .flow-arrow { color: #475569; font-size: 20px; flex-shrink: 0; }
+
+  /* Module Grid */
+  .module-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .module-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; overflow: hidden; }
+  .module-header { padding: 12px 16px; border-bottom: 1px solid #334155; display: flex; align-items: center; gap: 10px; }
+  .module-icon { font-size: 18px; }
+  .module-name { font-family: monospace; font-size: 13px; font-weight: 700; color: #fbbf24; }
+  .module-role { font-size: 11px; color: #94a3b8; margin-left: auto; }
+  .module-body { padding: 14px 16px; }
+  .func-list { list-style: none; }
+  .func-list li { font-size: 11px; padding: 3px 0; color: #cbd5e1; display: flex; align-items: center; gap: 6px; }
+  .func-list li::before { content: 'fn'; font-family: monospace; font-size: 9px; background: #3b82f620; color: #60a5fa; padding: 1px 4px; border-radius: 3px; }
+  .func-list li.data::before { content: 'var'; background: #10b98120; color: #34d399; }
+  .func-list li.const::before { content: 'const'; background: #a855f720; color: #c084fc; font-size: 8px; }
+  .exports { margin-top: 10px; padding-top: 10px; border-top: 1px solid #334155; }
+  .exports-label { font-size: 10px; color: #64748b; font-weight: 600; margin-bottom: 4px; }
+  .dep-tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; margin: 2px; background: #1e40af20; color: #93c5fd; border: 1px solid #1e40af40; }
+
+  /* Data Flow Diagram */
+  .dataflow { display: flex; flex-direction: column; gap: 12px; align-items: center; margin: 24px 0; }
+  .df-row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; justify-content: center; }
+  .df-box { background: #1e293b; border-radius: 10px; padding: 12px 20px; font-size: 12px; text-align: center; min-width: 130px; }
+  .df-box.data { border: 2px solid #10b981; }
+  .df-box.logic { border: 2px solid #3b82f6; }
+  .df-box.ui { border: 2px solid #a855f7; }
+  .df-box.ext { border: 2px solid #f59e0b; }
+  .df-box .df-label { font-weight: 700; margin-bottom: 2px; }
+  .df-box .df-sub { font-size: 10px; color: #94a3b8; }
+  .df-arrow-down { font-size: 24px; color: #475569; }
+  .df-arrow-right { font-size: 20px; color: #475569; }
+
+  /* Issue highlight */
+  .issue { background: #991b1b20; border: 1px solid #991b1b60; border-radius: 8px; padding: 12px 16px; margin-top: 16px; }
+  .issue-title { font-size: 12px; font-weight: 700; color: #fca5a5; margin-bottom: 4px; }
+  .issue-desc { font-size: 11px; color: #fca5a5aa; }
+
+  /* Stats bar */
+  .stats { display: flex; gap: 16px; justify-content: center; margin-bottom: 32px; flex-wrap: wrap; }
+  .stat { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px 20px; text-align: center; }
+  .stat-value { font-family: monospace; font-size: 22px; font-weight: 700; color: #38bdf8; }
+  .stat-label { font-size: 10px; color: #64748b; margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<h1>八友電工 見積システム - コード構造図</h1>
+<p class="subtitle">Vanilla HTML/CSS/JS SPA | 外部ライブラリ: SheetJS のみ | localStorage 永続化</p>
+
+<div class="diagram">
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat"><div class="stat-value">10</div><div class="stat-label">ファイル数</div></div>
+    <div class="stat"><div class="stat-value">~1,600</div><div class="stat-label">総行数 (コード)</div></div>
+    <div class="stat"><div class="stat-value">6</div><div class="stat-label">JSモジュール</div></div>
+    <div class="stat"><div class="stat-value">540</div><div class="stat-label">内蔵資材DB品目</div></div>
+    <div class="stat"><div class="stat-value">109</div><div class="stat-label">内蔵歩掛DB品目</div></div>
+    <div class="stat"><div class="stat-value">33</div><div class="stat-label">実績DB物件数</div></div>
+  </div>
+
+  <!-- File Tree -->
+  <div class="section">
+    <div class="section-title">ファイルツリー</div>
+    <div style="font-family:monospace; font-size:13px; line-height:2; background:#1e293b; padding:20px 24px; border-radius:12px; border:1px solid #334155;">
+      <div><span class="file-tag tag-entry">ENTRY</span> <span style="color:#a78bfa">index.html</span> <span style="color:#475569">── 画面構造 (470行)</span></div>
+      <div style="padding-left:16px; color:#334155;">|</div>
+      <div style="padding-left:16px;"><span style="color:#475569;">css/</span></div>
+      <div style="padding-left:32px;"><span class="file-tag tag-css">CSS</span> <span style="color:#22d3ee">style.css</span> <span style="color:#475569">── デザイン・レイアウト (180行)</span></div>
+      <div style="padding-left:16px; color:#334155;">|</div>
+      <div style="padding-left:16px;"><span style="color:#475569;">js/</span> <span style="color:#64748b; font-size:10px;">※読み込み順序が重要</span></div>
+      <div style="padding-left:32px;"><span class="file-tag tag-js">JS</span> <span style="color:#fbbf24">1. data.js</span> <span style="color:#475569">── データ定義・状態管理 (73行)</span></div>
+      <div style="padding-left:32px;"><span class="file-tag tag-js">JS</span> <span style="color:#fbbf24">2. labor.js</span> <span style="color:#475569">── 労務費計算エンジン (77行)</span></div>
+      <div style="padding-left:32px;"><span class="file-tag tag-js">JS</span> <span style="color:#fbbf24">3. material-search.js</span> <span style="color:#475569">── 資材検索・サジェスト (145行)</span></div>
+      <div style="padding-left:32px;"><span class="file-tag tag-js">JS</span> <span style="color:#fbbf24">4. calc-engine.js</span> <span style="color:#475569">── 自動計算エンジン (76行)</span></div>
+      <div style="padding-left:32px;"><span class="file-tag tag-js">JS</span> <span style="color:#fbbf24">5. excel-loader.js</span> <span style="color:#475569">── Excel D&amp;D読み込み (295行)</span></div>
+      <div style="padding-left:32px;"><span class="file-tag tag-js">JS</span> <span style="color:#fbbf24">6. app.js</span> <span style="color:#475569">── メインアプリ・画面制御 (560行)</span></div>
+      <div style="padding-left:16px; color:#334155;">|</div>
+      <div style="padding-left:16px;"><span style="color:#475569;">data/</span></div>
+      <div style="padding-left:32px;"><span class="file-tag tag-json">JSON</span> <span style="color:#34d399">material_db.json</span> <span style="color:#475569">── 内蔵資材DB (540品目)</span></div>
+      <div style="padding-left:32px;"><span class="file-tag tag-json">JSON</span> <span style="color:#34d399">bukariki_db.json</span> <span style="color:#475569">── 内蔵歩掛DB (109品目)</span></div>
+    </div>
+  </div>
+
+  <!-- Architecture Layers -->
+  <div class="section">
+    <div class="section-title">アーキテクチャ層構成</div>
+    <div class="dataflow">
+      <div class="df-row">
+        <div class="df-box ui"><div class="df-label">UI層 (View)</div><div class="df-sub">index.html + style.css</div></div>
+      </div>
+      <div class="df-arrow-down">&#9660;</div>
+      <div class="df-row">
+        <div class="df-box logic"><div class="df-label">アプリ制御層</div><div class="df-sub">app.js</div></div>
+      </div>
+      <div class="df-arrow-down">&#9660;</div>
+      <div class="df-row">
+        <div class="df-box logic"><div class="df-label">計算エンジン</div><div class="df-sub">labor.js / calc-engine.js</div></div>
+        <div class="df-arrow-right">&#9654;</div>
+        <div class="df-box logic"><div class="df-label">検索エンジン</div><div class="df-sub">material-search.js</div></div>
+        <div class="df-arrow-right">&#9654;</div>
+        <div class="df-box ext"><div class="df-label">外部取込</div><div class="df-sub">excel-loader.js</div></div>
+      </div>
+      <div class="df-arrow-down">&#9660;</div>
+      <div class="df-row">
+        <div class="df-box data"><div class="df-label">データ層</div><div class="df-sub">data.js + JSON + localStorage</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Module Detail -->
+  <div class="section">
+    <div class="section-title">各モジュール詳細</div>
+    <div class="module-grid">
+
+      <div class="module-card">
+        <div class="module-header">
+          <span class="module-icon">&#128203;</span>
+          <span class="module-name">data.js</span>
+          <span class="module-role">データ定義</span>
+        </div>
+        <div class="module-body">
+          <ul class="func-list">
+            <li class="data">MATERIAL_DB [ ] &mdash; 資材DBメイン配列</li>
+            <li class="data">BUKARIKI_DB [ ] &mdash; 歩掛DBメイン配列</li>
+            <li class="const">LABOR_RATES &mdash; {sell: 19000, cost: 12000}</li>
+            <li class="const">CAT_RATIOS &mdash; カテゴリ別原価率</li>
+            <li class="const">AUTO_CALC &mdash; 自動計算ルール</li>
+            <li class="const">CATEGORIES (9工種) &mdash; 工種マスタ</li>
+            <li class="const">UNITS (11種) &mdash; 単位マスタ</li>
+            <li class="const">PERF_DB (33物件) &mdash; 実績DB</li>
+            <li class="data">project &mdash; 物件情報オブジェクト</li>
+            <li class="data">items {} &mdash; カテゴリ別明細配列</li>
+            <li class="data">currentCat &mdash; 選択中カテゴリID</li>
+          </ul>
+          <div class="exports">
+            <div class="exports-label">依存元:</div>
+            <span class="dep-tag">全モジュール</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="module-card">
+        <div class="module-header">
+          <span class="module-icon">&#128119;</span>
+          <span class="module-name">labor.js</span>
+          <span class="module-role">労務費計算</span>
+        </div>
+        <div class="module-body">
+          <ul class="func-list">
+            <li>findBukariki(name, spec) &mdash; 歩掛値検索 (3段階フォールバック)</li>
+            <li>classifyForLabor(name, spec, unit) &mdash; 労務分類 (配線/器具/機器)</li>
+            <li>calcLaborBreakdown(catId) &mdash; 労務費内訳計算</li>
+          </ul>
+          <div class="exports">
+            <div class="exports-label">参照する変数:</div>
+            <span class="dep-tag">BUKARIKI_DB</span>
+            <span class="dep-tag">items</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="module-card">
+        <div class="module-header">
+          <span class="module-icon">&#128269;</span>
+          <span class="module-name">material-search.js</span>
+          <span class="module-role">資材検索</span>
+        </div>
+        <div class="module-body">
+          <ul class="func-list">
+            <li>openSearchModal(itemId) &mdash; 検索モーダル表示</li>
+            <li>searchMaterial() &mdash; DB絞込検索 (複数ワードAND)</li>
+            <li>selectMaterial(idx) &mdash; 検索結果を明細に反映</li>
+            <li>showSuggestions(id, query) &mdash; インライン候補表示</li>
+            <li>applySuggestion(id, idx) &mdash; 候補選択を反映</li>
+          </ul>
+          <div class="exports">
+            <div class="exports-label">参照する変数:</div>
+            <span class="dep-tag">MATERIAL_DB</span>
+            <span class="dep-tag">items</span>
+            <span class="dep-tag">currentCat</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="module-card">
+        <div class="module-header">
+          <span class="module-icon">&#9881;</span>
+          <span class="module-name">calc-engine.js</span>
+          <span class="module-role">自動計算</span>
+        </div>
+        <div class="module-body">
+          <ul class="func-list">
+            <li>addAutoCalcRows() &mdash; 工種別テンプレート行追加</li>
+            <li>calcAutoRows() &mdash; 雑材料/運搬費/労務費の自動算出</li>
+            <li class="const">CAT_RATIOS (重複定義) &mdash; カテゴリ別原価率</li>
+          </ul>
+          <div class="exports">
+            <div class="exports-label">参照する変数:</div>
+            <span class="dep-tag">AUTO_CALC</span>
+            <span class="dep-tag">items</span>
+            <span class="dep-tag">currentCat</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="module-card">
+        <div class="module-header">
+          <span class="module-icon">&#128196;</span>
+          <span class="module-name">excel-loader.js</span>
+          <span class="module-role">Excel取込</span>
+        </div>
+        <div class="module-body">
+          <ul class="func-list">
+            <li>showDbOverlay() &mdash; DB読込オーバーレイ表示</li>
+            <li>closeDbOverlay() &mdash; オーバーレイ非表示</li>
+            <li>updateDbStatus() &mdash; DBバッジ更新</li>
+            <li>loadExcelDB(file) &mdash; Excel解析・DB差替え</li>
+            <li class="data">externalDbLoaded &mdash; 外部DB有無フラグ</li>
+          </ul>
+          <div class="exports">
+            <div class="exports-label">参照する変数:</div>
+            <span class="dep-tag">MATERIAL_DB</span>
+            <span class="dep-tag">BUKARIKI_DB</span>
+            <span class="dep-tag">LABOR_RATES</span>
+            <span class="dep-tag">CAT_RATIOS</span>
+            <span class="dep-tag">SheetJS (外部)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="module-card">
+        <div class="module-header">
+          <span class="module-icon">&#127968;</span>
+          <span class="module-name">app.js</span>
+          <span class="module-role">メインアプリ</span>
+        </div>
+        <div class="module-body">
+          <ul class="func-list">
+            <li>loadDefaultDB() &mdash; JSON DB初期読み込み</li>
+            <li>navigate(panel) &mdash; パネル切替・画面遷移</li>
+            <li>updateProject() &mdash; 物件情報のフォーム同期</li>
+            <li>renderItems() &mdash; 明細テーブル描画</li>
+            <li>renderLaborSection() &mdash; 労務費セクション描画</li>
+            <li>updateSummaryBar() &mdash; サマリーバー更新</li>
+            <li>renderSummary() &mdash; 内訳書プレビュー描画</li>
+            <li>searchSimilar() &mdash; 類似物件検索・表示</li>
+            <li>runValidation() &mdash; 妥当性チェック実行</li>
+            <li>saveToLocalStorage() &mdash; データ永続化</li>
+            <li>exportEstimate() &mdash; Excel出力 (未実装)</li>
+          </ul>
+          <div class="exports">
+            <div class="exports-label">依存先:</div>
+            <span class="dep-tag">data.js (全変数)</span>
+            <span class="dep-tag">labor.js</span>
+            <span class="dep-tag">material-search.js</span>
+            <span class="dep-tag">calc-engine.js</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Data Flow -->
+  <div class="section">
+    <div class="section-title">データフロー</div>
+    <div style="background:#1e293b; border:1px solid #334155; border-radius:12px; padding:24px;">
+      <div style="display:grid; grid-template-columns:1fr 40px 1fr 40px 1fr; align-items:center; text-align:center; gap:8px; margin-bottom:24px;">
+        <div class="df-box ext" style="margin:0;">
+          <div class="df-label">入力ソース</div>
+          <div class="df-sub">Excel D&amp;D / JSON / localStorage</div>
+        </div>
+        <div style="color:#475569; font-size:24px;">&#10230;</div>
+        <div class="df-box data" style="margin:0;">
+          <div class="df-label">グローバル状態</div>
+          <div class="df-sub">MATERIAL_DB, BUKARIKI_DB, items, project</div>
+        </div>
+        <div style="color:#475569; font-size:24px;">&#10230;</div>
+        <div class="df-box ui" style="margin:0;">
+          <div class="df-label">DOM 描画</div>
+          <div class="df-sub">innerHTML による直接書換</div>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px;">
+        <div style="background:#0f172a; border-radius:8px; padding:12px; font-size:11px;">
+          <div style="color:#f59e0b; font-weight:600; margin-bottom:4px;">ユーザー操作</div>
+          <div style="color:#94a3b8;">oninput/onchange/onclick</div>
+          <div style="color:#94a3b8;">&#8594; updateItem() / updateProject()</div>
+        </div>
+        <div style="background:#0f172a; border-radius:8px; padding:12px; font-size:11px;">
+          <div style="color:#3b82f6; font-weight:600; margin-bottom:4px;">再計算</div>
+          <div style="color:#94a3b8;">renderItems() &rarr; renderLaborSection()</div>
+          <div style="color:#94a3b8;">&rarr; updateSummaryBar() &rarr; renderCatTabs()</div>
+        </div>
+        <div style="background:#0f172a; border-radius:8px; padding:12px; font-size:11px;">
+          <div style="color:#10b981; font-weight:600; margin-bottom:4px;">永続化</div>
+          <div style="color:#94a3b8;">saveToLocalStorage()</div>
+          <div style="color:#94a3b8;">&#8594; JSON.stringify &rarr; localStorage</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen Structure -->
+  <div class="section">
+    <div class="section-title">画面構成 (6パネル SPA)</div>
+    <div style="display:grid; grid-template-columns:180px 1fr; gap:16px; background:#1e293b; border:1px solid #334155; border-radius:12px; padding:20px;">
+      <div style="background:#0f172a; border-radius:8px; padding:16px;">
+        <div style="font-size:11px; color:#64748b; font-weight:700; margin-bottom:12px;">SIDEBAR</div>
+        <div style="font-size:11px; color:#94a3b8; padding:4px 0; border-left:2px solid #3b82f6; padding-left:8px;">&#127968; 物件情報</div>
+        <div style="font-size:11px; color:#94a3b8; padding:4px 0; padding-left:10px;">&#128202; 明細入力</div>
+        <div style="font-size:11px; color:#94a3b8; padding:4px 0; padding-left:10px;">&#128196; 内訳書</div>
+        <div style="font-size:11px; color:#64748b; margin-top:8px; margin-bottom:4px; font-size:9px;">参照</div>
+        <div style="font-size:11px; color:#94a3b8; padding:4px 0; padding-left:10px;">&#128270; 類似物件</div>
+        <div style="font-size:11px; color:#94a3b8; padding:4px 0; padding-left:10px;">&#9989; 妥当性チェック</div>
+        <div style="font-size:11px; color:#64748b; margin-top:8px; margin-bottom:4px; font-size:9px;">データ</div>
+        <div style="font-size:11px; color:#94a3b8; padding:4px 0; padding-left:10px;">&#128451; 実績DB</div>
+      </div>
+      <div>
+        <div style="background:#0f172a; border-radius:8px; padding:12px; margin-bottom:8px; font-size:11px; color:#94a3b8;">
+          <span style="font-weight:700; color:#f1f5f9;">TOPBAR</span> &mdash; タイトル + 物件名 + [保存] [Excel出力]
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <div style="background:#0f172a; border-radius:8px; padding:12px; font-size:11px;">
+            <div style="color:#a78bfa; font-weight:600;">panel-project</div>
+            <div style="color:#64748b;">物件基本情報フォーム</div>
+            <div style="color:#64748b;">計算パラメータ設定</div>
+          </div>
+          <div style="background:#0f172a; border-radius:8px; padding:12px; font-size:11px;">
+            <div style="color:#a78bfa; font-weight:600;">panel-items</div>
+            <div style="color:#64748b;">サマリーバー (5指標)</div>
+            <div style="color:#64748b;">工種タブ (9カテゴリ)</div>
+            <div style="color:#64748b;">明細テーブル (CRUD)</div>
+            <div style="color:#64748b;">労務費セクション</div>
+          </div>
+          <div style="background:#0f172a; border-radius:8px; padding:12px; font-size:11px;">
+            <div style="color:#a78bfa; font-weight:600;">panel-summary</div>
+            <div style="color:#64748b;">内訳書プレビュー</div>
+          </div>
+          <div style="background:#0f172a; border-radius:8px; padding:12px; font-size:11px;">
+            <div style="color:#a78bfa; font-weight:600;">panel-reference</div>
+            <div style="color:#64748b;">類似物件自動検索</div>
+            <div style="color:#64748b;">坪単価/利益率レンジ</div>
+          </div>
+          <div style="background:#0f172a; border-radius:8px; padding:12px; font-size:11px;">
+            <div style="color:#a78bfa; font-weight:600;">panel-check</div>
+            <div style="color:#64748b;">坪単価チェック</div>
+            <div style="color:#64748b;">利益率チェック</div>
+            <div style="color:#64748b;">工種別構成比</div>
+          </div>
+          <div style="background:#0f172a; border-radius:8px; padding:12px; font-size:11px;">
+            <div style="color:#a78bfa; font-weight:600;">panel-database</div>
+            <div style="color:#64748b;">実績DB一覧 (33物件)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Issues Found -->
+  <div class="section">
+    <div class="section-title">検出された問題点</div>
+    <div class="issue">
+      <div class="issue-title">&#9888; excel-loader.js にコードが重複</div>
+      <div class="issue-desc">externalDbLoaded, showDbOverlay, closeDbOverlay, updateDbStatus, loadExcelDB がファイル内で2回定義されています（150行目以降が完全な重複）。</div>
+    </div>
+    <div class="issue" style="margin-top:8px;">
+      <div class="issue-title">&#9888; CAT_RATIOS が data.js と calc-engine.js で二重定義</div>
+      <div class="issue-desc">data.js (行9) と calc-engine.js (行72) で別々の値が定義されており、後から読み込まれる calc-engine.js の値で上書きされます。</div>
+    </div>
+    <div class="issue" style="margin-top:8px;">
+      <div class="issue-title">&#9888; exportEstimate() が未実装</div>
+      <div class="issue-desc">Excel出力ボタンは存在しますが、関数はトースト表示のみです。</div>
+    </div>
+    <div class="issue" style="margin-top:8px;">
+      <div class="issue-title">&#9888; グローバルスコープに全変数・関数が展開</div>
+      <div class="issue-desc">ES Modules未使用のため、全ての変数と関数がwindowスコープに存在し、名前衝突のリスクがあります。</div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

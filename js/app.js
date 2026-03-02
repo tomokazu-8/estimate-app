@@ -1,6 +1,6 @@
 let _laborSellTotal = 0; // renderLaborSection → updateSummaryBar で参照
-let _navHistory = [];
-let _currentPanel = 'project';
+let _undoStack = [];
+let _redoStack = [];
 
 // ===== DB初期化（JSONファイルから読み込み） =====
 async function loadDefaultDB() {
@@ -31,17 +31,26 @@ async function loadDefaultDB() {
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('pj-date').value = project.date;
+  // activeCategories の最初の有効工種を currentCat に設定
+  const firstActive = activeCategories.find(c => c.active);
+  if (firstActive) currentCat = firstActive.id;
+  // カスタム工種の items を初期化（localStorage から復元した場合に必要）
+  activeCategories.filter(c => c.custom).forEach(c => { if (!items[c.id]) items[c.id] = []; });
   renderCatTabs();
   renderDBTable();
   showDbOverlay();
   loadDefaultDB().then(() => { loadFromLocalStorage(); updateDbStatus(); recalcAll(); });
 });
 
-// ===== NAVIGATION =====
-function navigate(panel, el, isBack = false) {
-  if (!isBack && _currentPanel !== panel) _navHistory.push(_currentPanel);
-  _currentPanel = panel;
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.metaKey) {
+    if (!e.shiftKey && e.key === 'z') { e.preventDefault(); undoAction(); }
+    if (e.key === 'y' || (e.shiftKey && e.key === 'Z')) { e.preventDefault(); redoAction(); }
+  }
+});
 
+// ===== NAVIGATION =====
+function navigate(panel, el) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.sidebar-item').forEach(s => s.classList.remove('active'));
   document.getElementById('panel-' + panel).classList.add('active');
@@ -56,16 +65,68 @@ function navigate(panel, el, isBack = false) {
   const titles = { project:'物件情報', items:'明細入力', summary:'内訳書', reference:'類似物件参照', check:'妥当性チェック', database:'実績DB' };
   document.getElementById('topbarTitle').textContent = titles[panel] || '';
   document.getElementById('topbarBread').textContent = project.name || '新規見積作成';
-  document.getElementById('backBtn').style.display = _navHistory.length > 0 ? '' : 'none';
 
-  if (panel === 'summary') renderSummary();
+  if (panel === 'summary') { renderCategoryManager(); renderSummary(); }
   if (panel === 'reference') searchSimilar();
   if (panel === 'items') { renderCatTabs(); renderItems(); }
 }
 
-function navigateBack() {
-  if (_navHistory.length === 0) return;
-  navigate(_navHistory.pop(), null, true);
+// ===== UNDO / REDO =====
+function saveUndoState() {
+  _undoStack.push({
+    items: JSON.parse(JSON.stringify(items)),
+    itemIdCounter: itemIdCounter,
+    activeCategories: JSON.parse(JSON.stringify(activeCategories)),
+    customCatCounter: customCatCounter,
+  });
+  if (_undoStack.length > 50) _undoStack.shift();
+  _redoStack = []; // 新しい操作でRedoスタックをクリア
+  document.getElementById('backBtn').style.display = '';
+  document.getElementById('redoBtn').style.display = 'none';
+}
+
+function undoAction() {
+  if (_undoStack.length === 0) return;
+  _redoStack.push({
+    items: JSON.parse(JSON.stringify(items)),
+    itemIdCounter: itemIdCounter,
+    activeCategories: JSON.parse(JSON.stringify(activeCategories)),
+    customCatCounter: customCatCounter,
+  });
+  const state = _undoStack.pop();
+  Object.keys(state.items).forEach(k => items[k] = state.items[k]);
+  itemIdCounter = state.itemIdCounter;
+  if (state.activeCategories) {
+    activeCategories = state.activeCategories;
+    customCatCounter = state.customCatCounter;
+  }
+  renderItems();
+  renderCatTabs();
+  document.getElementById('backBtn').style.display = _undoStack.length > 0 ? '' : 'none';
+  document.getElementById('redoBtn').style.display = '';
+  showToast('元に戻しました');
+}
+
+function redoAction() {
+  if (_redoStack.length === 0) return;
+  _undoStack.push({
+    items: JSON.parse(JSON.stringify(items)),
+    itemIdCounter: itemIdCounter,
+    activeCategories: JSON.parse(JSON.stringify(activeCategories)),
+    customCatCounter: customCatCounter,
+  });
+  const state = _redoStack.pop();
+  Object.keys(state.items).forEach(k => items[k] = state.items[k]);
+  itemIdCounter = state.itemIdCounter;
+  if (state.activeCategories) {
+    activeCategories = state.activeCategories;
+    customCatCounter = state.customCatCounter;
+  }
+  renderItems();
+  renderCatTabs();
+  document.getElementById('backBtn').style.display = '';
+  document.getElementById('redoBtn').style.display = _redoStack.length > 0 ? '' : 'none';
+  showToast('やり直しました');
 }
 
 // ===== PROJECT =====
@@ -107,7 +168,13 @@ function syncArea(from) {
 // ===== CATEGORY TABS =====
 function renderCatTabs() {
   const el = document.getElementById('catTabs');
-  el.innerHTML = CATEGORIES.map(c => {
+  // rateMode 工種は明細入力タブに表示しない
+  const activeCats = activeCategories.filter(c => c.active && !c.rateMode);
+  // currentCat が非表示になった場合は最初の有効工種に切り替える
+  if (!activeCats.find(c => c.id === currentCat) && activeCats.length > 0) {
+    currentCat = activeCats[0].id;
+  }
+  el.innerHTML = activeCats.map(c => {
     const total = getCatTotal(c.id);
     const amountStr = total > 0 ? ` ¥${formatNum(total)}` : '';
     return `<div class="cat-tab${c.id===currentCat?' active':''}" onclick="switchCat('${c.id}')">${c.short}<span class="cat-amount">${amountStr}</span></div>`;
@@ -120,12 +187,199 @@ function switchCat(catId) {
   renderItems();
 }
 
+// ===== CATEGORY MANAGER =====
+function saveActiveCategories() {
+  localStorage.setItem('activeCategories', JSON.stringify(activeCategories));
+  localStorage.setItem('customCatCounter', String(customCatCounter));
+}
+
+function renderCategoryManager() {
+  const el = document.getElementById('catManagerList');
+  if (!el) return;
+  el.innerHTML = activeCategories.map((c, idx) => {
+    const canUp = idx > 0;
+    const canDown = idx < activeCategories.length - 1;
+    const btnStyle = 'padding:0 5px;font-size:10px;line-height:1.6;border:1px solid var(--border);background:var(--bg);border-radius:3px;';
+    const moveBtns = `
+      <div style="display:flex;flex-direction:column;gap:1px;flex-shrink:0;">
+        <button onclick="moveCat('${c.id}','up')" ${canUp ? '' : 'disabled'}
+                style="${btnStyle}${canUp ? 'cursor:pointer;' : 'opacity:0.25;cursor:default;'}">▲</button>
+        <button onclick="moveCat('${c.id}','down')" ${canDown ? '' : 'disabled'}
+                style="${btnStyle}${canDown ? 'cursor:pointer;' : 'opacity:0.25;cursor:default;'}">▼</button>
+      </div>`;
+
+    const checkbox = `<input type="checkbox" ${c.active ? 'checked' : ''}
+      onchange="toggleCategory('${c.id}', this.checked)"
+      style="width:15px;height:15px;cursor:pointer;flex-shrink:0;">`;
+
+    const nameSpan = `<span style="font-size:13px;flex:1;min-width:0;">${c.name}</span>`;
+
+    const deleteBtn = c.custom
+      ? `<button class="btn btn-sm" onclick="removeCustomCategory('${c.id}')"
+               style="padding:2px 8px;font-size:11px;color:#ef4444;border:1px solid #ef4444;background:transparent;flex-shrink:0;">削除</button>`
+      : '';
+
+    if (c.rateMode) {
+      const base = calcRateBase(c.id);
+      const pct = c.ratePct || 0;
+      const rawAmt = Math.round(base * pct / 100);
+      const amt = c.id === 'discount' ? -rawAmt : rawAmt;
+      const amtColor = amt < 0 ? '#ef4444' : 'var(--text)';
+      const rateSection = `
+        <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;flex-shrink:0;">
+          <input type="number" value="${pct}" step="0.1" min="0"
+                 onchange="updateRatePct('${c.id}', parseFloat(this.value)||0)"
+                 style="width:52px;text-align:right;padding:2px 4px;font-size:12px;border:1px solid var(--border);border-radius:4px;">
+          <span style="font-size:12px;">%</span>
+          <label style="display:flex;align-items:center;gap:3px;font-size:11px;cursor:pointer;color:var(--text-sub);white-space:nowrap;">
+            <input type="checkbox" ${c.rateIncludeLabor ? 'checked' : ''}
+                   onchange="updateRateIncludeLabor('${c.id}', this.checked)"
+                   style="width:13px;height:13px;">労務費含む
+          </label>
+          <span style="font-size:12px;font-weight:600;color:${amtColor};white-space:nowrap;">
+            =${amt < 0 ? ' -' : ' '}¥${formatNum(Math.abs(amt))}
+          </span>
+        </div>`;
+      return `<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--bg-alt);background:#faf9f7;">
+        ${moveBtns}${checkbox}${nameSpan}${rateSection}${deleteBtn}
+      </div>`;
+    }
+
+    return `<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--bg-alt);">
+      ${moveBtns}${checkbox}${nameSpan}${deleteBtn}
+    </div>`;
+  }).join('');
+}
+
+function toggleCategory(catId, checked) {
+  const cat = activeCategories.find(c => c.id === catId);
+  if (!cat) return;
+  cat.active = checked;
+  saveActiveCategories();
+  renderCatTabs();
+  renderSummary();
+  updateSummaryBar();
+}
+
+function addCustomCategory() {
+  const nameEl = document.getElementById('customCatName');
+  const rawName = nameEl.value.trim();
+  if (!rawName) { showToast('工種名を入力してください'); return; }
+  const id = 'custom_' + customCatCounter;
+  const name = String(customCatCounter) + '\u3000' + rawName;
+  const short = rawName.length > 8 ? rawName.slice(0, 8) + '…' : rawName;
+  activeCategories.push({ id, name, short, active: true, custom: true, rateMode: false, ratePct: 0, rateIncludeLabor: false });
+  if (!items[id]) items[id] = [];
+  customCatCounter++;
+  nameEl.value = '';
+  saveActiveCategories();
+  renderCategoryManager();
+  renderCatTabs();
+  showToast(`「${name}」を追加しました`);
+}
+
+function removeCustomCategory(catId) {
+  const idx = activeCategories.findIndex(c => c.id === catId);
+  if (idx === -1) return;
+  const name = activeCategories[idx].name;
+  activeCategories.splice(idx, 1);
+  // currentCat が削除された工種なら最初の有効工種に切り替える
+  if (currentCat === catId) {
+    const first = activeCategories.find(c => c.active);
+    if (first) currentCat = first.id;
+  }
+  saveActiveCategories();
+  renderCategoryManager();
+  renderCatTabs();
+  showToast(`「${name}」を削除しました`);
+}
+
+// ===== CATEGORY ORDER / RATE OPERATIONS =====
+function moveCat(catId, direction) {
+  const idx = activeCategories.findIndex(c => c.id === catId);
+  if (idx === -1) return;
+  const newIdx = direction === 'up' ? idx - 1 : idx + 1;
+  if (newIdx < 0 || newIdx >= activeCategories.length) return;
+  [activeCategories[idx], activeCategories[newIdx]] = [activeCategories[newIdx], activeCategories[idx]];
+  saveActiveCategories();
+  renderCategoryManager();
+  renderCatTabs();
+  renderSummary();
+  updateSummaryBar();
+}
+
+function updateRatePct(catId, value) {
+  const cat = activeCategories.find(c => c.id === catId);
+  if (!cat) return;
+  cat.ratePct = parseFloat(value) || 0;
+  saveActiveCategories();
+  renderCategoryManager();
+  renderSummary();
+  updateSummaryBar();
+}
+
+function updateRateIncludeLabor(catId, checked) {
+  const cat = activeCategories.find(c => c.id === catId);
+  if (!cat) return;
+  cat.rateIncludeLabor = checked;
+  saveActiveCategories();
+  renderCategoryManager();
+  renderSummary();
+  updateSummaryBar();
+}
+
 function getCatTotal(catId) {
   // Material items only (labor is tracked separately)
   return (items[catId] || []).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
 }
 
+// ===== 割合計算工種 ヘルパー =====
+function calcRateBase(catId) {
+  const idx = activeCategories.findIndex(c => c.id === catId);
+  let base = 0;
+  for (let i = 0; i < idx; i++) {
+    const c = activeCategories[i];
+    if (!c.active) continue;
+    base += getCatAmount(c.id);
+  }
+  const cat = activeCategories[idx];
+  if (cat && cat.rateIncludeLabor) base += _laborSellTotal;
+  return base;
+}
+
+function getRateCatAmount(catId) {
+  const cat = activeCategories.find(c => c.id === catId);
+  if (!cat) return 0;
+  const base = calcRateBase(catId);
+  const amt = Math.round(base * (cat.ratePct || 0) / 100);
+  return cat.id === 'discount' ? -amt : amt;
+}
+
+function getCatAmount(catId) {
+  const cat = activeCategories.find(c => c.id === catId);
+  if (cat && cat.rateMode) return getRateCatAmount(catId);
+  return getCatTotal(catId);
+}
+
 // ===== ITEM ENTRY =====
+
+// 労務費セクションの計算値を、明細リスト内の固定行に自動反映する
+function syncLaborItemPrices() {
+  const lb = calcLaborBreakdown(currentCat);
+  const priceMap = {
+    '電工労務費':               Math.round(lb.totalKosu * LABOR_RATES.sell),
+    '器具取付費':               Math.round(lb.fixtureKosu * LABOR_RATES.sell),
+    '機器取付費':               Math.round(lb.equipKosu * LABOR_RATES.sell),
+    '機器取付け及び試験調整費': Math.round(lb.totalKosu * LABOR_RATES.sell),
+    '埋込器具用天井材開口費':   Math.round(lb.ceilingCount * 1410),
+  };
+  (items[currentCat] || []).forEach(item => {
+    if (Object.prototype.hasOwnProperty.call(priceMap, item.name)) {
+      item.price  = priceMap[item.name];
+      item.amount = priceMap[item.name];
+    }
+  });
+}
 
 // ===== LABOR SECTION RENDERING (本丸EX準拠) =====
 function renderLaborSection() {
@@ -220,7 +474,9 @@ function showLaborDetail() {
 }
 
 function renderItems() {
-  const cat = CATEGORIES.find(c => c.id === currentCat);
+  syncLaborItemPrices(); // 労務費セクションの計算値を固定行に自動反映
+
+  const cat = activeCategories.find(c => c.id === currentCat);
   document.getElementById('catTitle').textContent = cat ? cat.name : '';
 
   const tbody = document.getElementById('itemBody');
@@ -228,6 +484,7 @@ function renderItems() {
 
   tbody.innerHTML = list.map((item, idx) => {
     const isAuto = AUTO_NAMES.includes(item.name);
+    const isLaborLocked = LABOR_LOCKED_NAMES.includes(item.name);
     return `
     <tr data-id="${item.id}" class="${isAuto ? 'auto-calc' : ''}">
       <td class="td-center" style="color:var(--text-dim);font-size:11px;">${idx+1}</td>
@@ -239,9 +496,9 @@ function renderItems() {
       <td><input class="num" value="${item.qty||''}" onchange="updateItem(${item.id},'qty',this.value)" type="number" step="any"></td>
       <td><select onchange="updateItem(${item.id},'unit',this.value)">${UNITS.map(u=>`<option${u===item.unit?' selected':''}>${u}</option>`).join('')}</select></td>
       <td><input class="num" value="${item.bukariki !== '' && item.bukariki !== undefined ? item.bukariki : ''}" onchange="updateItem(${item.id},'bukariki',this.value)" type="number" step="0.001" placeholder="自動" ${isAuto ? 'disabled' : ''}></td>
-      <td><input class="num" value="${item.price||''}" onchange="updateItem(${item.id},'price',this.value)" type="number" step="any"></td>
+      <td><input class="num" value="${item.price||''}" onchange="updateItem(${item.id},'price',this.value)" type="number" step="any" ${isLaborLocked ? 'disabled style="background:var(--bg-alt);color:var(--text-sub);"' : ''}></td>
       <td class="td-right" style="font-weight:500;">${item.amount ? '¥'+formatNum(Math.round(item.amount)) : ''}</td>
-      <td><input value="${esc(item.note)}" onchange="updateItem(${item.id},'note',this.value)" placeholder="定価" style="font-size:11px;color:var(--text-sub);"></td>
+      <td><input value="${esc(item.note)}" onchange="updateItem(${item.id},'note',this.value)" placeholder="${isLaborLocked ? '自動計算' : (item.name==='雑材料消耗品'||item.name==='運搬費') ? '例: 5.0%' : '定価'}" style="font-size:11px;color:var(--text-sub);" ${isLaborLocked ? 'readonly' : ''}></td>
       <td>
         <span style="display:flex;gap:2px;">
           <button class="row-delete" onclick="openSearchModal(${item.id})" title="材料DBから検索" style="opacity:0.5;color:var(--accent);">🔍</button>
@@ -257,6 +514,7 @@ function renderItems() {
 }
 
 function addItem() {
+  saveUndoState();
   const id = itemIdCounter++;
   items[currentCat].push({ id, name:'', spec:'', qty:'', unit:'式', price:'', amount:0, note:'', bukariki:'' });
   renderItems();
@@ -273,21 +531,49 @@ function updateItem(id, field, value) {
   const list = items[currentCat];
   const item = list.find(i => i.id === id);
   if (!item) return;
-  
+  saveUndoState();
   item[field] = value;
-  
+
   // Auto calc amount
   if (field === 'qty' || field === 'price') {
     const qty = parseFloat(item.qty) || 0;
     const price = parseFloat(item.price) || 0;
     item.amount = qty * price;
+
+    // 雑材料消耗品・運搬費：価格変更時に有効％をnoteへ自動反映
+    if (field === 'price' && (item.name === '雑材料消耗品' || item.name === '運搬費')) {
+      const matTotal = list
+        .filter(i => !AUTO_NAMES.includes(i.name))
+        .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+      if (matTotal > 0 && price > 0) {
+        item.note = (price / matTotal * 100).toFixed(1) + '%';
+      }
+    }
   }
-  
+
+  // 雑材料消耗品・運搬費：note に %値を入力したら価格を千円丸めで再計算
+  if (field === 'note' && (item.name === '雑材料消耗品' || item.name === '運搬費')) {
+    const m = value.trim().match(/^(\d+\.?\d*)%?$/);
+    if (m) {
+      const pct = parseFloat(m[1]);
+      const matTotal = list
+        .filter(i => !AUTO_NAMES.includes(i.name))
+        .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+      if (matTotal > 0 && pct > 0) {
+        const rounded = Math.round(matTotal * pct / 100 / 1000) * 1000;
+        item.price  = rounded;
+        item.amount = rounded;
+        item.note   = pct.toFixed(1) + '%';
+      }
+    }
+  }
+
   renderItems();
   renderCatTabs();
 }
 
 function deleteItem(id) {
+  saveUndoState();
   items[currentCat] = items[currentCat].filter(i => i.id !== id);
   renderItems();
   renderCatTabs();
@@ -301,8 +587,8 @@ function recalcAll() {
 // ===== SUMMARY BAR =====
 function updateSummaryBar() {
   let grandTotal = 0;
-  CATEGORIES.forEach(c => { grandTotal += getCatTotal(c.id); });
-  grandTotal += _laborSellTotal; // 労務費・経費を加算
+  activeCategories.filter(c => c.active).forEach(c => { grandTotal += getCatAmount(c.id); });
+  grandTotal += _laborSellTotal; // 労務費・経費を加算（rateIncludeLaborがONの場合は各割合工種に内包済み）
   
   const tsubo = parseFloat(project.areaTsubo) || 0;
   const sqm = parseFloat(project.areaSqm) || 0;
@@ -325,16 +611,21 @@ function renderSummary() {
   let rows = '';
   let grandTotal = 0;
 
-  CATEGORIES.forEach(c => {
-    const total = getCatTotal(c.id);
-    if (total === 0 && c.id !== 'discount') return; // Skip empty unless discount
+  activeCategories.filter(c => c.active).forEach(c => {
+    const total = getCatAmount(c.id);
+    // rateMode 工種は %=0 で金額ゼロでも表示（入力欄として存在させる）、非 rateMode は金額ゼロをスキップ
+    if (total === 0 && !c.rateMode) return;
     grandTotal += total;
+    const noteCell = c.rateMode
+      ? `<span style="font-size:11px;color:var(--text-sub);">${(c.ratePct||0).toFixed(1)}%${c.rateIncludeLabor ? '（労務含）' : ''}</span>`
+      : '';
+    const amtStyle = total < 0 ? 'font-weight:500;color:#ef4444;' : 'font-weight:500;';
     rows += `<tr>
       <td>${c.name}</td>
       <td class="td-right">1</td>
       <td class="td-center">式</td>
-      <td class="td-right" style="font-weight:500;">${formatNum(Math.round(total))}</td>
-      <td></td>
+      <td class="td-right" style="${amtStyle}">${total < 0 ? '△ ' : ''}${formatNum(Math.abs(Math.round(total)))}</td>
+      <td>${noteCell}</td>
     </tr>`;
   });
 
@@ -415,7 +706,7 @@ function searchSimilar() {
 // ===== VALIDATION =====
 function runValidation() {
   let grandTotal = 0;
-  CATEGORIES.forEach(c => { grandTotal += getCatTotal(c.id); });
+  activeCategories.filter(c => c.active).forEach(c => { grandTotal += getCatAmount(c.id); });
 
   if (grandTotal === 0) {
     document.getElementById('checkContent').innerHTML = '<p style="color:var(--amber);">明細が入力されていません。</p>';
@@ -462,9 +753,9 @@ function runValidation() {
 
   // Category balance check
   const catTotals = {};
-  CATEGORIES.forEach(c => {
-    const t = getCatTotal(c.id);
-    if (t > 0) catTotals[c.short] = t;
+  activeCategories.filter(c => c.active).forEach(c => {
+    const t = getCatAmount(c.id);
+    if (t !== 0) catTotals[c.short] = t;
   });
 
   let html = '<div style="display:flex;flex-direction:column;gap:12px;">';
@@ -552,7 +843,8 @@ function loadFromLocalStorage() {
     }
     if (data.items) {
       items = data.items;
-      CATEGORIES.forEach(c => { if (!items[c.id]) items[c.id] = []; });
+      // プリセット工種 + 有効なカスタム工種の items を初期化
+      activeCategories.forEach(c => { if (!items[c.id]) items[c.id] = []; });
     }
     if (data.itemIdCounter) itemIdCounter = data.itemIdCounter;
     renderCatTabs();
@@ -578,11 +870,12 @@ function exportEstimate() {
   aoa.push(['工事内訳', '数量', '単位', '見積金額（税抜）', '備考']);
 
   let grandTotal = 0;
-  CATEGORIES.forEach(c => {
-    const total = getCatTotal(c.id);
-    if (total === 0 && c.id !== 'discount') return;
+  activeCategories.filter(c => c.active).forEach(c => {
+    const total = getCatAmount(c.id);
+    if (total === 0 && !c.rateMode) return;
     grandTotal += total;
-    aoa.push([c.name, 1, '式', Math.round(total), '']);
+    const note = c.rateMode ? `${(c.ratePct||0).toFixed(1)}%${c.rateIncludeLabor ? '（労務費含）' : ''}` : '';
+    aoa.push([c.name, 1, '式', Math.round(total), note]);
   });
   aoa.push([]);
   aoa.push(['合　計', '', '', Math.round(grandTotal), '']);
@@ -595,8 +888,8 @@ function exportEstimate() {
   ws1['!cols'] = [{wch:35},{wch:6},{wch:6},{wch:15},{wch:20}];
   XLSX.utils.book_append_sheet(wb, ws1, '内訳書');
 
-  // Sheet per category
-  CATEGORIES.forEach(c => {
+  // Sheet per category（rateMode 工種は明細なしのためスキップ）
+  activeCategories.filter(c => c.active && !c.rateMode).forEach(c => {
     const list = (items[c.id] || []).filter(i => i.name);
     if (list.length === 0) return;
 

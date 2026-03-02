@@ -63,6 +63,7 @@ function selectMaterial(resultIdx) {
   
   const buk = findBukariki(m.n, m.s || '');
 
+  saveUndoState();
   if (searchTargetItemId !== null) {
     // Update existing item
     const list = items[currentCat];
@@ -135,6 +136,7 @@ function applySuggestion(itemId, matchIdx) {
   const m = _suggestMatches[matchIdx];
   if (!m) return;
   
+  saveUndoState();
   const list = items[currentCat];
   const item = list.find(i => i.id === itemId);
   if (item) {
