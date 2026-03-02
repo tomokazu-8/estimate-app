@@ -89,6 +89,7 @@
       <span class="topbar-title" id="topbarTitle">物件情報</span>
       <span class="topbar-breadcrumb" id="topbarBread">新規見積作成</span>
       <div class="topbar-actions">
+        <button id="backBtn" class="btn btn-secondary btn-sm" onclick="navigateBack()" style="display:none;">← 戻る</button>
         <button class="btn btn-secondary btn-sm" onclick="saveToLocalStorage()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1-2 2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
           保存
@@ -298,20 +299,21 @@
                 <thead>
                   <tr>
                     <th style="width:28px">#</th>
-                    <th style="width:240px">品名</th>
-                    <th style="width:180px">規格</th>
+                    <th style="width:220px">品名</th>
+                    <th style="width:160px">規格</th>
                     <th style="width:55px">数量</th>
-                    <th style="width:50px">単位</th>
-                    <th style="width:90px">見積単価</th>
-                    <th style="width:100px">見積金額</th>
-                    <th style="width:90px">備考(定価)</th>
+                    <th style="width:46px">単位</th>
+                    <th style="width:65px">歩掛</th>
+                    <th style="width:85px">見積単価</th>
+                    <th style="width:95px">見積金額</th>
+                    <th style="width:80px">備考(定価)</th>
                     <th style="width:28px"></th>
                   </tr>
                 </thead>
                 <tbody id="itemBody"></tbody>
                 <tfoot>
                   <tr style="background:var(--bg); font-weight:600;">
-                    <td colspan="6" style="text-align:right; padding-right:12px;">合　計</td>
+                    <td colspan="7" style="text-align:right; padding-right:12px;">合　計</td>
                     <td class="td-right" id="catTotal" style="font-weight:700;">¥0</td>
                     <td colspan="2"></td>
                   </tr>

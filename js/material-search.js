@@ -61,6 +61,8 @@ function selectMaterial(resultIdx) {
   const m = _searchResults[resultIdx];
   if (!m) return;
   
+  const buk = findBukariki(m.n, m.s || '');
+
   if (searchTargetItemId !== null) {
     // Update existing item
     const list = items[currentCat];
@@ -70,7 +72,7 @@ function selectMaterial(resultIdx) {
       item.spec = m.s;
       item.unit = m.u;
       item.price = m.ep;
-      item.note = m.ep !== m.cp ? '' : '';
+      item.bukariki = buk.value;
       if (item.qty) item.amount = (parseFloat(item.qty) || 0) * m.ep;
     }
   } else {
@@ -78,14 +80,14 @@ function selectMaterial(resultIdx) {
     const id = itemIdCounter++;
     items[currentCat].push({
       id, name: m.n, spec: m.s, qty: '', unit: m.u,
-      price: m.ep, amount: 0, note: ''
+      price: m.ep, amount: 0, note: '', bukariki: buk.value
     });
   }
-  
+
   closeSearchModal();
   renderItems();
   renderCatTabs();
-  showToast(`${m.n} を追加しました`);
+  showToast(`${m.n} を選択しました`);
 }
 
 // ===== INLINE SUGGESTION (on name input) =====
@@ -140,6 +142,7 @@ function applySuggestion(itemId, matchIdx) {
     item.spec = m.s;
     item.unit = m.u;
     item.price = m.ep;
+    item.bukariki = findBukariki(m.n, m.s || '').value;
     if (item.qty) item.amount = (parseFloat(item.qty) || 0) * m.ep;
   }
   renderItems();

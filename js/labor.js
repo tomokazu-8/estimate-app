@@ -45,7 +45,9 @@ function calcLaborBreakdown(catId) {
     if (AUTO_NAMES.includes(item.name) || !item.qty) continue;
     const qty = parseFloat(item.qty) || 0;
     if (qty <= 0) continue;
-    const buk = findBukariki(item.name, item.spec || '');
+    const buk = (item.bukariki !== '' && item.bukariki !== undefined)
+      ? { value: parseFloat(item.bukariki) || 0, source: '手入力' }
+      : findBukariki(item.name, item.spec || '');
     const kosu = qty * buk.value;
     const laborType = classifyForLabor(item.name, item.spec);
     

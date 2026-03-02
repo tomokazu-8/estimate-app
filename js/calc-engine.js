@@ -15,7 +15,7 @@ function addAutoCalcRows() {
     const exists = items[currentCat].some(i => i.name === name);
     if (!exists) {
       const id = itemIdCounter++;
-      items[currentCat].push({ id, name, spec:'', qty:1, unit:'式', price:'', amount:0, note:'' });
+      items[currentCat].push({ id, name, spec:'', qty:1, unit:'式', price:'', amount:0, note:'', bukariki:'' });
     }
   });
   renderItems();

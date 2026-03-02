@@ -1,4 +1,6 @@
 let _laborSellTotal = 0; // renderLaborSection → updateSummaryBar で参照
+let _navHistory = [];
+let _currentPanel = 'project';
 
 // ===== DB初期化（JSONファイルから読み込み） =====
 async function loadDefaultDB() {
@@ -32,23 +34,38 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCatTabs();
   renderDBTable();
   showDbOverlay();
-  loadDefaultDB().then(() => { loadFromLocalStorage(); updateDbStatus(); });
+  loadDefaultDB().then(() => { loadFromLocalStorage(); updateDbStatus(); recalcAll(); });
 });
 
 // ===== NAVIGATION =====
-function navigate(panel, el) {
+function navigate(panel, el, isBack = false) {
+  if (!isBack && _currentPanel !== panel) _navHistory.push(_currentPanel);
+  _currentPanel = panel;
+
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.sidebar-item').forEach(s => s.classList.remove('active'));
   document.getElementById('panel-' + panel).classList.add('active');
-  el.classList.add('active');
+  if (el) {
+    el.classList.add('active');
+  } else {
+    document.querySelectorAll('.sidebar-item').forEach(s => {
+      if ((s.getAttribute('onclick') || '').includes(`'${panel}'`)) s.classList.add('active');
+    });
+  }
 
   const titles = { project:'物件情報', items:'明細入力', summary:'内訳書', reference:'類似物件参照', check:'妥当性チェック', database:'実績DB' };
   document.getElementById('topbarTitle').textContent = titles[panel] || '';
   document.getElementById('topbarBread').textContent = project.name || '新規見積作成';
+  document.getElementById('backBtn').style.display = _navHistory.length > 0 ? '' : 'none';
 
   if (panel === 'summary') renderSummary();
   if (panel === 'reference') searchSimilar();
   if (panel === 'items') { renderCatTabs(); renderItems(); }
+}
+
+function navigateBack() {
+  if (_navHistory.length === 0) return;
+  navigate(_navHistory.pop(), null, true);
 }
 
 // ===== PROJECT =====
@@ -69,6 +86,11 @@ function updateProject() {
   project.laborSell = parseFloat(document.getElementById('pj-labor-sell').value) || 33000;
   project.tax = parseFloat(document.getElementById('pj-tax').value) || 10;
   project.copper = document.getElementById('pj-copper').value;
+
+  // LABOR_RATES / laborCostRatio を project 値と同期
+  LABOR_RATES.sell = project.laborSell;
+  LABOR_RATES.cost = Math.round(project.laborSell * project.laborRate / 100);
+  AUTO_CALC.laborCostRatio = project.laborRate / 100;
 }
 
 function syncArea(from) {
@@ -216,6 +238,7 @@ function renderItems() {
       <td><input value="${esc(item.spec)}" onchange="updateItem(${item.id},'spec',this.value)" placeholder="規格"></td>
       <td><input class="num" value="${item.qty||''}" onchange="updateItem(${item.id},'qty',this.value)" type="number" step="any"></td>
       <td><select onchange="updateItem(${item.id},'unit',this.value)">${UNITS.map(u=>`<option${u===item.unit?' selected':''}>${u}</option>`).join('')}</select></td>
+      <td><input class="num" value="${item.bukariki !== '' && item.bukariki !== undefined ? item.bukariki : ''}" onchange="updateItem(${item.id},'bukariki',this.value)" type="number" step="0.001" placeholder="自動" ${isAuto ? 'disabled' : ''}></td>
       <td><input class="num" value="${item.price||''}" onchange="updateItem(${item.id},'price',this.value)" type="number" step="any"></td>
       <td class="td-right" style="font-weight:500;">${item.amount ? '¥'+formatNum(Math.round(item.amount)) : ''}</td>
       <td><input value="${esc(item.note)}" onchange="updateItem(${item.id},'note',this.value)" placeholder="定価" style="font-size:11px;color:var(--text-sub);"></td>
@@ -235,7 +258,7 @@ function renderItems() {
 
 function addItem() {
   const id = itemIdCounter++;
-  items[currentCat].push({ id, name:'', spec:'', qty:'', unit:'式', price:'', amount:0, note:'' });
+  items[currentCat].push({ id, name:'', spec:'', qty:'', unit:'式', price:'', amount:0, note:'', bukariki:'' });
   renderItems();
   // Focus the new row's name input
   setTimeout(() => {
