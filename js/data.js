@@ -1,6 +1,9 @@
 // ===== 見積データベース =====
 // DB are loaded from JSON files or Excel, these are defaults
 
+// 全角/半角カナ・英数字を統一して比較するための正規化（NFKC: 半角カナ→全角、全角英数→半角）
+function norm(s) { return (s || '').normalize('NFKC').toLowerCase(); }
+
 let MATERIAL_DB = [];  // Loaded in init
 let BUKARIKI_DB = [];  // Loaded in init
 let LABOR_RATES = { sell: 19000, cost: 12000 };

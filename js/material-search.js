@@ -18,19 +18,19 @@ function closeSearchModal() {
 }
 
 function searchMaterial() {
-  const query = document.getElementById('searchQuery').value.toLowerCase().trim();
+  const query = norm(document.getElementById('searchQuery').value).trim();
   const catFilter = document.getElementById('searchCatFilter').value;
-  
+
   let results = MATERIAL_DB;
-  
+
   if (catFilter) {
     results = results.filter(m => m.c === catFilter);
   }
-  
+
   if (query.length >= 1) {
     const terms = query.split(/\s+/);
     results = results.filter(m => {
-      const text = (m.n + ' ' + m.s).toLowerCase();
+      const text = norm(m.n + ' ' + m.s);
       return terms.every(t => text.includes(t));
     });
   }
@@ -103,9 +103,9 @@ function showSuggestions(itemId, query) {
     return;
   }
   
-  const terms = query.toLowerCase().split(/\s+/);
+  const terms = norm(query).split(/\s+/);
   const matches = MATERIAL_DB.filter(m => {
-    const text = (m.n + ' ' + m.s).toLowerCase();
+    const text = norm(m.n + ' ' + m.s);
     return terms.every(t => text.includes(t));
   }).slice(0, 8);
   
