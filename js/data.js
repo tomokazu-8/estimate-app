@@ -38,6 +38,8 @@ const AUTO_CALC = {
   miscRate: { trunk: 0.05, lighting_fix: 0.04, outlet: 0.03, weak: 0.10, fire: 0.05 },
   transportBase: { small: 12000, medium: 55000, large: 80000, xlarge: 161000 },
   laborCostRatio: 0.72, // default
+  copperBase:     1000, // DB作成時点の基準銅建値（円/kg）
+  copperFraction: 0.50, // ケーブル価格に占める銅連動比率（導体コスト）
 };
 
 // ===== DATA MODEL =====

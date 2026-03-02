@@ -152,6 +152,9 @@ function updateProject() {
   LABOR_RATES.sell = project.laborSell;
   LABOR_RATES.cost = Math.round(project.laborSell * project.laborRate / 100);
   AUTO_CALC.laborCostRatio = project.laborRate / 100;
+
+  // 銅建値変動分を全ケーブル行に反映
+  recalcCopperAmounts();
 }
 
 function syncArea(from) {
@@ -405,6 +408,39 @@ function getCatAmount(catId) {
 
 // ===== ITEM ENTRY =====
 
+// ===== 銅建値補正 =====
+
+// ケーブル品名かどうかを判定（導体コストが価格に含まれる品目）
+function isCableItem(name, spec) {
+  const n = (name + ' ' + (spec || '')).toLowerCase();
+  return ['ケーブル','vv-f','cvt','cv ','iv ','ae ','cpev','utp','toev','vct','em-']
+    .some(k => n.includes(k));
+}
+
+// 銅建値乗数を返す（ケーブル以外は 1.0）
+// 乗数 = 銅非連動分(1-f) + 銅連動分(f × 現在値/基準値)
+function getCopperMultiplier(name, spec) {
+  const currentCopper = parseFloat(project.copper);
+  if (!currentCopper || currentCopper <= 0) return 1.0;
+  if (!isCableItem(name, spec)) return 1.0;
+  const r = currentCopper / AUTO_CALC.copperBase;
+  const f = AUTO_CALC.copperFraction;
+  return f * r + (1 - f);
+}
+
+// 全カテゴリの材料行 amount を銅建値乗数で再計算（銅建値変更時に呼ぶ）
+function recalcCopperAmounts() {
+  Object.keys(items).forEach(catId => {
+    (items[catId] || []).forEach(item => {
+      if (AUTO_NAMES.includes(item.name)) return;
+      const qty   = parseFloat(item.qty);
+      const price = parseFloat(item.price);
+      if (isNaN(qty) || isNaN(price)) return;
+      item.amount = qty * price * getCopperMultiplier(item.name, item.spec || '');
+    });
+  });
+}
+
 // 労務費セクションの計算値を、明細リスト内の固定行に自動反映する
 function syncLaborItemPrices() {
   const lb = calcLaborBreakdown(currentCat);
@@ -527,6 +563,11 @@ function renderItems() {
   tbody.innerHTML = list.map((item, idx) => {
     const isAuto = AUTO_NAMES.includes(item.name);
     const isLaborLocked = LABOR_LOCKED_NAMES.includes(item.name);
+    const copperMult = (!isAuto && isCableItem(item.name, item.spec || '')) ? getCopperMultiplier(item.name, item.spec || '') : 1.0;
+    const hasCopperAdj = Math.abs(copperMult - 1.0) > 0.001;
+    const copperBadge = hasCopperAdj
+      ? `<span style="display:block;font-size:9px;color:var(--amber);line-height:1.2;" title="銅建値補正（基準 ¥${AUTO_CALC.copperBase}/kg → 現在 ¥${project.copper}/kg）">銅×${copperMult.toFixed(2)}</span>`
+      : '';
     return `
     <tr data-id="${item.id}" class="${isAuto ? 'auto-calc' : ''}">
       <td class="td-center" style="color:var(--text-dim);font-size:11px;">${idx+1}</td>
@@ -539,7 +580,7 @@ function renderItems() {
       <td><select onchange="updateItem(${item.id},'unit',this.value)">${UNITS.map(u=>`<option${u===item.unit?' selected':''}>${u}</option>`).join('')}</select></td>
       <td><input class="num" value="${item.bukariki !== '' && item.bukariki !== undefined ? item.bukariki : ''}" onchange="updateItem(${item.id},'bukariki',this.value)" type="number" step="0.001" placeholder="自動" ${isAuto ? 'disabled' : ''}></td>
       <td><input class="num" value="${item.price||''}" onchange="updateItem(${item.id},'price',this.value)" type="number" step="any" ${isLaborLocked ? 'disabled style="background:var(--bg-alt);color:var(--text-sub);"' : ''}></td>
-      <td class="td-right" style="font-weight:500;">${item.amount ? '¥'+formatNum(Math.round(item.amount)) : ''}</td>
+      <td class="td-right" style="font-weight:500;">${item.amount ? '¥'+formatNum(Math.round(item.amount)) : ''}${copperBadge}</td>
       <td><input value="${esc(item.note)}" onchange="updateItem(${item.id},'note',this.value)" placeholder="${isLaborLocked ? '自動計算' : (item.name==='雑材料消耗品'||item.name==='運搬費') ? '例: 5.0%' : '定価'}" style="font-size:11px;color:var(--text-sub);" ${isLaborLocked ? 'readonly' : ''}></td>
       <td>
         <span style="display:flex;gap:2px;">
@@ -580,7 +621,7 @@ function updateItem(id, field, value) {
   if (field === 'qty' || field === 'price') {
     const qty = parseFloat(item.qty) || 0;
     const price = parseFloat(item.price) || 0;
-    item.amount = qty * price;
+    item.amount = qty * price * getCopperMultiplier(item.name, item.spec || '');
 
     // 雑材料消耗品・運搬費：価格変更時に有効％をnoteへ自動反映
     if (field === 'price' && (item.name === '雑材料消耗品' || item.name === '運搬費')) {
