@@ -223,22 +223,35 @@ function renderCategoryManager() {
       const base = calcRateBase(c.id);
       const pct = c.ratePct || 0;
       const rawAmt = Math.round(base * pct / 100);
-      const amt = c.id === 'discount' ? -rawAmt : rawAmt;
-      const amtColor = amt < 0 ? '#ef4444' : 'var(--text)';
+      const isFixed = c.fixedAmount != null && c.fixedAmount !== '';
+      const fixedVal = isFixed ? parseFloat(c.fixedAmount) : null;
+      const displayAbs = isFixed ? Math.abs(fixedVal) : Math.abs(rawAmt);
+      const amtColor = c.id === 'discount' ? '#ef4444' : 'var(--text)';
+      const pctBorderColor = isFixed ? 'var(--border)' : 'var(--accent)';
+      const amtBorderColor = isFixed ? 'var(--accent)' : 'var(--border)';
+      const resetBtn = isFixed
+        ? `<button onclick="clearRateFixedAmount('${c.id}')"
+             title="%計算に戻す"
+             style="padding:2px 6px;font-size:10px;border:1px solid var(--border);background:var(--bg-alt);border-radius:3px;cursor:pointer;color:var(--text-sub);white-space:nowrap;">%連動</button>`
+        : '';
       const rateSection = `
         <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;flex-shrink:0;">
           <input type="number" value="${pct}" step="0.1" min="0"
                  onchange="updateRatePct('${c.id}', parseFloat(this.value)||0)"
-                 style="width:52px;text-align:right;padding:2px 4px;font-size:12px;border:1px solid var(--border);border-radius:4px;">
+                 title="％で金額を自動計算"
+                 style="width:52px;text-align:right;padding:2px 4px;font-size:12px;border:1px solid ${pctBorderColor};border-radius:4px;${isFixed ? 'color:var(--text-sub);' : ''}">
           <span style="font-size:12px;">%</span>
           <label style="display:flex;align-items:center;gap:3px;font-size:11px;cursor:pointer;color:var(--text-sub);white-space:nowrap;">
             <input type="checkbox" ${c.rateIncludeLabor ? 'checked' : ''}
                    onchange="updateRateIncludeLabor('${c.id}', this.checked)"
                    style="width:13px;height:13px;">労務費含む
           </label>
-          <span style="font-size:12px;font-weight:600;color:${amtColor};white-space:nowrap;">
-            =${amt < 0 ? ' -' : ' '}¥${formatNum(Math.abs(amt))}
-          </span>
+          <span style="font-size:12px;color:var(--text-sub);">= ${c.id === 'discount' ? '-' : ''}¥</span>
+          <input type="number" value="${displayAbs}" min="0" step="1000"
+                 onchange="updateRateFixedAmount('${c.id}', this.value)"
+                 title="直接入力で金額を固定"
+                 style="width:96px;text-align:right;padding:2px 4px;font-size:12px;font-weight:600;color:${amtColor};border:1px solid ${amtBorderColor};border-radius:4px;">
+          ${resetBtn}
         </div>`;
       return `<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--bg-alt);background:#faf9f7;">
         ${moveBtns}${checkbox}${nameSpan}${rateSection}${deleteBtn}
@@ -312,6 +325,28 @@ function updateRatePct(catId, value) {
   const cat = activeCategories.find(c => c.id === catId);
   if (!cat) return;
   cat.ratePct = parseFloat(value) || 0;
+  cat.fixedAmount = null; // % 変更時は手動金額をクリアして%連動に戻す
+  saveActiveCategories();
+  renderCategoryManager();
+  renderSummary();
+  updateSummaryBar();
+}
+
+function updateRateFixedAmount(catId, value) {
+  const cat = activeCategories.find(c => c.id === catId);
+  if (!cat) return;
+  const trimmed = String(value).trim();
+  cat.fixedAmount = (trimmed === '' || isNaN(parseFloat(trimmed))) ? null : parseFloat(trimmed);
+  saveActiveCategories();
+  renderCategoryManager();
+  renderSummary();
+  updateSummaryBar();
+}
+
+function clearRateFixedAmount(catId) {
+  const cat = activeCategories.find(c => c.id === catId);
+  if (!cat) return;
+  cat.fixedAmount = null;
   saveActiveCategories();
   renderCategoryManager();
   renderSummary();
@@ -357,7 +392,14 @@ function getRateCatAmount(catId) {
 
 function getCatAmount(catId) {
   const cat = activeCategories.find(c => c.id === catId);
-  if (cat && cat.rateMode) return getRateCatAmount(catId);
+  if (cat && cat.rateMode) {
+    // fixedAmount が設定されている場合は手動金額を優先
+    if (cat.fixedAmount != null && cat.fixedAmount !== '') {
+      const fixed = parseFloat(cat.fixedAmount) || 0;
+      return cat.id === 'discount' ? -fixed : fixed;
+    }
+    return getRateCatAmount(catId);
+  }
   return getCatTotal(catId);
 }
 
@@ -617,7 +659,11 @@ function renderSummary() {
     if (total === 0 && !c.rateMode) return;
     grandTotal += total;
     const noteCell = c.rateMode
-      ? `<span style="font-size:11px;color:var(--text-sub);">${(c.ratePct||0).toFixed(1)}%${c.rateIncludeLabor ? '（労務含）' : ''}</span>`
+      ? `<span style="font-size:11px;color:var(--text-sub);">${
+          (c.fixedAmount != null && c.fixedAmount !== '')
+            ? '手動入力'
+            : (c.ratePct||0).toFixed(1) + '%' + (c.rateIncludeLabor ? '（労務含）' : '')
+        }</span>`
       : '';
     const amtStyle = total < 0 ? 'font-weight:500;color:#ef4444;' : 'font-weight:500;';
     rows += `<tr>
