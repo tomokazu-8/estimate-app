@@ -6,8 +6,8 @@ let _redoStack = [];
 async function loadDefaultDB() {
   try {
     const [matRes, bukRes] = await Promise.all([
-      fetch('data/material_db.json'),
-      fetch('data/bukariki_db.json')
+      fetch('data/material_db.json', { cache: 'no-store' }),
+      fetch('data/bukariki_db.json', { cache: 'no-store' })
     ]);
     if (matRes.ok) {
       const matData = await matRes.json();
