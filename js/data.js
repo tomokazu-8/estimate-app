@@ -8,19 +8,6 @@ let MATERIAL_DB = [];  // Loaded in init
 let BUKARIKI_DB = [];  // Loaded in init
 let LABOR_RATES = { sell: 19000, cost: 12000 };
 
-// 歩掛デフォルト値（DBに該当なし時のフォールバック）
-const BUKARIKI_DEFAULTS = {
-  cable:   0.01,  // 電線・ケーブル（m/本単位）
-  conduit: 0.02,  // 電線管
-  device:  0.05,  // 配線器具
-  panel:   0.25,  // 分電盤
-  fire:    0.08,  // 火災感知器
-  ground:  0.15,  // 接地
-  dimmer:  0.08,  // 調光器
-  fixture: 0.07,  // 照明器具（デフォルト）
-};
-
-
 const CAT_RATIOS = {"accessories": 0.807, "box": 0.767, "cable": 0.721, "conduit": 0.756, "device": 0.728, "dimmer": 0.834, "fire": 0.802, "fixture": 0.77, "ground": 0.718, "panel": 0.761};
 
 // 自動計算行の名称リスト（labor.js / calc-engine.js / app.js で共有）
@@ -38,25 +25,25 @@ const LABOR_LOCKED_NAMES = [
 
 // ===== AUTO-CALC RULES =====
 const AUTO_CALC = {
-  miscRate: { trunk: 0.05, lighting_fix: 0.04, outlet: 0.03, weak: 0.10, fire: 0.05 },
   transportBase: { small: 12000, medium: 55000, large: 80000, xlarge: 161000 },
   laborCostRatio: 0.72, // default
-  copperBase:     1000, // DB作成時点の基準銅建値（円/kg）
-  copperFraction: 0.50, // ケーブル価格に占める銅連動比率（導体コスト）
 };
 
-// ===== DATA MODEL =====
-const CATEGORIES = [
-  { id: 'trunk',        name: '1　幹線・分電盤工事',       short: '幹線・分電盤',   rateMode: false },
-  { id: 'lighting_fix', name: '2　照明器具供給取付工事',    short: '照明器具',       rateMode: false },
-  { id: 'outlet',       name: '3　電灯コンセント設備工事',  short: '電灯コンセント', rateMode: false },
-  { id: 'weak',         name: '4　弱電設備工事',           short: '弱電設備',       rateMode: false },
-  { id: 'fire',         name: '5　住宅用火災報知器',       short: '火報',           rateMode: false },
-  { id: 'apply',        name: '6　電力会社協議及び申請費',  short: '申請費',         rateMode: true  },
-  { id: 'temp',         name: '7　仮設工事',               short: '仮設工事',       rateMode: true  },
-  { id: 'overhead',     name: '8　諸経費',                 short: '諸経費',         rateMode: true  },
-  { id: 'discount',     name: '△　値引き',                short: '値引き',         rateMode: true  },
-];
+// ===== TRIDGE DATA (Tridge読み込み時に上書きされる) =====
+let TRIDGE_SETTINGS = {
+  copperEnabled:   false,  // 銅建値補正 有効/無効
+  copperBase:      1000,   // 基準銅建値（円/kg）
+  copperFraction:  0.50,   // ケーブル価格に占める銅連動比率
+  laborSell:       19000,  // 労務売単価（円/人工）
+  laborCost:       12000,  // 労務原価単価（円/人工）
+};
+
+// キーワードマスタ（Tridgeから読み込む）
+// { keyword: string, laborType: 'wiring'|'fixture'|'equipment', bukariki: number, copperLinked: boolean }
+let TRIDGE_KEYWORDS = [];
+
+// Tridge装着フラグ
+let tridgeLoaded = false;
 
 const UNITS = ['式','ｍ','台','個','面','箇所','本','枚','組','ｾｯﾄ','系統'];
 
@@ -97,29 +84,26 @@ let project = {
 };
 
 let items = {}; // { categoryId: [ {id, name, spec, qty, unit, price, amount, note} ] }
-CATEGORIES.forEach(c => items[c.id] = []);
+// items はTridge装着時・localStorage復元時に初期化される
 
-let currentCat = 'trunk';
+let currentCat = ''; // Tridge装着時に最初の工種IDが設定される
 let itemIdCounter = 1;
 
-// 有効工種リスト（プリセット＋カスタム、localStorageから復元）
+// 有効工種リスト（Tridgeから動的ロード、localStorageから復元）
 let activeCategories = (function() {
   try {
     const saved = JSON.parse(localStorage.getItem('activeCategories'));
     if (Array.isArray(saved) && saved.length > 0) {
-      // 旧データに rateMode/ratePct/rateIncludeLabor がない場合はマイグレーション
-      return saved.map(c => {
-        const preset = CATEGORIES.find(p => p.id === c.id);
-        return {
-          ratePct: 0,
-          rateIncludeLabor: false,
-          rateMode: preset ? preset.rateMode : false,
-          ...c,
-        };
-      });
+      return saved.map(c => ({
+        ratePct: 0,
+        rateIncludeLabor: false,
+        rateMode: false,
+        miscRate: 0.05,
+        ...c,
+      }));
     }
   } catch(e) {}
-  return CATEGORIES.map(c => ({ ...c, active: true, custom: false, ratePct: 0, rateIncludeLabor: false }));
+  return []; // Tridge未装着時は空
 })();
 
 let customCatCounter = parseInt(localStorage.getItem('customCatCounter') || '10', 10);

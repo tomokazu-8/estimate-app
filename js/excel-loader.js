@@ -49,7 +49,59 @@ function loadExcelDB(file) {
     try {
       const wb = XLSX.read(e.target.result, { type: 'array' });
 
-      // Sheet 1: 資材マスタ
+      // ===== Sheet: 工種マスタ =====
+      const wsKoshu = wb.Sheets['工種マスタ'];
+      let newCategories = [];
+      if (wsKoshu) {
+        const dataKoshu = XLSX.utils.sheet_to_json(wsKoshu);
+        newCategories = dataKoshu.map(r => ({
+          id:       String(getCol(r, '工種ID') || '').trim(),
+          name:     String(getCol(r, '工種名') || '').trim(),
+          short:    String(getCol(r, '略称') || '').trim(),
+          rateMode: ['true','1','yes','割合','はい','○'].includes(String(getCol(r, '割合モード') || '').trim()),
+          miscRate: parseFloat(getCol(r, '雑材料率%', '雑材料率') || 0) / 100,
+          order:    parseInt(getCol(r, '順序') || 0),
+        })).filter(c => c.id && c.name);
+        console.log('[Tridge] 工種マスタ:', newCategories.length, '件');
+      }
+
+      // ===== Sheet: 設定マスタ =====
+      const wsSettings = wb.Sheets['設定マスタ'];
+      let newSettings = { ...TRIDGE_SETTINGS };
+      if (wsSettings) {
+        const dataSettings = XLSX.utils.sheet_to_json(wsSettings);
+        const map = {};
+        dataSettings.forEach(r => {
+          const key = String(getCol(r, 'パラメーター名', 'パラメータ', '設定名') || '').trim();
+          const val = getCol(r, '値', 'value');
+          if (key) map[key] = val;
+        });
+        const yn = v => ['true','1','yes','有効','○','はい'].includes(String(v || '').trim());
+        if (map['銅建値補正']          !== undefined) newSettings.copperEnabled  = yn(map['銅建値補正']);
+        if (map['銅建値基準（円/kg）'] !== undefined) newSettings.copperBase     = parseFloat(map['銅建値基準（円/kg）']) || 1000;
+        if (map['銅連動率']            !== undefined) newSettings.copperFraction = parseFloat(map['銅連動率']) || 0.50;
+        if (map['労務売単価（円/人工）']!== undefined) newSettings.laborSell     = parseFloat(map['労務売単価（円/人工）']) || 19000;
+        if (map['労務原価単価（円/人工）']!==undefined) newSettings.laborCost    = parseFloat(map['労務原価単価（円/人工）']) || 12000;
+        console.log('[Tridge] 設定マスタ:', newSettings);
+      }
+
+      // ===== Sheet: キーワードマスタ =====
+      const wsKw = wb.Sheets['キーワードマスタ'];
+      let newKeywords = [];
+      if (wsKw) {
+        const dataKw = XLSX.utils.sheet_to_json(wsKw);
+        const yn = v => ['true','1','yes','○','はい'].includes(String(v || '').trim());
+        newKeywords = dataKw.map(r => ({
+          keyword:       norm(String(getCol(r, 'キーワード') || '').trim()),
+          laborType:     String(getCol(r, '分類', '労務分類') || 'fixture').trim(),
+          bukariki:      parseFloat(getCol(r, '歩掛', '歩掛値') || 0),
+          copperLinked:  yn(getCol(r, '銅連動', '銅連動フラグ')),
+          ceilingOpening: yn(getCol(r, '天井開口', '天井開口フラグ')),
+        })).filter(k => k.keyword);
+        console.log('[Tridge] キーワードマスタ:', newKeywords.length, '件');
+      }
+
+      // ===== Sheet: 資材マスタ =====
       const ws1 = wb.Sheets['資材マスタ'];
       if (!ws1) { status.textContent = '❌ 「資材マスタ」シートが見つかりません'; status.style.color = '#dc2626'; return; }
       const data1 = XLSX.utils.sheet_to_json(ws1);
@@ -142,11 +194,21 @@ function loadExcelDB(file) {
         return;
       }
 
-      // Update labor rates if found
-      if (laborRates['001']) {
+      // ===== Tridge設定・キーワード・工種を適用 =====
+      // 設定マスタ → TRIDGE_SETTINGS
+      Object.assign(TRIDGE_SETTINGS, newSettings);
+      // キーワードマスタ → TRIDGE_KEYWORDS
+      TRIDGE_KEYWORDS.length = 0;
+      newKeywords.forEach(k => TRIDGE_KEYWORDS.push(k));
+      // 労務単価を同期（設定マスタ優先、なければ労務単価マスタ）
+      if (newSettings.laborSell) {
+        LABOR_RATES.sell = TRIDGE_SETTINGS.laborSell;
+        LABOR_RATES.cost = TRIDGE_SETTINGS.laborCost;
+      } else if (laborRates['001']) {
         LABOR_RATES.sell = laborRates['001'].sell;
         LABOR_RATES.cost = laborRates['001'].cost;
       }
+      tridgeLoaded = true;
 
       // Replace DBs
       MATERIAL_DB.length = 0;
@@ -156,25 +218,38 @@ function loadExcelDB(file) {
         newBukariki.forEach(b => BUKARIKI_DB.push(b));
       }
 
+      // 工種マスタがあれば activeCategories を更新
+      if (newCategories.length > 0 && typeof applyTridgeCategories === 'function') {
+        applyTridgeCategories(newCategories);
+      }
+      // 銅建値補正UIの表示切り替え
+      if (typeof updateCopperUI === 'function') updateCopperUI();
+
       externalDbLoaded = true;
       externalDbInfo = {
         materials: newMaterials.length,
-        bukariki: newBukariki.length,
+        bukariki:  newBukariki.length,
+        categories: newCategories.length,
+        keywords:  newKeywords.length,
         source: file.name
       };
 
       // カテゴリ別内訳の表示
       const CAT_JA = {cable:'電線',conduit:'電線管',device:'器具',box:'BOX',panel:'盤',fixture:'照明/その他',dimmer:'調光',fire:'火報',ground:'接地',accessories:'付属'};
       const catSummary = Object.entries(catCount).map(([c,n]) => `${CAT_JA[c]||c}:${n}`).join(' / ');
+      const catInfo    = newCategories.length > 0 ? ` / 工種: ${newCategories.length}件` : '';
+      const kwInfo     = newKeywords.length   > 0 ? ` / KW: ${newKeywords.length}件`    : '';
+      const copperInfo = TRIDGE_SETTINGS.copperEnabled ? ' ⚡銅建値補正有効' : '';
 
       status.innerHTML = '✅ 読み込み完了!<br>'
-        + '資材: ' + newMaterials.length.toLocaleString() + '品目 / 歩掛: ' + newBukariki.length.toLocaleString() + '件<br>'
-        + '<small style="color:#555;">' + catSummary + '</small>';
+        + `資材: ${newMaterials.length.toLocaleString()}品目 / 歩掛: ${newBukariki.length.toLocaleString()}件`
+        + catInfo + kwInfo + '<br>'
+        + `<small style="color:#555;">${catSummary}${copperInfo}</small>`;
       status.style.color = '#16a34a';
 
       setTimeout(() => {
         closeDbOverlay();
-        showToast('外部DB読み込み完了: ' + newMaterials.length.toLocaleString() + '品目');
+        showToast('Tridge読み込み完了: ' + newMaterials.length.toLocaleString() + '品目');
       }, 2000);
 
     } catch(err) {

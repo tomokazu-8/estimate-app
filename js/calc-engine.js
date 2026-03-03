@@ -14,7 +14,8 @@ function addAutoCalcRows() {
 
   // 労務費セクションと同じ計算値を取得
   const lb = calcLaborBreakdown(currentCat);
-  const miscRate = AUTO_CALC.miscRate[currentCat] || 0.05;
+  const cat = activeCategories.find(c => c.id === currentCat);
+  const miscRate = cat?.miscRate ?? 0.05;
 
   const laborPrices = {
     '電工労務費':               Math.round(lb.totalKosu * LABOR_RATES.sell),
@@ -79,7 +80,8 @@ function calcAutoRows() {
   if (materialTotal <= 0) return;
 
   // 雑材料消耗品：材料費 × 率
-  const miscRate = AUTO_CALC.miscRate[currentCat] || 0.05;
+  const cat = activeCategories.find(c => c.id === currentCat);
+  const miscRate = cat?.miscRate ?? 0.05;
   const miscItem = list.find(i => i.name === '雑材料消耗品');
   if (miscItem) {
     miscItem.qty = 1;

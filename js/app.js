@@ -2,6 +2,42 @@ let _laborSellTotal = 0; // renderLaborSection → updateSummaryBar で参照
 let _undoStack = [];
 let _redoStack = [];
 
+// ===== TRIDGE APPLY =====
+
+// Tridgeの工種マスタをactiveCategoriesに反映する
+function applyTridgeCategories(newCats) {
+  const built = newCats.map(c => ({
+    id:               c.id,
+    name:             c.name,
+    short:            c.short || c.name,
+    rateMode:         c.rateMode || false,
+    miscRate:         c.miscRate ?? 0.05,
+    active:           true,
+    custom:           false,
+    ratePct:          0,
+    rateIncludeLabor: false,
+  }));
+  built.forEach(c => { if (!items[c.id]) items[c.id] = []; });
+  activeCategories = built;
+  if (!currentCat || !activeCategories.find(c => c.id === currentCat && c.active)) {
+    const first = activeCategories.find(c => c.active && !c.rateMode);
+    if (first) currentCat = first.id;
+  }
+  saveActiveCategories();
+  renderCatTabs();
+}
+
+// 銅建値補正UIをTridge設定マスタに連動して表示/非表示切り替え
+function updateCopperUI() {
+  const copperGroup = document.getElementById('pj-copper')?.closest('.form-group');
+  if (copperGroup) copperGroup.style.display = TRIDGE_SETTINGS.copperEnabled ? '' : 'none';
+  // 設定マスタの労務単価をフォームに反映
+  if (TRIDGE_SETTINGS.laborSell) {
+    const el = document.getElementById('pj-labor-sell');
+    if (el && !project.laborSell) el.value = TRIDGE_SETTINGS.laborSell;
+  }
+}
+
 // ===== DB初期化（JSONファイルから読み込み） =====
 async function loadDefaultDB() {
   try {
@@ -36,6 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (firstActive) currentCat = firstActive.id;
   // カスタム工種の items を初期化（localStorage から復元した場合に必要）
   activeCategories.filter(c => c.custom).forEach(c => { if (!items[c.id]) items[c.id] = []; });
+  updateCopperUI(); // 銅建値補正UI（Tridge未装着時は非表示）
   renderCatTabs();
   renderDBTable();
   showDbOverlay();
@@ -410,21 +447,22 @@ function getCatAmount(catId) {
 
 // ===== 銅建値補正 =====
 
-// ケーブル品名かどうかを判定（導体コストが価格に含まれる品目）
+// ケーブル品名かどうかを判定（キーワードマスタの銅連動フラグで決定）
 function isCableItem(name, spec) {
-  const n = (name + ' ' + (spec || '')).toLowerCase();
-  return ['ケーブル','vv-f','cvt','cv ','iv ','ae ','cpev','utp','toev','vct','em-']
-    .some(k => n.includes(k));
+  if (!TRIDGE_KEYWORDS.length) return false;
+  const n = norm(name + ' ' + (spec || ''));
+  return TRIDGE_KEYWORDS.some(k => k.copperLinked && n.includes(k.keyword));
 }
 
-// 銅建値乗数を返す（ケーブル以外は 1.0）
+// 銅建値乗数を返す（銅建値補正が無効またはケーブル以外は 1.0）
 // 乗数 = 銅非連動分(1-f) + 銅連動分(f × 現在値/基準値)
 function getCopperMultiplier(name, spec) {
+  if (!TRIDGE_SETTINGS.copperEnabled) return 1.0;
   const currentCopper = parseFloat(project.copper);
   if (!currentCopper || currentCopper <= 0) return 1.0;
   if (!isCableItem(name, spec)) return 1.0;
-  const r = currentCopper / AUTO_CALC.copperBase;
-  const f = AUTO_CALC.copperFraction;
+  const r = currentCopper / TRIDGE_SETTINGS.copperBase;
+  const f = TRIDGE_SETTINGS.copperFraction;
   return f * r + (1 - f);
 }
 
@@ -502,7 +540,8 @@ function renderLaborSection() {
   
   // 5. 雑材料消耗品
   if (lb.materialTotal > 0) {
-    const rate = AUTO_CALC.miscRate[currentCat] || 0.05;
+    const _miscCat = activeCategories.find(c => c.id === currentCat);
+    const rate = _miscCat?.miscRate ?? 0.05;
     const sell = Math.round(lb.materialTotal * rate);
     rows.push({ name: '雑材料消耗品', basis: '材料費 × ' + (rate*100).toFixed(0) + '%', sell, cost: Math.round(sell * lr) });
   }
@@ -566,7 +605,7 @@ function renderItems() {
     const copperMult = (!isAuto && isCableItem(item.name, item.spec || '')) ? getCopperMultiplier(item.name, item.spec || '') : 1.0;
     const hasCopperAdj = Math.abs(copperMult - 1.0) > 0.001;
     const copperBadge = hasCopperAdj
-      ? `<span style="display:block;font-size:9px;color:var(--amber);line-height:1.2;" title="銅建値補正（基準 ¥${AUTO_CALC.copperBase}/kg → 現在 ¥${project.copper}/kg）">銅×${copperMult.toFixed(2)}</span>`
+      ? `<span style="display:block;font-size:9px;color:var(--amber);line-height:1.2;" title="銅建値補正（基準 ¥${TRIDGE_SETTINGS.copperBase}/kg → 現在 ¥${project.copper}/kg）">銅×${copperMult.toFixed(2)}</span>`
       : '';
     return `
     <tr data-id="${item.id}" class="${isAuto ? 'auto-calc' : ''}">

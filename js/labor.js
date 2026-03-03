@@ -1,38 +1,36 @@
 // ===== 労務費計算エンジン =====
+
+// 歩掛を取得する（優先順位: 資材マスタの歩掛DB → キーワードマスタ）
 function findBukariki(name, spec) {
-  const n = norm(name + ' ' + (spec||''));
+  const n = norm(name + ' ' + (spec || ''));
+
+  // 1. BUKARIKI_DB: 完全一致（資材マスタの歩掛カラムから生成）
   for (const b of BUKARIKI_DB) {
     if (n.includes(norm(b.n)) && (b.s === '' || n.includes(norm(b.s))))
       return { value: b.b, source: 'DB' };
   }
+  // 2. BUKARIKI_DB: 先頭語の部分一致
   for (const b of BUKARIKI_DB) {
     const fw = norm(b.n).split(' ')[0];
     if (fw.length >= 3 && n.includes(fw))
       return { value: b.b, source: '近似' };
   }
-  for (const [cat, kws] of [
-    ['cable',  ['ケーブル','vv-f','cv ','cvt','iv ','同軸','cpev']],
-    ['conduit',['電線管','pf-','ve ','fep','ねじなし']],
-    ['device', ['コンセント','スイッチ','プレート']],
-    ['panel',  ['分電盤','開閉器']],
-    ['fire',   ['火災','感知','報知']],
-    ['ground', ['接地']],
-  ]) {
-    if (kws.some(k => n.includes(norm(k))))
-      return { value: BUKARIKI_DEFAULTS[cat], source: 'ﾃﾞﾌｫﾙﾄ' };
+  // 3. TRIDGE_KEYWORDS: キーワードマスタで一致（Tridge定義のフォールバック）
+  for (const k of TRIDGE_KEYWORDS) {
+    if (k.bukariki > 0 && n.includes(k.keyword))
+      return { value: k.bukariki, source: 'KW' };
   }
-  return { value: BUKARIKI_DEFAULTS.fixture, source: 'ﾃﾞﾌｫﾙﾄ' };
+
+  return { value: 0, source: 'なし' };
 }
 
-// Classify items for labor split: wiring / fixture / equipment
+// 労務分類を判定（wiring / fixture / equipment）
+// TRIDGE_KEYWORDS の「分類」列で決まる
 function classifyForLabor(name, spec) {
-  const n = norm(name + ' ' + (spec||''));
-  if (['ケーブル','vv-f','cv ','cvt','iv ','同軸','cpev','導入線','ae ','hp ','toev','utp',
-       '電線管','pf-','ve ','fep','ねじなし','ボックス','プルボックス','ダクト'].some(k => n.includes(norm(k))))
-    return 'wiring';
-  if (['分電盤','開閉器','制御盤','盤','メーター','計器'].some(k => n.includes(norm(k))))
-    return 'equipment';
-  return 'fixture';
+  if (!TRIDGE_KEYWORDS.length) return 'fixture';
+  const n = norm(name + ' ' + (spec || ''));
+  const match = TRIDGE_KEYWORDS.find(k => n.includes(k.keyword));
+  return match?.laborType || 'fixture';
 }
 
 // Compute labor breakdown for a category
@@ -55,10 +53,10 @@ function calcLaborBreakdown(catId) {
     else if (laborType === 'equipment') equipKosu += kosu;
     else fixtureKosu += kosu;
 
-    // Count ceiling openings
-    const n = norm(item.name + ' ' + (item.spec||''));
-    if (n.includes('ダウンライト') || n.includes('非常灯') || n.includes('非常照明') || n.includes('感知'))
-      ceilingCount += qty;
+    // Count ceiling openings（キーワードマスタに「天井開口」フラグがある品目）
+    const n = norm(item.name + ' ' + (item.spec || ''));
+    const kwMatch = TRIDGE_KEYWORDS.find(k => k.ceilingOpening && n.includes(k.keyword));
+    if (kwMatch) ceilingCount += qty;
 
     details.push({ name: item.name, qty, bukariki: buk.value, kosu: Math.round(kosu*1000)/1000, type: laborType, source: buk.source });
   }

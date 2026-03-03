@@ -19,36 +19,54 @@
 - 工種（幹線・照明・コンセント等）はトリッジから読み込む（ハードコードしない）
 - 電気/空調トリッジには銅建値補正パラメーターを含める
 
-## トリッジのExcel構成
+## トリッジのExcel構成（Deck側の受け口 = コネクタ雌形状）
 
 ```
 トリッジ（Excel）
-├── 資材マスタ     — 材料マスタ（品目名称/規格/単位/基準単価/原価/原価率/歩掛/カテゴリ）
-├── 工種マスタ     — 工種カテゴリ定義（Phase 1で実装）
-├── 設定マスタ     — アプリ動作パラメーター（Phase 1で実装）
+├── 資材マスタ     — 品目名称/規格/単位/基準単価/原価/原価率/歩掛/カテゴリ
+├── 工種マスタ     — 工種ID/工種名/略称/割合モード/雑材料率%/順序
+├── 設定マスタ     — パラメーター名/値（銅建値補正等）
+├── キーワードマスタ — キーワード/分類/歩掛/銅連動/天井開口
 └── 労務単価マスタ  — 将来実装予定
 ```
 
-### 設定マスタのパラメーター
-| パラメーター | 説明 |
+### 設定マスタのパラメーター（パラメーター名/値 の2列）
+| パラメーター名 | 説明 |
 |------------|------|
-| 銅建値補正 | 有効/無効（電気・空調トリッジのみ有効） |
+| 銅建値補正 | ○/はい/1 で有効（電気・空調トリッジのみ） |
 | 銅建値基準（円/kg） | トリッジ作成時点の基準銅建値 |
-| 銅連動率 | 材料価格に占める銅コスト比率 |
+| 銅連動率 | 材料価格に占める銅コスト比率（0〜1） |
 | 労務売単価（円/人工） | 労務費計算用 |
 | 労務原価単価（円/人工） | 労務費計算用 |
 
-## 現在の実装状態（Phase 0 完了）
+### キーワードマスタの列
+| 列名 | 説明 |
+|------|------|
+| キーワード | 品名に含まれる文字列（norm()適用） |
+| 分類 | wiring / fixture / equipment |
+| 歩掛 | デフォルト歩掛係数 |
+| 銅連動 | ○で銅建値補正対象（ケーブル類） |
+| 天井開口 | ○で天井開口カウント対象 |
+
+## 現在の実装状態（Phase 1 完了）
 
 ### 完成済み機能
-- トリッジ（Excel）の読み込み（excel-loader.js）
+- トリッジ読み込み（4シート対応）→ excel-loader.js
+- 工種マスタ → `applyTridgeCategories()` で activeCategories に動的ロード
+- 設定マスタ → `TRIDGE_SETTINGS` に格納、銅建値補正UI連動
+- キーワードマスタ → `TRIDGE_KEYWORDS` に格納、labor.js が参照
+- 資材マスタの歩掛カラム → BUKARIKI_DB として labor.js が優先参照
+- 銅建値補正: `TRIDGE_SETTINGS.copperEnabled` が true の時のみ有効
 - 材料検索モーダル（material-search.js）
-- 労務費自動計算（labor.js）※現在は電気専用ロジック
 - 見積計算エンジン（calc-engine.js）
-- 銅建値補正機能（app.js内）
 - Excel出力
 - 実績DB参照（PERF_DB）
-- 工種の追加・有効/無効切り替え
+
+### 重要なグローバル変数（data.js）
+- `TRIDGE_SETTINGS`: 設定マスタの値（copperEnabled/copperBase/copperFraction/laborSell/laborCost）
+- `TRIDGE_KEYWORDS`: キーワードマスタの配列（keyword/laborType/bukariki/copperLinked/ceilingOpening）
+- `tridgeLoaded`: Tridge装着フラグ
+- `activeCategories`: 工種マスタから動的ロード（Tridge未装着時は[]）
 
 ### 内蔵DB
 `data/material_db.json` と `data/bukariki_db.json` は空の`[]`。
@@ -56,28 +74,16 @@
 
 ## 汎用化フェーズ計画
 
-### Phase 1（次に着手）：工種マスタをトリッジに移行
+### Phase 1 ✅ 完了：Tridge主導アーキテクチャへの移行
+- CATEGORIES・BUKARIKI_DEFAULTS を data.js から削除
+- 工種マスタ・設定マスタ・キーワードマスタの読み込みを excel-loader.js に実装
+- labor.js をTRIDGE_KEYWORDS参照型に書き換え
+- 銅建値補正UIを設定マスタ連動に
 
-**変更内容：**
-1. `excel-loader.js` に工種マスタ・設定マスタの読み込み処理を追加
-2. `data.js` のCATEGORIES固定値を削除 → トリッジから動的ロード
-3. 銅建値補正UIをトリッジ設定マスタで動的に表示/非表示
-4. トリッジ未装着時は「工種が定義されていません」と表示
-
-**削除・変更対象：**
-- `data.js` の `CATEGORIES`（9種固定）→ 動的に
-- `data.js` の `AUTO_CALC.copperBase/copperFraction` → 設定マスタへ
-- `data.js` の `BUKARIKI_DEFAULTS` → トリッジ依存に（Phase 2）
-
-**変更しないもの（Phase 1では触らない）：**
-- `labor.js`（電気専用ロジック）→ Phase 2で汎用化
-- `PERF_DB`（八友電工の実績DB）→ Phase 3で分離
-- `AUTO_NAMES`（自動計算行名称）→ Phase 2で動的化
-
-### Phase 2：労務費計算の汎用化
-- `labor.js` の電気専用キーワードを廃止
-- 歩掛はすべてトリッジのDB値のみ（自動判定廃止）
-- AUTO_NAMESも工種マスタで定義
+### Phase 2（次）：AUTO_NAMES・calc-engine テンプレートの動的化
+- AUTO_NAMESを工種マスタの「自動計算行」列で定義
+- calc-engine.js の addAutoCalcRows テンプレートを工種マスタ依存に
+- labor.js の `classifyForLabor` をさらに精緻化（天井開口等）
 
 ### Phase 3：軽量化・分離
 - PERF_DBを八友電工専用ファイルに分離
@@ -106,5 +112,7 @@ estimate-app/
 - `norm(s)`: NFKC正規化で全角/半角統一 → data.jsで定義、全ファイルで使用
 - `cache: 'no-store'`: app.jsのfetch呼び出しに設定（ブラウザキャッシュ防止）
 - `getCol(row, ...names)`: excel-loader.jsの柔軟な列名検索
-- `activeCategories`: localStorage保存（旧データは起動時にマイグレーション）
-- 銅建値補正: ケーブル行の金額をリアルタイム自動調整（現在は常時有効）
+- `activeCategories`: Tridge装着時に `applyTridgeCategories()` で上書き、localStorageに保存
+- 銅建値補正: `TRIDGE_SETTINGS.copperEnabled === true` の時のみ有効（Tridge設定マスタ連動）
+- `isCableItem()`: TRIDGE_KEYWORDS の copperLinked フラグで判定（ハードコードなし）
+- `miscRate`: activeCategories[*].miscRate に格納（工種マスタの「雑材料率%」列）
