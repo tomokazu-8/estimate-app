@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"import sys,json; data=json.loads\\(''[''+sys.stdin.read\\(\\)\\); cats=list\\(set\\(d[''c''] for d in data\\)\\); print\\(''カテゴリ:'', cats\\)\")",
+      "Bash(node -e \":*)",
+      "Bash(where gh)",
+      "Bash(winget list --name \"GitHub CLI\")",
+      "Bash(wc -l js/*.js)"
+    ]
+  }
+}
