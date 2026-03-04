@@ -74,9 +74,16 @@ document.addEventListener('DOMContentLoaded', () => {
   activeCategories.filter(c => c.custom).forEach(c => { if (!items[c.id]) items[c.id] = []; });
   updateCopperUI(); // 銅建値補正UI（Tridge未装着時は非表示）
   renderCatTabs();
-  renderDBTable();
   showDbOverlay();
-  loadDefaultDB().then(() => { loadFromLocalStorage(); updateDbStatus(); recalcAll(); });
+  loadDefaultDB().then(async () => {
+    loadFromLocalStorage(); updateDbStatus(); recalcAll();
+    // PERF_DB → ナレッジDB移行（初回のみ）
+    try {
+      const migrated = await knowledgeDB.migratePerfDB(PERF_DB);
+      if (migrated > 0) console.log('PERF_DB migrated: ' + migrated + ' records');
+    } catch(e) { console.warn('PERF_DB migration failed:', e); }
+    renderDBTable();
+  });
 });
 
 document.addEventListener('keydown', (e) => {
@@ -99,7 +106,7 @@ function navigate(panel, el) {
     });
   }
 
-  const titles = { project:'物件情報', items:'明細入力', summary:'内訳書', reference:'類似物件参照', check:'妥当性チェック', database:'実績DB' };
+  const titles = { project:'物件情報', items:'明細入力', summary:'内訳書', reference:'類似物件参照', check:'妥当性チェック', database:'ナレッジDB' };
   document.getElementById('topbarTitle').textContent = titles[panel] || '';
   document.getElementById('topbarBread').textContent = project.name || '新規見積作成';
 
@@ -760,8 +767,8 @@ function renderSummary() {
   document.getElementById('prev-projname').textContent = project.name || '（物件名未入力）';
 }
 
-// ===== SIMILAR PROJECTS =====
-function searchSimilar() {
+// ===== SIMILAR PROJECTS (ナレッジDB参照) =====
+async function searchSimilar() {
   const struct = project.struct;
   const type = project.type;
   const usage = project.usage;
@@ -773,18 +780,32 @@ function searchSimilar() {
     return;
   }
 
-  let matches = PERF_DB.filter(p => {
+  let allRecords;
+  try { allRecords = await knowledgeDB.getAll(); } catch(e) { allRecords = []; }
+
+  let matches = allRecords.map(rec => {
     let score = 0;
+    const p = rec.project;
     if (struct && p.struct === struct) score += 3;
     if (type && p.type === type) score += 2;
     if (usage && p.usage === usage) score += 2;
-    if (area > 0 && p.area_tsubo) {
-      const diff = Math.abs(p.area_tsubo - area) / area;
+    const pArea = parseFloat(p.areaTsubo) || 0;
+    if (area > 0 && pArea > 0) {
+      const diff = Math.abs(pArea - area) / area;
       if (diff < 0.5) score += 1;
     }
-    p._score = score;
-    return score >= 2;
-  }).sort((a,b) => b._score - a._score);
+    return {
+      name: p.name,
+      struct: p.struct,
+      type: p.type,
+      usage: p.usage,
+      area_tsubo: pArea || null,
+      total: rec.grandTotal,
+      profit: rec.profitRate,
+      hasDetail: rec.categories && rec.categories.some(c => c.items && c.items.length > 0),
+      _score: score,
+    };
+  }).filter(m => m._score >= 2).sort((a,b) => b._score - a._score);
 
   document.getElementById('refBadge').textContent = matches.length;
 
@@ -793,7 +814,6 @@ function searchSimilar() {
     return;
   }
 
-  // Stats
   const withArea = matches.filter(m => m.area_tsubo);
   const tsuboPrices = withArea.map(m => Math.round(m.total / m.area_tsubo));
   const profits = matches.map(m => m.profit);
@@ -829,8 +849,8 @@ function searchSimilar() {
   document.getElementById('refContent').innerHTML = html;
 }
 
-// ===== VALIDATION =====
-function runValidation() {
+// ===== VALIDATION (ナレッジDB参照) =====
+async function runValidation() {
   let grandTotal = 0;
   activeCategories.filter(c => c.active).forEach(c => { grandTotal += getCatAmount(c.id); });
 
@@ -842,15 +862,22 @@ function runValidation() {
   const tsubo = parseFloat(project.areaTsubo) || 0;
   const struct = project.struct;
   const type = project.type;
-  
+
   let checks = [];
+
+  // ナレッジDBから全件取得
+  let allRecords;
+  try { allRecords = await knowledgeDB.getAll(); } catch(e) { allRecords = []; }
 
   // Tsubo price check
   if (tsubo > 0) {
     const tsuboPrice = grandTotal / tsubo;
-    const similar = PERF_DB.filter(p => p.area_tsubo && p.struct === struct && p.type === type);
+    const similar = allRecords.filter(rec => {
+      const pArea = parseFloat(rec.project.areaTsubo) || 0;
+      return pArea > 0 && rec.project.struct === struct && rec.project.type === type;
+    });
     if (similar.length > 0) {
-      const prices = similar.map(p => p.total / p.area_tsubo);
+      const prices = similar.map(rec => rec.grandTotal / parseFloat(rec.project.areaTsubo));
       const avg = prices.reduce((a,b)=>a+b,0)/prices.length;
       const ratio = tsuboPrice / avg;
       const ok = ratio >= 0.7 && ratio <= 1.3;
@@ -867,12 +894,16 @@ function runValidation() {
   // Profit check
   const laborRate = (project.laborRate || 72) / 100;
   const profitRate = (1 - laborRate) * 100;
-  const targetProfit = type === '改修' ? 32.7 : 27.5;
+  // ナレッジDBから同種別の平均利益率を算出
+  const sameType = allRecords.filter(rec => rec.project.type === type && rec.profitRate > 0);
+  const targetProfit = sameType.length > 0
+    ? Math.round(sameType.reduce((s,r) => s + r.profitRate, 0) / sameType.length * 10) / 10
+    : (type === '改修' ? 32.7 : 27.5);
   const profitOk = Math.abs(profitRate - targetProfit) < 10;
   checks.push({
     label: '利益率チェック',
     value: profitRate.toFixed(1) + '%',
-    range: `${type || '全体'}平均 ${targetProfit.toFixed(1)}%`,
+    range: `${type || '全体'}平均 ${targetProfit.toFixed(1)}%（${sameType.length}件の実績）`,
     status: profitOk ? 'ok' : 'warn',
     message: profitOk ? '目標範囲内です' : '利益率の調整を検討してください'
   });
@@ -920,20 +951,117 @@ function runValidation() {
   document.getElementById('checkContent').innerHTML = html;
 }
 
-// ===== DB TABLE =====
-function renderDBTable() {
+// ===== ナレッジDB TABLE =====
+async function renderDBTable() {
+  let allRecords;
+  try { allRecords = await knowledgeDB.getAll(); } catch(e) { allRecords = []; }
+
+  // バッジ更新
+  const badge = document.getElementById('knowledgeBadge');
+  if (badge) badge.textContent = allRecords.length;
+
+  // 統計更新
+  const detailCount = allRecords.filter(r => r.categories && r.categories.some(c => c.items && c.items.length > 0)).length;
+  const legacyCount = allRecords.filter(r => r.legacy).length;
+  const countEl = document.getElementById('knowledgeCount');
+  const detailEl = document.getElementById('knowledgeDetailCount');
+  const legacyEl = document.getElementById('knowledgeLegacyCount');
+  if (countEl) countEl.textContent = allRecords.length;
+  if (detailEl) detailEl.textContent = detailCount;
+  if (legacyEl) legacyEl.textContent = legacyCount;
+
+  // テーブル描画
   const tbody = document.getElementById('dbBody');
-  tbody.innerHTML = PERF_DB.map(p => {
-    const tp = p.area_tsubo ? '¥'+formatNum(Math.round(p.total/p.area_tsubo)) : '—';
+  tbody.innerHTML = allRecords.map(rec => {
+    const p = rec.project;
+    const area = parseFloat(p.areaTsubo) || 0;
+    const tp = area > 0 ? '¥'+formatNum(Math.round(rec.grandTotal / area)) : '—';
+    const hasDetail = rec.categories && rec.categories.some(c => c.items && c.items.length > 0);
     return `<tr>
+      <td style="font-size:11px;">${rec.registeredAt || '—'}</td>
       <td>${p.name}</td>
       <td>${p.struct}</td>
       <td><span class="tag ${p.type==='新築'?'tag-blue':'tag-amber'}">${p.type}</span></td>
-      <td class="td-right">¥${formatNum(p.total)}</td>
-      <td class="td-right">${p.profit}%</td>
+      <td>${p.usage||''}</td>
+      <td class="td-right">¥${formatNum(rec.grandTotal)}</td>
+      <td class="td-right">${rec.profitRate}%</td>
       <td class="td-right">${tp}</td>
+      <td style="text-align:center;">${hasDetail
+        ? `<button class="btn btn-secondary btn-sm" style="font-size:10px;padding:2px 6px;" onclick="showKnowledgeDetail(${rec.id})">詳細</button>`
+        : '<span style="font-size:10px;color:var(--text-dim);">なし</span>'}</td>
+      <td><button class="btn btn-sm" style="font-size:10px;padding:2px 6px;color:var(--red);" onclick="deleteKnowledge(${rec.id})">×</button></td>
     </tr>`;
   }).join('');
+}
+
+// ナレッジ詳細表示
+async function showKnowledgeDetail(id) {
+  const rec = await knowledgeDB.getById(id);
+  if (!rec) { showToast('レコードが見つかりません'); return; }
+
+  const p = rec.project;
+  let html = `<div style="margin-bottom:12px;">
+    <div style="font-weight:600;font-size:15px;margin-bottom:4px;">${p.name}</div>
+    <div style="font-size:11px;color:var(--text-sub);">${p.struct} / ${p.type} / ${p.usage || '—'} / ${p.areaTsubo ? p.areaTsubo+'坪' : '面積不明'}</div>
+    <div style="font-size:11px;color:var(--text-sub);">登録日: ${rec.registeredAt} / 合計: ¥${formatNum(rec.grandTotal)} / 利益率: ${rec.profitRate}%</div>
+  </div>`;
+
+  if (rec.categories && rec.categories.length > 0) {
+    rec.categories.forEach(cat => {
+      if (!cat.items || cat.items.length === 0) return;
+      html += `<div style="margin-bottom:12px;">
+        <div style="font-weight:600;font-size:12px;background:var(--bg);padding:6px 10px;border-radius:4px;margin-bottom:4px;">
+          ${cat.name}（小計: ¥${formatNum(cat.subtotal)}）
+        </div>
+        <table style="font-size:11px;"><thead><tr>
+          <th>品名</th><th>規格</th><th style="text-align:right">数量</th><th>単位</th><th style="text-align:right">単価</th><th style="text-align:right">金額</th>
+        </tr></thead><tbody>`;
+      cat.items.forEach(i => {
+        html += `<tr>
+          <td>${i.name}</td><td>${i.spec||''}</td>
+          <td class="td-right">${i.qty||''}</td><td>${i.unit||''}</td>
+          <td class="td-right">${i.price ? '¥'+formatNum(i.price) : ''}</td>
+          <td class="td-right">${i.amount ? '¥'+formatNum(Math.round(i.amount)) : ''}</td>
+        </tr>`;
+      });
+      html += '</tbody></table></div>';
+    });
+  } else {
+    html += '<p style="color:var(--text-sub);font-size:12px;">品目明細なし（レガシーデータ）</p>';
+  }
+
+  document.getElementById('knowledgeDetailBody').innerHTML = html;
+  document.getElementById('knowledgeDetailModal').classList.add('show');
+}
+
+// ナレッジ削除
+async function deleteKnowledge(id) {
+  if (!confirm('この実績データを削除しますか？')) return;
+  try {
+    await knowledgeDB.remove(id);
+    showToast('削除しました');
+    renderDBTable();
+  } catch(e) { showToast('削除に失敗しました'); }
+}
+
+// JSONエクスポート
+async function knowledgeExportJSON() {
+  try {
+    await knowledgeDB.exportJSON();
+    showToast('JSONエクスポート完了');
+  } catch(e) { showToast('エクスポートに失敗しました'); }
+}
+
+// JSONインポート
+async function knowledgeImportJSON(file) {
+  if (!file) return;
+  try {
+    const count = await knowledgeDB.importJSON(file);
+    showToast(count + '件インポートしました');
+    renderDBTable();
+  } catch(e) { showToast('インポートに失敗しました: ' + e.message); }
+  // input をリセット
+  document.getElementById('knowledgeImportFile').value = '';
 }
 
 // ===== PERSISTENCE =====
@@ -1041,6 +1169,17 @@ function exportEstimate() {
   const safeName = (project.name || '新規').replace(/[\/\\:*?"<>|]/g, '');
   XLSX.writeFile(wb, '見積書_' + safeName + '_' + (project.date || '') + '.xlsx');
   showToast('Excel出力完了');
+
+  // ナレッジDBに自動登録
+  try {
+    const record = knowledgeDB.buildRecord();
+    if (record.grandTotal > 0) {
+      knowledgeDB.save(record).then(() => {
+        showToast('ナレッジDBに登録しました');
+        renderDBTable();
+      });
+    }
+  } catch(e) { console.warn('ナレッジDB登録失敗:', e); }
 }
 
 // ===== UTILS =====
@@ -1053,4 +1192,142 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ===== 見積自動作成 =====
+async function autoCreateEstimate() {
+  if (!tridgeLoaded && activeCategories.length === 0) {
+    showToast('先にトリッジを装着してください');
+    return;
+  }
+
+  const struct = project.struct;
+  const type = project.type;
+  const usage = project.usage;
+  const area = parseFloat(project.areaTsubo) || 0;
+
+  if (!struct && !type) {
+    showToast('構造・種別を入力してください');
+    return;
+  }
+
+  // ナレッジDBから類似物件を検索
+  let candidates;
+  try {
+    candidates = await knowledgeDB.searchSimilar({ struct, type, usage, areaTsubo: area });
+  } catch(e) { candidates = []; }
+
+  // 品目明細付きの候補のみ抽出
+  const withDetail = candidates.filter(r =>
+    r.categories && r.categories.some(c => c.items && c.items.length > 0)
+  );
+
+  if (withDetail.length === 0) {
+    showToast('品目明細付きの類似物件がありません');
+    return;
+  }
+
+  // 候補選択モーダル表示
+  let html = '<div style="margin-bottom:12px;font-size:12px;color:var(--text-sub);">類似物件の品目を面積比で調整して自動投入します。候補を選んでください。</div>';
+
+  html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+  withDetail.slice(0, 5).forEach(rec => {
+    const p = rec.project;
+    const recArea = parseFloat(p.areaTsubo) || 0;
+    const ratio = (area > 0 && recArea > 0) ? (area / recArea) : 1;
+    const catCount = rec.categories.filter(c => c.items && c.items.length > 0).length;
+    const itemCount = rec.categories.reduce((s,c) => s + (c.items ? c.items.length : 0), 0);
+
+    html += `<div style="border:1px solid var(--border);border-radius:8px;padding:12px;cursor:pointer;transition:all 0.15s;"
+                  onmouseover="this.style.borderColor='var(--accent)';this.style.background='var(--accent-light)'"
+                  onmouseout="this.style.borderColor='var(--border)';this.style.background=''"
+                  onclick="applyAutoCreate(${rec.id}, ${ratio})">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-weight:600;font-size:13px;">${p.name}</div>
+          <div style="font-size:11px;color:var(--text-sub);">
+            ${p.struct} / ${p.type} / ${p.usage || '—'} / ${recArea ? recArea+'坪' : '面積不明'}
+          </div>
+          <div style="font-size:10px;color:var(--text-dim);margin-top:2px;">
+            ${catCount}工種 / ${itemCount}品目 / スコア: ${rec._score}
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-family:'JetBrains Mono';font-weight:700;color:var(--accent);">¥${formatNum(rec.grandTotal)}</div>
+          <div style="font-size:10px;color:var(--text-sub);">面積比: ${ratio.toFixed(2)}x</div>
+        </div>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+
+  document.getElementById('autoCreateBody').innerHTML = html;
+  document.getElementById('autoCreateModal').classList.add('show');
+}
+
+// 自動作成の実行
+async function applyAutoCreate(knowledgeId, areaRatio) {
+  document.getElementById('autoCreateModal').classList.remove('show');
+
+  const rec = await knowledgeDB.getById(knowledgeId);
+  if (!rec) { showToast('レコードが見つかりません'); return; }
+
+  saveUndoState();
+
+  let addedItems = 0;
+
+  rec.categories.forEach(srcCat => {
+    if (!srcCat.items || srcCat.items.length === 0) return;
+
+    // 現在のactiveCategoriesから一致する工種を探す
+    const targetCat = activeCategories.find(c =>
+      c.id === srcCat.id || c.name === srcCat.name
+    );
+    if (!targetCat || !targetCat.active) return;
+
+    // items[catId] がなければ初期化
+    if (!items[targetCat.id]) items[targetCat.id] = [];
+
+    // 既存品目があれば確認
+    const existing = items[targetCat.id].filter(i => i.name);
+    if (existing.length > 0) {
+      if (!confirm(`「${targetCat.name}」には既に${existing.length}件の品目があります。上書きしますか？\n（キャンセルでこの工種をスキップ）`)) {
+        return;
+      }
+      items[targetCat.id] = [];
+    }
+
+    // AUTO_NAMESに該当する行は除外（自動計算行はaddAutoCalcRowsで再生成するため）
+    srcCat.items.forEach(srcItem => {
+      if (AUTO_NAMES.includes(srcItem.name)) return;
+
+      const qty = areaRatio !== 1
+        ? Math.ceil((srcItem.qty || 0) * areaRatio)
+        : (srcItem.qty || 0);
+      const price = srcItem.price || 0;
+      const amount = qty * price;
+
+      items[targetCat.id].push({
+        id: itemIdCounter++,
+        name: srcItem.name,
+        spec: srcItem.spec || '',
+        qty: qty,
+        unit: srcItem.unit || '',
+        price: price,
+        amount: amount,
+        bukariki: srcItem.bukariki || '',
+        note: srcItem.note || '',
+      });
+      addedItems++;
+    });
+  });
+
+  // 最初の工種を表示
+  const firstCat = activeCategories.find(c => c.active && !c.rateMode && items[c.id] && items[c.id].length > 0);
+  if (firstCat) currentCat = firstCat.id;
+
+  renderCatTabs();
+  renderItems();
+  updateSummaryBar();
+  showToast(`${addedItems}品目を自動投入しました（元: ${rec.project.name}）`);
 }

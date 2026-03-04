@@ -60,17 +60,28 @@
 - 材料検索モーダル（material-search.js）
 - 見積計算エンジン（calc-engine.js）
 - Excel出力
-- 実績DB参照（PERF_DB）
+- ナレッジDB（knowledge-db.js）— IndexedDB + JSONエクスポート/インポート
+- 見積自動作成（ナレッジDBの類似物件から品目を面積比スケーリングで自動投入）
 
 ### 重要なグローバル変数（data.js）
 - `TRIDGE_SETTINGS`: 設定マスタの値（copperEnabled/copperBase/copperFraction/laborSell/laborCost）
 - `TRIDGE_KEYWORDS`: キーワードマスタの配列（keyword/laborType/bukariki/copperLinked/ceilingOpening）
 - `tridgeLoaded`: Tridge装着フラグ
 - `activeCategories`: 工種マスタから動的ロード（Tridge未装着時は[]）
+- `PERF_DB`: レガシー実績データ（33件、初回起動時にナレッジDBに移行済み）
 
 ### 内蔵DB
 `data/material_db.json` と `data/bukariki_db.json` は空の`[]`。
 トリッジを装着することで材料DBが有効になる。
+
+### ナレッジDB（knowledge-db.js）
+- IndexedDB `estimate-knowledge` に見積実績を蓄積
+- Excel出力時に自動登録（プロジェクト情報 + 全工種の全品目明細）
+- JSONエクスポート/インポートで端末間共有可能
+- `knowledgeDB.searchSimilar()`: 構造/種別/用途/面積で類似物件検索
+- `knowledgeDB.buildRecord()`: 現在の見積データからナレッジレコードを構築
+- 初回起動時に `PERF_DB` → ナレッジDB に自動移行（`perf_db_migrated` フラグで制御）
+- 見積自動作成: 類似物件の品目を面積比でスケーリングして自動投入
 
 ## 汎用化フェーズ計画
 
@@ -86,7 +97,7 @@
 - labor.js の `classifyForLabor` をさらに精緻化（天井開口等）
 
 ### Phase 3：軽量化・分離
-- PERF_DBを八友電工専用ファイルに分離
+- PERF_DBをdata.jsから完全削除（ナレッジDBに移行済みのため）
 - 電気専用UIの完全削除
 
 ## ファイル構成
@@ -99,11 +110,12 @@ estimate-app/
 │   ├── material_db.json    ← 空の[] （トリッジで上書きされる）
 │   └── bukariki_db.json    ← 空の[] （トリッジで上書きされる）
 └── js/
-    ├── app.js              ← メインUIロジック（1016行）
+    ├── app.js              ← メインUIロジック
     ├── calc-engine.js      ← 見積計算エンジン
-    ├── data.js             ← 定数・データモデル（CATEGORIES等）
+    ├── data.js             ← 定数・データモデル
     ├── excel-loader.js     ← トリッジ読み込み・Excelエクスポート
-    ├── labor.js            ← 労務費計算（現在電気専用）
+    ├── knowledge-db.js     ← ナレッジDB（IndexedDB CRUD + JSON入出力 + 見積自動作成）
+    ├── labor.js            ← 労務費計算（TRIDGE_KEYWORDS参照型）
     └── material-search.js  ← 材料検索モーダル
 ```
 
