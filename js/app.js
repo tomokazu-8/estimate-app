@@ -974,7 +974,8 @@ async function renderDBTable() {
     const area = parseFloat(p.areaTsubo) || 0;
     const tp = area > 0 ? '¥'+formatNum(Math.round(rec.grandTotal / area)) : '—';
     const hasDetail = rec.categories && rec.categories.some(c => c.items && c.items.length > 0);
-    return `<tr>
+    const excluded = !!rec.excluded;
+    return `<tr style="${excluded ? 'opacity:0.4;' : ''}">
       <td style="font-size:11px;">${rec.registeredAt || '—'}</td>
       <td>${p.name}</td>
       <td>${p.struct}</td>
@@ -986,9 +987,20 @@ async function renderDBTable() {
       <td style="text-align:center;">${hasDetail
         ? `<button class="btn btn-secondary btn-sm" style="font-size:10px;padding:2px 6px;" onclick="showKnowledgeDetail(${rec.id})">詳細</button>`
         : '<span style="font-size:10px;color:var(--text-dim);">なし</span>'}</td>
+      <td style="text-align:center;">
+        <button class="btn btn-sm" style="font-size:10px;padding:2px 6px;${excluded ? 'color:var(--red);' : 'color:var(--green);'}"
+          title="${excluded ? '有効に戻す' : '自動見積りから除外'}"
+          onclick="toggleExclude(${rec.id}, ${excluded})">${excluded ? '除外中' : '有効'}</button>
+      </td>
       <td><button class="btn btn-sm" style="font-size:10px;padding:2px 6px;color:var(--red);" onclick="deleteKnowledge(${rec.id})">×</button></td>
     </tr>`;
   }).join('');
+}
+
+// 除外フラグ切り替え
+async function toggleExclude(id, currentExcluded) {
+  await knowledgeDB.setExcluded(id, !currentExcluded);
+  renderDBTable();
 }
 
 // ナレッジ詳細表示
@@ -1041,23 +1053,22 @@ async function deleteKnowledge(id) {
   } catch(e) { showToast('削除に失敗しました'); }
 }
 
-// JSONエクスポート
-async function knowledgeExportJSON() {
+// Excelエクスポート
+async function knowledgeExportXLSX() {
   try {
-    await knowledgeDB.exportJSON();
-    showToast('JSONエクスポート完了');
+    await knowledgeDB.exportXLSX();
+    showToast('Excelエクスポート完了');
   } catch(e) { showToast('エクスポートに失敗しました'); }
 }
 
-// JSONインポート
-async function knowledgeImportJSON(file) {
+// インポート（JSON / XLSX 自動判別）
+async function knowledgeImportFile(file) {
   if (!file) return;
   try {
-    const count = await knowledgeDB.importJSON(file);
+    const count = await knowledgeDB.importFile(file);
     showToast(count + '件インポートしました');
     renderDBTable();
   } catch(e) { showToast('インポートに失敗しました: ' + e.message); }
-  // input をリセット
   document.getElementById('knowledgeImportFile').value = '';
 }
 
