@@ -2,9 +2,13 @@
 
 ## このアプリの位置づけ
 
-八友電工の**見積プラットフォーム**。
+八友電工の**見積プラットフォーム**（通称 Deck）。
 「トリッジ（Tridge）」と呼ぶExcelファイルを差し込むことで、
-電気・空調・給排水・建築など、どの業種の見積にも対応できる汎用設計を目指す。
+電気・空調・給排水・建築など、どの業種の見積にも対応できる汎用設計。
+
+- Deck = ゲーム機本体（プラットフォーム）= コネクタの雌側
+- Tridge = ゲームカセット（Excel）= コネクタの雄側
+- Deckには業種固有知識を一切持たせない（全てTridgeに委ねる）
 
 ## 関連リポジトリ
 
@@ -19,7 +23,14 @@
 - 工種（幹線・照明・コンセント等）はトリッジから読み込む（ハードコードしない）
 - 電気/空調トリッジには銅建値補正パラメーターを含める
 
-## トリッジのExcel構成（Deck側の受け口 = コネクタ雌形状）
+### トリッジ運用方針
+- **1スロット1トリッジ**: 同時に1つのトリッジのみ受け付ける（複数スロット不可）
+- **差しっぱなし可**: localStorage に工種・設定が保存されるため、毎回読み込む必要なし
+- **抜き差し自由**: 別トリッジを読み込めば全マスタが上書きされる
+- **複数業種対応**: db-manager側でトリッジを「合成」して1本にまとめる
+- **コネクタ仕様は安易に変えない**: 変えると既存トリッジが全て使えなくなる
+
+### トリッジのExcel構成（Deck側の受け口 = コネクタ雌形状）
 
 ```
 トリッジ（Excel）
@@ -48,7 +59,7 @@
 | 銅連動 | ○で銅建値補正対象（ケーブル類） |
 | 天井開口 | ○で天井開口カウント対象 |
 
-## 現在の実装状態（Phase 1 完了）
+## 現在の実装状態
 
 ### 完成済み機能
 - トリッジ読み込み（4シート対応）→ excel-loader.js
@@ -59,8 +70,8 @@
 - 銅建値補正: `TRIDGE_SETTINGS.copperEnabled` が true の時のみ有効
 - 材料検索モーダル（material-search.js）
 - 見積計算エンジン（calc-engine.js）
-- Excel出力
-- ナレッジDB（knowledge-db.js）— IndexedDB + JSONエクスポート/インポート
+- テンプレート方式Excel出力（excel-template-export.js）
+- ナレッジDB（knowledge-db.js）
 - 見積自動作成（ナレッジDBの類似物件から品目を面積比スケーリングで自動投入）
 
 ### 重要なグローバル変数（data.js）
@@ -74,24 +85,72 @@
 `data/material_db.json` と `data/bukariki_db.json` は空の`[]`。
 トリッジを装着することで材料DBが有効になる。
 
-### ナレッジDB（knowledge-db.js）
+## ナレッジDB（knowledge-db.js）
+
 - IndexedDB `estimate-knowledge` に見積実績を蓄積
 - Excel出力時に自動登録（プロジェクト情報 + 全工種の全品目明細）
 - JSONエクスポート/インポートで端末間共有可能
-- `knowledgeDB.searchSimilar()`: 構造/種別/用途/面積で類似物件検索
+- `knowledgeDB.searchSimilar()`: 構造/種別/用途/面積で類似物件検索（スコア3以上を返却）
 - `knowledgeDB.buildRecord()`: 現在の見積データからナレッジレコードを構築
 - 初回起動時に `PERF_DB` → ナレッジDB に自動移行（`perf_db_migrated` フラグで制御）
-- 見積自動作成: 類似物件の品目を面積比でスケーリングして自動投入
+- 見積自動作成: 類似物件の品目を面積比でスケーリングして自動投入（AUTO_NAMES行は除外）
 
-### テンプレート方式Excel出力（ExcelJS）
-- `data/estimate_template.xlsx` をテンプレートとして読み込み、データを書き込む方式
-- レイアウト修正 = テンプレートをExcelで直接編集するだけ（コード変更不要）
-- 3シート構成: 表紙（御見積書）/ 内訳書 / 内訳明細書
-- ExcelJS CDN使用、テンプレート読み込み失敗時はSheetJS簡易版にフォールバック
-- テンプレート生成: `node scripts/generate-template.js`
-- 表紙の消費税・御見積金額はテンプレート内のExcel関数が計算
-- 内訳書の合計もテンプレートの SUM(G7:G16) が計算
-- 明細書は20ページ確保（1ページ25データ行）、未使用ページは自動クリア
+## テンプレート方式Excel出力
+
+### 概要
+`data/estimate_template.xlsx` を読み込み、所定セルにデータを書き込む方式。
+レイアウト修正 = テンプレートをExcelで直接編集するだけ（コード変更不要）。
+
+### テンプレートファイル
+- **場所**: `data/estimate_template.xlsx`
+- **生成**: `node scripts/generate-template.js`（再生成が必要な場合のみ）
+- **ページ設定**: A4横向き、fitToPage有効
+- **3シート構成**: 表紙 / 内訳書 / 内訳明細書
+- ユーザーがExcelで直接編集・関数追加できる
+
+### テンプレートのセルマップ（Deck→テンプレートの書き込み先）
+
+#### 表紙シート
+| セル | 内容 |
+|------|------|
+| P4 | 見積番号 |
+| C6 | 得意先名 +「　御中」 |
+| O6 | 日付（yyyy年 m月 d日） |
+| G9 | 税抜金額 |
+| G10 | 消費税（テンプレート関数 `=ROUNDDOWN(G9*0.1,0)` を推奨） |
+| G11 | 税込合計（テンプレート関数 `=G9+G10` を推奨） |
+| E14 | 工事名 |
+| E15 | 施工場所 |
+| P15 | 担当者名 |
+
+#### 内訳書シート
+| セル | 内容 |
+|------|------|
+| B4 | 物件名 |
+| 行7〜16 | カテゴリ行（最大10工種）: B=工種名, D=1, E=式, G=金額, H=備考 |
+| G32 | 合計（テンプレート関数 `=SUM(G7:G16)` を推奨） |
+
+#### 内訳明細書シート
+- 20ページ分確保（各35行、1ページ=ヘッダー6行+データ25行+フッター4行）
+- ページN（0始まり）の行オフセット: `base = N × 35`
+
+| オフセット | 内容 |
+|-----------|------|
+| base+2 | タイトル「内訳明細書」 |
+| base+4 | B: カテゴリ名, H:「見積№」 |
+| base+6 | 列ヘッダー（品名/規格/数量/単位/単価/金額/備考） |
+| base+7〜31 | データ行（25行）: B=品名, C=規格, D=数量, E=単位, F=単価, G=金額, H=備考 |
+| base+32 | B:「合計」, G=工種合計金額 |
+| base+34 | B: ページ番号 |
+
+### 複数ページにまたがる工種の処理
+- 25品目を超えた工種は自動で次のページに送る
+- 途中ページ: 合計行をクリア
+- 最終ページ: 工種全体の合計を値で書き込み（テンプレートのSUM関数を上書き）
+- 未使用ページ: 自動クリア、印刷範囲も使用分のみに設定
+
+### フォールバック
+ExcelJS CDN読み込み失敗またはテンプレート読み込み失敗時は、SheetJS簡易版で出力。
 
 ## 汎用化フェーズ計画
 
@@ -116,21 +175,22 @@
 estimate-app/
 ├── index.html
 ├── css/
+│   └── style.css
 ├── data/
 │   ├── material_db.json       ← 空の[] （トリッジで上書きされる）
 │   ├── bukariki_db.json       ← 空の[] （トリッジで上書きされる）
-│   └── estimate_template.xlsx ← Excel出力テンプレート（Excelで直接編集可）
+│   └── estimate_template.xlsx ← Excel出力テンプレート（Excelで直接編集可、A4横）
 ├── scripts/
-│   └── generate-template.js   ← テンプレート自動生成スクリプト
+│   └── generate-template.js   ← テンプレート自動生成スクリプト（ExcelJS使用）
 └── js/
-    ├── app.js              ← メインUIロジック
-    ├── calc-engine.js      ← 見積計算エンジン
-    ├── data.js             ← 定数・データモデル
-    ├── excel-loader.js     ← トリッジ読み込み
-    ├── excel-template-export.js ← テンプレート方式Excel出力（ExcelJS、3シート構成）
-    ├── knowledge-db.js     ← ナレッジDB（IndexedDB CRUD + JSON入出力 + 見積自動作成）
-    ├── labor.js            ← 労務費計算（TRIDGE_KEYWORDS参照型）
-    └── material-search.js  ← 材料検索モーダル
+    ├── app.js                     ← メインUIロジック（exportEstimate: ExcelJS優先→SheetJSフォールバック）
+    ├── calc-engine.js             ← 見積計算エンジン（自動計算行の追加・雑材料費等）
+    ├── data.js                    ← 定数・グローバル変数・PERF_DB
+    ├── excel-loader.js            ← トリッジ読み込み（資材/工種/設定/キーワード4シート対応）
+    ├── excel-template-export.js   ← テンプレート方式Excel出力（テンプレート読み込み→データ書き込み）
+    ├── knowledge-db.js            ← ナレッジDB（IndexedDB CRUD + JSON入出力 + 見積自動作成）
+    ├── labor.js                   ← 労務費計算（TRIDGE_KEYWORDS参照型）
+    └── material-search.js         ← 材料検索モーダル
 ```
 
 ## 重要な実装メモ
@@ -142,3 +202,12 @@ estimate-app/
 - 銅建値補正: `TRIDGE_SETTINGS.copperEnabled === true` の時のみ有効（Tridge設定マスタ連動）
 - `isCableItem()`: TRIDGE_KEYWORDS の copperLinked フラグで判定（ハードコードなし）
 - `miscRate`: activeCategories[*].miscRate に格納（工種マスタの「雑材料率%」列）
+- `getCatTotal(catId)`: 品目金額の合計（items配列のamountを集計）
+- `getCatAmount(catId)`: 割合モード込みの金額（rateModeの場合は前工種合計×割合%で算出）
+- `exportEstimate()`: async関数、ExcelJS版を試行→失敗時SheetJSフォールバック→ナレッジDB自動登録
+
+## 外部ライブラリ（CDN）
+
+- **SheetJS** (`xlsx@0.18.5`): トリッジ読み込み・フォールバック用Excel出力
+- **ExcelJS** (`exceljs@4.4.0`): テンプレート方式Excel出力（メイン）
+- npm `exceljs`: テンプレート生成スクリプト用（`node_modules/`、.gitignore済み）
