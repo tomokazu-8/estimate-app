@@ -6,6 +6,7 @@ function norm(s) { return (s || '').normalize('NFKC').toLowerCase(); }
 
 let MATERIAL_DB = [];  // Loaded in init
 let BUKARIKI_DB = [];  // Loaded in init
+let BUNRUI_DB = { rows: [], keywords: [] };  // 分類マスタ（v3 Tridgeから読み込み）
 let LABOR_RATES = { sell: 19000, cost: 12000 };
 
 const CAT_RATIOS = {"accessories": 0.807, "box": 0.767, "cable": 0.721, "conduit": 0.756, "device": 0.728, "dimmer": 0.834, "fire": 0.802, "fixture": 0.77, "ground": 0.718, "panel": 0.761};

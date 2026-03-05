@@ -102,6 +102,22 @@ function loadExcelDB(file) {
         console.log('[Tridge] キーワードマスタ:', newKeywords.length, '件');
       }
 
+      // ===== Sheet: 分類マスタ（v3）=====
+      const wsBunrui = wb.Sheets['分類マスタ'];
+      if (wsBunrui) {
+        const dataBunrui = XLSX.utils.sheet_to_json(wsBunrui);
+        BUNRUI_DB.rows = dataBunrui.map(r => ({
+          daiId:   String(getCol(r, '大分類ID') || '').trim(),
+          daiName: String(getCol(r, '大分類名') || '').trim(),
+          chuId:   String(getCol(r, '中分類ID') || '').trim(),
+          chuName: String(getCol(r, '中分類名') || '').trim(),
+          shoId:   String(getCol(r, '小分類ID') || '').trim(),
+          shoName: String(getCol(r, '小分類名') || '').trim(),
+          count:   parseInt(getCol(r, '品目数') || 0),
+        })).filter(r => r.shoId);
+        console.log('[Tridge] 分類マスタ:', BUNRUI_DB.rows.length, '件');
+      }
+
       // ===== Sheet: 資材マスタ =====
       const ws1 = wb.Sheets['資材マスタ'];
       if (!ws1) { status.textContent = '❌ 「資材マスタ」シートが見つかりません'; status.style.color = '#dc2626'; return; }
@@ -145,6 +161,10 @@ function loadExcelDB(file) {
         const basePrice = parseFloat(getCol(row, '基準単価', '単価', '見積単価', '仕切単価', '仕切価格', '定価') || 0);
         const buk1     = parseFloat(getCol(row, '歩掛1', '歩掛', '人工', '取付人工') || 0);
         const chuName  = String(getCol(row, '中分類名', '分類名', '分類') || '').trim();
+        const daiId    = String(getCol(row, '大分類ID') || '').trim();
+        const chuId    = String(getCol(row, '中分類ID') || '').trim();
+        const shoId    = String(getCol(row, '小分類ID') || '').trim();
+        const shoName  = String(getCol(row, '小分類名') || '').trim();
 
         if (!hinmei) { skippedNoName++; continue; }
 
@@ -164,7 +184,8 @@ function loadExcelDB(file) {
           const costRate = CAT_RATIOS[cat] || 0.75;
           newMaterials.push({
             n: hinmei, s: kikaku, u: unit, c: cat,
-            ep: basePrice, cp: Math.round(basePrice * costRate), r: costRate, a: 1
+            ep: basePrice, cp: Math.round(basePrice * costRate), r: costRate, a: 1,
+            daiId, chuId, shoId, shoName,
           });
         } else {
           skippedNoPrice++;

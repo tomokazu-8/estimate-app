@@ -8,8 +8,62 @@ function openSearchModal(itemId) {
   document.getElementById('searchModal').classList.add('show');
   document.getElementById('searchQuery').value = '';
   document.getElementById('searchCatFilter').value = '';
+  initBunruiFilter();
   searchMaterial();
   setTimeout(() => document.getElementById('searchQuery').focus(), 100);
+}
+
+// ===== 分類階層フィルタ =====
+function initBunruiFilter() {
+  const row = document.getElementById('bunruiFilterRow');
+  if (!row) return;
+  const hasBunrui = BUNRUI_DB && BUNRUI_DB.rows && BUNRUI_DB.rows.length > 0;
+  row.style.display = hasBunrui ? 'flex' : 'none';
+  if (!hasBunrui) return;
+
+  // 大分類を重複なしで列挙
+  const daiSel = document.getElementById('searchDaiFilter');
+  const seen = new Map();
+  BUNRUI_DB.rows.forEach(r => { if (!seen.has(r.daiId)) seen.set(r.daiId, r.daiName); });
+  daiSel.innerHTML = '<option value="">大分類（全て）</option>' +
+    Array.from(seen.entries()).map(([id, name]) =>
+      `<option value="${id}">${id} ${name}</option>`
+    ).join('');
+  document.getElementById('searchChuFilter').innerHTML = '<option value="">中分類（全て）</option>';
+  document.getElementById('searchShoFilter').innerHTML = '<option value="">小分類（全て）</option>';
+}
+
+function onDaiFilterChange() {
+  const daiId = document.getElementById('searchDaiFilter').value;
+  const chuSel = document.getElementById('searchChuFilter');
+  const shoSel = document.getElementById('searchShoFilter');
+
+  // 中分類を更新
+  const seen = new Map();
+  BUNRUI_DB.rows.forEach(r => {
+    if ((!daiId || r.daiId === daiId) && !seen.has(r.chuId))
+      seen.set(r.chuId, r.chuName);
+  });
+  chuSel.innerHTML = '<option value="">中分類（全て）</option>' +
+    Array.from(seen.entries()).map(([id, name]) =>
+      `<option value="${id}">${id} ${name}</option>`
+    ).join('');
+  shoSel.innerHTML = '<option value="">小分類（全て）</option>';
+  searchMaterial();
+}
+
+function onChuFilterChange() {
+  const chuId = document.getElementById('searchChuFilter').value;
+  const daiId = document.getElementById('searchDaiFilter').value;
+  const shoSel = document.getElementById('searchShoFilter');
+
+  // 小分類を更新
+  const filtered = BUNRUI_DB.rows.filter(r =>
+    (!daiId || r.daiId === daiId) && (!chuId || r.chuId === chuId)
+  );
+  shoSel.innerHTML = '<option value="">小分類（全て）</option>' +
+    filtered.map(r => `<option value="${r.shoId}">${r.shoName}（${r.count}件）</option>`).join('');
+  searchMaterial();
 }
 
 function closeSearchModal() {
@@ -20,11 +74,23 @@ function closeSearchModal() {
 function searchMaterial() {
   const query = norm(document.getElementById('searchQuery').value).trim();
   const catFilter = document.getElementById('searchCatFilter').value;
+  const shoId = document.getElementById('searchShoFilter')?.value || '';
+  const chuId = document.getElementById('searchChuFilter')?.value || '';
+  const daiId = document.getElementById('searchDaiFilter')?.value || '';
 
   let results = MATERIAL_DB;
 
   if (catFilter) {
     results = results.filter(m => m.c === catFilter);
+  }
+
+  // 分類フィルタ（小→中→大の順で優先）
+  if (shoId) {
+    results = results.filter(m => m.shoId === shoId);
+  } else if (chuId) {
+    results = results.filter(m => m.chuId === chuId);
+  } else if (daiId) {
+    results = results.filter(m => m.daiId === daiId);
   }
 
   if (query.length >= 1) {
