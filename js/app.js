@@ -1107,67 +1107,78 @@ function loadFromLocalStorage() {
 }
 
 // ===== EXPORT =====
-function exportEstimate() {
-  if (!window.XLSX) { showToast('SheetJSが読み込まれていません'); return; }
+async function exportEstimate() {
+  // ExcelJS テンプレート出力を試みる（フォールバック: SheetJS簡易版）
+  let exported = false;
+  if (typeof ExcelJS !== 'undefined' && typeof ExcelTemplateExport !== 'undefined') {
+    try {
+      exported = await ExcelTemplateExport.exportFormatted();
+    } catch(e) {
+      console.warn('ExcelJS出力エラー、SheetJSにフォールバック:', e);
+    }
+  }
 
-  const wb = XLSX.utils.book_new();
+  if (!exported) {
+    // SheetJS簡易版（フォールバック）
+    if (!window.XLSX) { showToast('SheetJSが読み込まれていません'); return; }
 
-  // Sheet 1: 内訳書
-  const aoa = [];
-  aoa.push(['八友電工　御見積書']);
-  aoa.push([]);
-  aoa.push(['物件名', project.name || '']);
-  aoa.push(['見積番号', project.number || '', '見積日', project.date || '']);
-  aoa.push(['得意先', project.client || '', '担当者', project.person || '']);
-  aoa.push(['構造', project.struct || '', '用途/種別', [project.usage, project.type].filter(Boolean).join(' ')]);
-  aoa.push([]);
-  aoa.push(['工事内訳', '数量', '単位', '見積金額（税抜）', '備考']);
+    const wb = XLSX.utils.book_new();
+    const aoa = [];
+    aoa.push(['八友電工　御見積書']);
+    aoa.push([]);
+    aoa.push(['物件名', project.name || '']);
+    aoa.push(['見積番号', project.number || '', '見積日', project.date || '']);
+    aoa.push(['得意先', project.client || '', '担当者', project.person || '']);
+    aoa.push(['構造', project.struct || '', '用途/種別', [project.usage, project.type].filter(Boolean).join(' ')]);
+    aoa.push([]);
+    aoa.push(['工事内訳', '数量', '単位', '見積金額（税抜）', '備考']);
 
-  let grandTotal = 0;
-  activeCategories.filter(c => c.active).forEach(c => {
-    const total = getCatAmount(c.id);
-    if (total === 0 && !c.rateMode) return;
-    grandTotal += total;
-    const note = c.rateMode ? `${(c.ratePct||0).toFixed(1)}%${c.rateIncludeLabor ? '（労務費含）' : ''}` : '';
-    aoa.push([c.name, 1, '式', Math.round(total), note]);
-  });
-  aoa.push([]);
-  aoa.push(['合　計', '', '', Math.round(grandTotal), '']);
-
-  const tax = (project.tax || 10) / 100;
-  aoa.push(['消費税（' + (project.tax || 10) + '%）', '', '', Math.round(grandTotal * tax), '']);
-  aoa.push(['税込合計', '', '', Math.round(grandTotal * (1 + tax)), '']);
-
-  const ws1 = XLSX.utils.aoa_to_sheet(aoa);
-  ws1['!cols'] = [{wch:35},{wch:6},{wch:6},{wch:15},{wch:20}];
-  XLSX.utils.book_append_sheet(wb, ws1, '内訳書');
-
-  // Sheet per category（rateMode 工種は明細なしのためスキップ）
-  activeCategories.filter(c => c.active && !c.rateMode).forEach(c => {
-    const list = (items[c.id] || []).filter(i => i.name);
-    if (list.length === 0) return;
-
-    const rows = [[c.name], [], ['品名', '規格', '数量', '単位', '見積単価', '見積金額', '備考']];
-    list.forEach(item => {
-      rows.push([
-        item.name || '', item.spec || '',
-        item.qty !== '' ? parseFloat(item.qty) || '' : '',
-        item.unit || '',
-        item.price !== '' ? parseFloat(item.price) || '' : '',
-        item.amount ? Math.round(item.amount) : '',
-        item.note || ''
-      ]);
+    let grandTotal = 0;
+    activeCategories.filter(c => c.active).forEach(c => {
+      const total = getCatAmount(c.id);
+      if (total === 0 && !c.rateMode) return;
+      grandTotal += total;
+      const note = c.rateMode ? `${(c.ratePct||0).toFixed(1)}%${c.rateIncludeLabor ? '（労務費含）' : ''}` : '';
+      aoa.push([c.name, 1, '式', Math.round(total), note]);
     });
-    rows.push([]);
-    rows.push(['', '', '', '', '小計', Math.round(getCatTotal(c.id)), '']);
+    aoa.push([]);
+    aoa.push(['合　計', '', '', Math.round(grandTotal), '']);
 
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{wch:25},{wch:18},{wch:6},{wch:6},{wch:10},{wch:12},{wch:15}];
-    XLSX.utils.book_append_sheet(wb, ws, c.short);
-  });
+    const tax = (project.tax || 10) / 100;
+    aoa.push(['消費税（' + (project.tax || 10) + '%）', '', '', Math.round(grandTotal * tax), '']);
+    aoa.push(['税込合計', '', '', Math.round(grandTotal * (1 + tax)), '']);
 
-  const safeName = (project.name || '新規').replace(/[\/\\:*?"<>|]/g, '');
-  XLSX.writeFile(wb, '見積書_' + safeName + '_' + (project.date || '') + '.xlsx');
+    const ws1 = XLSX.utils.aoa_to_sheet(aoa);
+    ws1['!cols'] = [{wch:35},{wch:6},{wch:6},{wch:15},{wch:20}];
+    XLSX.utils.book_append_sheet(wb, ws1, '内訳書');
+
+    activeCategories.filter(c => c.active && !c.rateMode).forEach(c => {
+      const list = (items[c.id] || []).filter(i => i.name);
+      if (list.length === 0) return;
+
+      const rows = [[c.name], [], ['品名', '規格', '数量', '単位', '見積単価', '見積金額', '備考']];
+      list.forEach(item => {
+        rows.push([
+          item.name || '', item.spec || '',
+          item.qty !== '' ? parseFloat(item.qty) || '' : '',
+          item.unit || '',
+          item.price !== '' ? parseFloat(item.price) || '' : '',
+          item.amount ? Math.round(item.amount) : '',
+          item.note || ''
+        ]);
+      });
+      rows.push([]);
+      rows.push(['', '', '', '', '小計', Math.round(getCatTotal(c.id)), '']);
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols'] = [{wch:25},{wch:18},{wch:6},{wch:6},{wch:10},{wch:12},{wch:15}];
+      XLSX.utils.book_append_sheet(wb, ws, c.short);
+    });
+
+    const safeName = (project.name || '新規').replace(/[\/\\:*?"<>|]/g, '');
+    XLSX.writeFile(wb, '見積書_' + safeName + '_' + (project.date || '') + '.xlsx');
+  }
+
   showToast('Excel出力完了');
 
   // ナレッジDBに自動登録

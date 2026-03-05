@@ -83,6 +83,16 @@
 - 初回起動時に `PERF_DB` → ナレッジDB に自動移行（`perf_db_migrated` フラグで制御）
 - 見積自動作成: 類似物件の品目を面積比でスケーリングして自動投入
 
+### テンプレート方式Excel出力（ExcelJS）
+- `data/estimate_template.xlsx` をテンプレートとして読み込み、データを書き込む方式
+- レイアウト修正 = テンプレートをExcelで直接編集するだけ（コード変更不要）
+- 3シート構成: 表紙（御見積書）/ 内訳書 / 内訳明細書
+- ExcelJS CDN使用、テンプレート読み込み失敗時はSheetJS簡易版にフォールバック
+- テンプレート生成: `node scripts/generate-template.js`
+- 表紙の消費税・御見積金額はテンプレート内のExcel関数が計算
+- 内訳書の合計もテンプレートの SUM(G7:G16) が計算
+- 明細書は20ページ確保（1ページ25データ行）、未使用ページは自動クリア
+
 ## 汎用化フェーズ計画
 
 ### Phase 1 ✅ 完了：Tridge主導アーキテクチャへの移行
@@ -107,13 +117,17 @@ estimate-app/
 ├── index.html
 ├── css/
 ├── data/
-│   ├── material_db.json    ← 空の[] （トリッジで上書きされる）
-│   └── bukariki_db.json    ← 空の[] （トリッジで上書きされる）
+│   ├── material_db.json       ← 空の[] （トリッジで上書きされる）
+│   ├── bukariki_db.json       ← 空の[] （トリッジで上書きされる）
+│   └── estimate_template.xlsx ← Excel出力テンプレート（Excelで直接編集可）
+├── scripts/
+│   └── generate-template.js   ← テンプレート自動生成スクリプト
 └── js/
     ├── app.js              ← メインUIロジック
     ├── calc-engine.js      ← 見積計算エンジン
     ├── data.js             ← 定数・データモデル
-    ├── excel-loader.js     ← トリッジ読み込み・Excelエクスポート
+    ├── excel-loader.js     ← トリッジ読み込み
+    ├── excel-template-export.js ← テンプレート方式Excel出力（ExcelJS、3シート構成）
     ├── knowledge-db.js     ← ナレッジDB（IndexedDB CRUD + JSON入出力 + 見積自動作成）
     ├── labor.js            ← 労務費計算（TRIDGE_KEYWORDS参照型）
     └── material-search.js  ← 材料検索モーダル
