@@ -77,11 +77,6 @@ document.addEventListener('DOMContentLoaded', () => {
   showDbOverlay();
   loadDefaultDB().then(async () => {
     loadFromLocalStorage(); updateDbStatus(); recalcAll();
-    // PERF_DB → ナレッジDB移行（初回のみ）
-    try {
-      const migrated = await knowledgeDB.migratePerfDB(PERF_DB);
-      if (migrated > 0) console.log('PERF_DB migrated: ' + migrated + ' records');
-    } catch(e) { console.warn('PERF_DB migration failed:', e); }
     renderDBTable();
     // ナレッジDB空チェック → 復元バナー表示
     checkKnowledgeRestore();

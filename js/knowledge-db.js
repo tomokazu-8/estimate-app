@@ -175,20 +175,19 @@ const knowledgeDB = (() => {
     };
   }
 
-  // --- JSONエクスポート ---
-  async function exportJSON() {
-    const all = await getAll();
-    const json = JSON.stringify(all, null, 2);
+  // --- JSONダウンロード（共通ヘルパー） ---
+  function downloadJSON(data, prefix) {
+    const json = JSON.stringify(data, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'knowledge_db_' + new Date().toISOString().split('T')[0] + '.json';
+    a.download = prefix + new Date().toISOString().split('T')[0] + '.json';
     a.click();
     URL.revokeObjectURL(url);
   }
 
-  // --- JSONインポート ---
+  // --- JSONインポート（インポート・復元共用） ---
   async function importJSON(file) {
     const text = await file.text();
     const records = JSON.parse(text);
@@ -198,95 +197,30 @@ const knowledgeDB = (() => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
 
-    let imported = 0;
+    let count = 0;
     for (const rec of records) {
-      // idを除去して新規レコードとして追加（重複回避）
       const { id, ...data } = rec;
       store.add(data);
-      imported++;
+      count++;
     }
 
     return new Promise((resolve, reject) => {
-      tx.oncomplete = () => { db.close(); resolve(imported); };
+      tx.oncomplete = () => { db.close(); resolve(count); };
       tx.onerror = () => { db.close(); reject(tx.error); };
     });
+  }
+
+  // --- JSONエクスポート ---
+  async function exportJSON() {
+    downloadJSON(await getAll(), 'knowledge_db_');
   }
 
   // --- 自動バックアップ（Excel出力時に呼ばれる） ---
   async function autoBackup() {
     const all = await getAll();
-    if (all.length === 0) return; // 空なら不要
-
-    const json = JSON.stringify(all, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'knowledge_backup_' + new Date().toISOString().split('T')[0] + '.json';
-    a.click();
-    URL.revokeObjectURL(url);
-
-    // 最終バックアップ日時を記録
+    if (all.length === 0) return;
+    downloadJSON(all, 'knowledge_backup_');
     localStorage.setItem('knowledge_last_backup', new Date().toISOString());
-  }
-
-  // --- バックアップからの復元（ファイルを受け取る） ---
-  async function restoreFromBackup(file) {
-    const text = await file.text();
-    const records = JSON.parse(text);
-    if (!Array.isArray(records)) throw new Error('不正なファイル形式です');
-
-    const db = await open();
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-
-    let restored = 0;
-    for (const rec of records) {
-      const { id, ...data } = rec;
-      store.add(data);
-      restored++;
-    }
-
-    return new Promise((resolve, reject) => {
-      tx.oncomplete = () => { db.close(); resolve(restored); };
-      tx.onerror = () => { db.close(); reject(tx.error); };
-    });
-  }
-
-  // --- PERF_DB → ナレッジDB移行 ---
-  async function migratePerfDB(perfDB) {
-    const migrated = localStorage.getItem('perf_db_migrated');
-    if (migrated) return 0;
-
-    let count = 0;
-    for (const p of perfDB) {
-      const record = {
-        registeredAt: '2025-01-01', // レガシーデータとして固定日付
-        project: {
-          name: p.name || '',
-          number: p.id || '',
-          date: '',
-          client: '',
-          struct: p.struct || '',
-          usage: p.usage || '',
-          type: p.type || '',
-          floors: '',
-          areaSqm: p.area_tsubo ? String(Math.round(p.area_tsubo * 3.306)) : '',
-          areaTsubo: p.area_tsubo ? String(p.area_tsubo) : '',
-          location: '',
-          person: '',
-        },
-        categories: [], // レガシーデータは品目明細なし
-        grandTotal: Math.round(p.total || 0),
-        profitRate: p.profit || 0,
-        legacy: true, // レガシーフラグ
-      };
-      await save(record);
-      count++;
-    }
-
-    localStorage.setItem('perf_db_migrated', '1');
-    return count;
   }
 
   return {
@@ -299,8 +233,7 @@ const knowledgeDB = (() => {
     buildRecord,
     exportJSON,
     importJSON,
-    migratePerfDB,
     autoBackup,
-    restoreFromBackup,
+    restoreFromBackup: importJSON,
   };
 })();

@@ -79,7 +79,6 @@
 - `TRIDGE_KEYWORDS`: キーワードマスタの配列（keyword/laborType/bukariki/copperLinked/ceilingOpening）
 - `tridgeLoaded`: Tridge装着フラグ
 - `activeCategories`: 工種マスタから動的ロード（Tridge未装着時は[]）
-- `PERF_DB`: レガシー実績データ（33件、初回起動時にナレッジDBに移行済み）
 
 ### 内蔵DB
 `data/material_db.json` と `data/bukariki_db.json` は空の`[]`。
@@ -92,7 +91,6 @@
 - JSONエクスポート/インポートで端末間共有可能
 - `knowledgeDB.searchSimilar()`: 構造/種別/用途/面積で類似物件検索（スコア3以上を返却）
 - `knowledgeDB.buildRecord()`: 現在の見積データからナレッジレコードを構築
-- 初回起動時に `PERF_DB` → ナレッジDB に自動移行（`perf_db_migrated` フラグで制御）
 - 見積自動作成: 類似物件の品目を面積比でスケーリングして自動投入（AUTO_NAMES行は除外）
 
 ### 自動バックアップ
@@ -174,7 +172,7 @@ ExcelJS CDN読み込み失敗またはテンプレート読み込み失敗時は
 - labor.js の `classifyForLabor` をさらに精緻化（天井開口等）
 
 ### Phase 3：軽量化・分離
-- PERF_DBをdata.jsから完全削除（ナレッジDBに移行済みのため）
+- ~~PERF_DBをdata.jsから完全削除~~ ✅ 完了
 - 電気専用UIの完全削除
 
 ## ファイル構成
@@ -193,7 +191,7 @@ estimate-app/
 └── js/
     ├── app.js                     ← メインUIロジック（exportEstimate: ExcelJS優先→SheetJSフォールバック）
     ├── calc-engine.js             ← 見積計算エンジン（自動計算行の追加・雑材料費等）
-    ├── data.js                    ← 定数・グローバル変数・PERF_DB
+    ├── data.js                    ← 定数・グローバル変数
     ├── excel-loader.js            ← トリッジ読み込み（資材/工種/設定/キーワード4シート対応）
     ├── excel-template-export.js   ← テンプレート方式Excel出力（テンプレート読み込み→データ書き込み）
     ├── knowledge-db.js            ← ナレッジDB（IndexedDB CRUD + JSON入出力 + 見積自動作成）
