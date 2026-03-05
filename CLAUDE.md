@@ -95,6 +95,14 @@
 - 初回起動時に `PERF_DB` → ナレッジDB に自動移行（`perf_db_migrated` フラグで制御）
 - 見積自動作成: 類似物件の品目を面積比でスケーリングして自動投入（AUTO_NAMES行は除外）
 
+### 自動バックアップ
+- **タイミング**: Excel出力のたびに `knowledgeDB.autoBackup()` が自動実行
+- **出力**: `knowledge_backup_YYYY-MM-DD.json` がダウンロードされる
+- **最終バックアップ記録**: `localStorage['knowledge_last_backup']` に日時を保存
+- **起動時復元チェック**: DB件数が0件かつ最終バックアップ記録がある場合、復元バナーを表示
+- **復元バナー**: 画面上部に表示、バックアップJSONファイルを選択して `restoreFromBackup()` で復元
+- **リスク対策**: IndexedDBはブラウザのキャッシュクリアで消失するため、バックアップファイルが唯一の永続的データ保存先
+
 ## テンプレート方式Excel出力
 
 ### 概要

@@ -83,6 +83,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (migrated > 0) console.log('PERF_DB migrated: ' + migrated + ' records');
     } catch(e) { console.warn('PERF_DB migration failed:', e); }
     renderDBTable();
+    // ナレッジDB空チェック → 復元バナー表示
+    checkKnowledgeRestore();
   });
 });
 
@@ -1185,12 +1187,43 @@ async function exportEstimate() {
   try {
     const record = knowledgeDB.buildRecord();
     if (record.grandTotal > 0) {
-      knowledgeDB.save(record).then(() => {
-        showToast('ナレッジDBに登録しました');
-        renderDBTable();
-      });
+      await knowledgeDB.save(record);
+      showToast('ナレッジDBに登録しました');
+      renderDBTable();
     }
   } catch(e) { console.warn('ナレッジDB登録失敗:', e); }
+
+  // ナレッジDB自動バックアップ（JSONダウンロード）
+  try {
+    await knowledgeDB.autoBackup();
+  } catch(e) { console.warn('ナレッジDBバックアップ失敗:', e); }
+}
+
+// ===== ナレッジDB復元バナー =====
+async function checkKnowledgeRestore() {
+  try {
+    const cnt = await knowledgeDB.count();
+    const lastBackup = localStorage.getItem('knowledge_last_backup');
+    if (cnt === 0 && lastBackup) {
+      document.getElementById('knowledgeRestoreBanner').style.display = '';
+    }
+  } catch(e) { console.warn('ナレッジDB復元チェック失敗:', e); }
+}
+
+async function restoreKnowledgeFromBanner(file) {
+  if (!file) return;
+  try {
+    const restored = await knowledgeDB.restoreFromBackup(file);
+    showToast(`ナレッジDB復元完了: ${restored}件`);
+    document.getElementById('knowledgeRestoreBanner').style.display = 'none';
+    renderDBTable();
+  } catch(e) {
+    showToast('復元に失敗しました: ' + e.message);
+  }
+}
+
+function dismissRestoreBanner() {
+  document.getElementById('knowledgeRestoreBanner').style.display = 'none';
 }
 
 // ===== UTILS =====

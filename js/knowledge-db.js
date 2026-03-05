@@ -212,6 +212,47 @@ const knowledgeDB = (() => {
     });
   }
 
+  // --- 自動バックアップ（Excel出力時に呼ばれる） ---
+  async function autoBackup() {
+    const all = await getAll();
+    if (all.length === 0) return; // 空なら不要
+
+    const json = JSON.stringify(all, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'knowledge_backup_' + new Date().toISOString().split('T')[0] + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+
+    // 最終バックアップ日時を記録
+    localStorage.setItem('knowledge_last_backup', new Date().toISOString());
+  }
+
+  // --- バックアップからの復元（ファイルを受け取る） ---
+  async function restoreFromBackup(file) {
+    const text = await file.text();
+    const records = JSON.parse(text);
+    if (!Array.isArray(records)) throw new Error('不正なファイル形式です');
+
+    const db = await open();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+
+    let restored = 0;
+    for (const rec of records) {
+      const { id, ...data } = rec;
+      store.add(data);
+      restored++;
+    }
+
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => { db.close(); resolve(restored); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+  }
+
   // --- PERF_DB → ナレッジDB移行 ---
   async function migratePerfDB(perfDB) {
     const migrated = localStorage.getItem('perf_db_migrated');
@@ -259,5 +300,7 @@ const knowledgeDB = (() => {
     exportJSON,
     importJSON,
     migratePerfDB,
+    autoBackup,
+    restoreFromBackup,
   };
 })();
