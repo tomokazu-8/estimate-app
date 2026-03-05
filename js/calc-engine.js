@@ -2,19 +2,22 @@
 
 function addAutoCalcRows() {
   saveUndoState();
-  const templates = {
-    trunk:        ['雑材料消耗品','電工労務費','運搬費'],
-    lighting_fix: ['雑材料消耗品','器具取付費','埋込器具用天井材開口費','運搬費'],
-    outlet:       ['雑材料消耗品','電工労務費','運搬費'],
-    weak:         ['雑材料消耗品','電工労務費','UTPケーブル試験費','運搬費'],
-    fire:         ['雑材料消耗品','機器取付け及び試験調整費','運搬費'],
-  };
-  const tmpl = templates[currentCat];
-  if (!tmpl) { showToast('この工種には自動計算行テンプレートがありません'); return; }
+  const cat = activeCategories.find(c => c.id === currentCat);
+  // autoRows: Tridge工種マスタの「自動計算行」列。未設定時はAUTO_NAMESで後方互換フォールバック
+  const tmpl = (cat?.autoRows?.length > 0) ? cat.autoRows : AUTO_NAMES.filter(n => {
+    const fallbacks = {
+      trunk:        ['雑材料消耗品','電工労務費','運搬費'],
+      lighting_fix: ['雑材料消耗品','器具取付費','埋込器具用天井材開口費','運搬費'],
+      outlet:       ['雑材料消耗品','電工労務費','運搬費'],
+      weak:         ['雑材料消耗品','電工労務費','UTPケーブル試験費','運搬費'],
+      fire:         ['雑材料消耗品','機器取付け及び試験調整費','運搬費'],
+    };
+    return (fallbacks[currentCat] || []).includes(n);
+  });
+  if (!tmpl || tmpl.length === 0) { showToast('この工種には自動計算行テンプレートがありません'); return; }
 
   // 労務費セクションと同じ計算値を取得
   const lb = calcLaborBreakdown(currentCat);
-  const cat = activeCategories.find(c => c.id === currentCat);
   const miscRate = cat?.miscRate ?? 0.05;
 
   const laborPrices = {
@@ -72,15 +75,16 @@ function calcAutoRows() {
   saveUndoState();
   const list = items[currentCat];
 
-  // 自動計算行を除いた材料費小計
+  // 自動計算行を除いた材料費小計（工種のautoRowsを優先、なければAUTO_NAMESにフォールバック）
+  const cat = activeCategories.find(c => c.id === currentCat);
+  const autoRowNames = (cat?.autoRows?.length > 0) ? cat.autoRows : AUTO_NAMES;
   const materialTotal = list
-    .filter(i => !AUTO_NAMES.includes(i.name))
+    .filter(i => !autoRowNames.includes(i.name))
     .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
 
   if (materialTotal <= 0) return;
 
   // 雑材料消耗品：材料費 × 率
-  const cat = activeCategories.find(c => c.id === currentCat);
   const miscRate = cat?.miscRate ?? 0.05;
   const miscItem = list.find(i => i.name === '雑材料消耗品');
   if (miscItem) {

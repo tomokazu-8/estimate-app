@@ -61,6 +61,7 @@ function loadExcelDB(file) {
           rateMode: ['true','1','yes','割合','はい','○'].includes(String(getCol(r, '割合モード') || '').trim()),
           miscRate: parseFloat(getCol(r, '雑材料率%', '雑材料率') || 0) / 100,
           order:    parseInt(getCol(r, '順序') || 0),
+          autoRows: String(getCol(r, '自動計算行') || '').trim().split('|').filter(Boolean),
         })).filter(c => c.id && c.name);
         console.log('[Tridge] 工種マスタ:', newCategories.length, '件');
       }

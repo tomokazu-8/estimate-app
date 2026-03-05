@@ -166,10 +166,11 @@ ExcelJS CDN読み込み失敗またはテンプレート読み込み失敗時は
 - labor.js をTRIDGE_KEYWORDS参照型に書き換え
 - 銅建値補正UIを設定マスタ連動に
 
-### Phase 2（次）：AUTO_NAMES・calc-engine テンプレートの動的化
-- AUTO_NAMESを工種マスタの「自動計算行」列で定義
-- calc-engine.js の addAutoCalcRows テンプレートを工種マスタ依存に
-- labor.js の `classifyForLabor` をさらに精緻化（天井開口等）
+### Phase 2 ✅ 完了：AUTO_NAMES・calc-engine テンプレートの動的化
+- 工種マスタに「自動計算行」列を追加（パイプ区切り）→ db-manager側で編集・エクスポート
+- excel-loader.js: `autoRows` フィールドを配列に変換して `activeCategories[*].autoRows` に格納
+- calc-engine.js: `addAutoCalcRows` / `calcAutoRows` が `activeCategories[*].autoRows` を優先参照
+- 後方互換: autoRowsが未設定の工種はAUTO_NAMESのフォールバックテンプレートを使用
 
 ### Phase 3：軽量化・分離
 - ~~PERF_DBをdata.jsから完全削除~~ ✅ 完了
