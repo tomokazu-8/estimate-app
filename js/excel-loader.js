@@ -17,17 +17,54 @@ function closeDbOverlay() {
 
 function updateDbStatus() {
   const badge = document.getElementById('dbBadge');
+  const ejectBtn = document.getElementById('ejectBtn');
   if (!badge) return;
   if (externalDbLoaded) {
     badge.textContent = '📊 ' + externalDbInfo.source.replace(/\.xlsx?$/i,'') + '（' + externalDbInfo.materials.toLocaleString() + '品目）';
     badge.style.background = '#dcfce7'; badge.style.color = '#16a34a';
+    if (ejectBtn) ejectBtn.style.display = 'inline-block';
   } else if (MATERIAL_DB.length > 0) {
     badge.textContent = 'DB: ' + MATERIAL_DB.length + '品目';
     badge.style.background = '#fef3c7'; badge.style.color = '#92400e';
+    if (ejectBtn) ejectBtn.style.display = 'none';
   } else {
     badge.textContent = '⚠ DBなし（クリックで読込）';
     badge.style.background = '#fee2e2'; badge.style.color = '#dc2626';
+    if (ejectBtn) ejectBtn.style.display = 'none';
   }
+}
+
+function ejectTridge() {
+  if (!confirm('トリッジを取り外しますか？\n材料DB・工種設定がクリアされます。\n現在の見積データ（品目）は保持されます。')) return;
+
+  // マスタデータをクリア
+  MATERIAL_DB.length = 0;
+  BUKARIKI_DB.length = 0;
+  BUNRUI_DB.rows = []; BUNRUI_DB.keywords = [];
+  TRIDGE_SETTINGS.copperEnabled  = false;
+  TRIDGE_SETTINGS.copperBase     = 1000;
+  TRIDGE_SETTINGS.copperFraction = 0.50;
+  TRIDGE_SETTINGS.laborSell      = 19000;
+  TRIDGE_SETTINGS.laborCost      = 12000;
+  TRIDGE_KEYWORDS.length = 0;
+  tridgeLoaded = false;
+  externalDbLoaded = false;
+  externalDbInfo = { materials: 0, bukariki: 0, source: '' };
+
+  // localStorage の工種設定を削除
+  localStorage.removeItem('activeCategories');
+  activeCategories = [];
+
+  // ファイル入力リセット
+  const input = document.getElementById('dbFileInput');
+  if (input) input.value = '';
+  const status = document.getElementById('dbLoadStatus');
+  if (status) status.textContent = '';
+
+  updateCopperUI();
+  renderCatTabs();
+  updateDbStatus();
+  showDbOverlay();
 }
 
 // 列名の揺れに対応：複数の候補名から最初に見つかった値を返す

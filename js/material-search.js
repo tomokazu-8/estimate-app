@@ -17,7 +17,9 @@ function openSearchModal(itemId) {
 function initBunruiFilter() {
   const row = document.getElementById('bunruiFilterRow');
   if (!row) return;
-  const hasBunrui = BUNRUI_DB && BUNRUI_DB.rows && BUNRUI_DB.rows.length > 0;
+  // 分類マスタがあり、かつ材料レコードに daiId が付与されている場合のみ表示
+  const hasBunrui = BUNRUI_DB && BUNRUI_DB.rows && BUNRUI_DB.rows.length > 0
+                    && MATERIAL_DB.some(m => m.daiId);
   row.style.display = hasBunrui ? 'flex' : 'none';
   if (!hasBunrui) return;
 
