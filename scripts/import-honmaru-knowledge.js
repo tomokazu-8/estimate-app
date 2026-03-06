@@ -64,6 +64,48 @@ function isEmptyRow(r) {
   return r.every(v => v === '' || v === null || v === undefined);
 }
 
+// ===== ファイル名から 構造・種別・用途 を自動解析 =====
+// 命名規則: 物件名（年）、種別、構造、階数（、用途）
+function parseFilename(filePath) {
+  const base = path.basename(filePath, path.extname(filePath));
+  const parts = base.split('、').map(s => s.trim()).filter(Boolean);
+
+  let struct = '', type = '', usage = '';
+
+  for (const part of parts.slice(1)) {  // 最初の部分は物件名なのでスキップ
+    // 種別
+    if (/新築/.test(part))                      { type = type || '新築'; continue; }
+    if (/改修|リノベ|リフォーム|現状回復/.test(part)) { type = type || '改修'; continue; }
+    if (/増築/.test(part))                      { type = type || '増築'; continue; }
+
+    // 構造
+    if (/RC|鉄筋/.test(part))   { struct = struct || 'RC'; continue; }
+    if (/SRC/.test(part))       { struct = struct || 'SRC'; continue; }
+    if (/S造|鉄骨/.test(part))  { struct = struct || 'S'; continue; }
+    if (/木造|木/.test(part) && !/複合/.test(part)) { struct = struct || 'W'; continue; }
+
+    // 用途（構造・種別に当てはまらなかった部分）
+    if (/住宅|邸|戸建|マンション|アパート|コーポ|集合住宅/.test(part)) { usage = usage || '住宅'; continue; }
+    if (/事務所|オフィス|office/i.test(part))  { usage = usage || '事務所'; continue; }
+    if (/店舗|ショップ|テナント/.test(part))    { usage = usage || '店舗'; continue; }
+    if (/倉庫|作業場|工場|工業/.test(part))     { usage = usage || '倉庫'; continue; }
+    if (/保育園|幼稚園|学校|教育/.test(part))   { usage = usage || '教育'; continue; }
+    if (/病院|医療|クリニック/.test(part))       { usage = usage || '医療'; continue; }
+  }
+
+  // 物件名本体にも種別がある場合のフォールバック
+  if (!type) {
+    if (/新築/.test(parts[0]))            type = '新築';
+    else if (/改修|リノベ/.test(parts[0])) type = '改修';
+  }
+  // 構造が複合（RC+木造など）
+  if (!struct && parts.some(p => /RC.*(木造|S造)|(木造|S造).*RC/.test(p))) struct = 'RC';
+  // S造のフォールバック（"S邸"など）
+  if (!struct && /S邸/.test(parts[0])) struct = 'S';
+
+  return { struct, type, usage };
+}
+
 // ===== 旧形式: 1行から品目データを抽出 =====
 // col[2]=code, col[3]=品名, col[7]=規格, col[9]=単位,
 // col[10]=見積数量, col[13]=見積単価, col[15]=見積金額,
@@ -79,6 +121,7 @@ function extractItemOld(r) {
   const sellAmt   = parseFloat(r[15]) || Math.round(qty * sellPrice);
   const costPrice = parseFloat(r[17]) || 0;
   const costAmt   = parseFloat(r[19]) || Math.round(qty * costPrice);
+  const bukariki  = parseFloat(r[22]) || 0;  // 歩掛（人工/単位）
 
   if (!unit || sellPrice <= 0) return null;
 
@@ -88,6 +131,7 @@ function extractItemOld(r) {
     costPrice,
     amount:     Math.round(sellAmt),
     costAmount: Math.round(costAmt),
+    bukariki,
   };
 }
 
@@ -177,14 +221,18 @@ function parseHonmaruFile(filePath) {
     ? Math.round((1 - costTotal / sellTotal) * 1000) / 10
     : 0;
 
-  // ファイル名から物件名をフォールバック
+  // ファイル名から物件名フォールバック + 構造・種別・用途を自動解析
   if (!info.name) {
-    info.name = path.basename(filePath, path.extname(filePath));
+    info.name = path.basename(filePath, path.extname(filePath)).split('、')[0].trim();
   }
+  const meta = parseFilename(filePath);
 
   return {
     name:       info.name,
     client:     info.client,
+    struct:     meta.struct,
+    type:       meta.type,
+    usage:      meta.usage,
     sections,   // { 工種名: [ items ] }
     grandTotal: Math.round(sellTotal),
     profitRate,
@@ -228,7 +276,8 @@ function main() {
     const fname = path.basename(filePath);
     try {
       const data = parseHonmaruFile(filePath);
-      console.log(`  [${idCounter}] ${data.name} — ${data.itemCount}品目 / 合計: ¥${data.grandTotal.toLocaleString()} / 利益率: ${data.profitRate}%`);
+      const meta = `${data.struct||'?'} ${data.type||'?'} ${data.usage||'?'}`;
+      console.log(`  [${idCounter}] ${data.name} [${meta}] — ${data.itemCount}品目 / ¥${data.grandTotal.toLocaleString()} / 利益率: ${data.profitRate}%`);
       projects.push({ id: idCounter++, ...data });
     } catch (e) {
       console.warn(`  [スキップ] ${fname}: ${e.message}`);
@@ -248,10 +297,10 @@ function main() {
   const rows1 = [['id', '登録日', '物件名', '構造', '種別', '用途', '坪数', '合計金額', '利益率', '有効', '得意先（参考）']];
   projects.forEach(p => rows1.push([
     p.id, today, p.name,
-    '',   // 構造 ← 記入してください
-    '',   // 種別 ← 記入してください
-    '',   // 用途 ← 記入してください
-    '',   // 坪数 ← 記入してください
+    p.struct,  // ファイル名から自動抽出（要確認）
+    p.type,    // ファイル名から自動抽出（要確認）
+    p.usage,   // ファイル名から自動抽出（要確認）
+    '',        // 坪数 ← 記入してください
     p.grandTotal, p.profitRate, '○', p.client,
   ]));
   const ws1 = XLSX.utils.aoa_to_sheet(rows1);
@@ -262,18 +311,18 @@ function main() {
   XLSX.utils.book_append_sheet(wb, ws1, 'プロジェクト一覧');
 
   // Sheet2: 明細
-  const rows2 = [['project_id', '工種名', '品目名', '規格', '数量', '単位', '単価', '金額']];
+  const rows2 = [['project_id', '工種名', '品目名', '規格', '数量', '単位', '単価', '金額', '歩掛']];
   projects.forEach(p => {
     Object.entries(p.sections).forEach(([catName, items]) => {
       items.forEach(i => {
-        rows2.push([p.id, catName, i.name, i.spec, i.qty, i.unit, i.price, i.amount]);
+        rows2.push([p.id, catName, i.name, i.spec, i.qty, i.unit, i.price, i.amount, i.bukariki || 0]);
       });
     });
   });
   const ws2 = XLSX.utils.aoa_to_sheet(rows2);
   ws2['!cols'] = [
     { wch: 5 }, { wch: 16 }, { wch: 30 }, { wch: 20 },
-    { wch: 6 }, { wch: 6 }, { wch: 10 }, { wch: 10 },
+    { wch: 6 }, { wch: 6 }, { wch: 10 }, { wch: 10 }, { wch: 8 },
   ];
   XLSX.utils.book_append_sheet(wb, ws2, '明細');
 

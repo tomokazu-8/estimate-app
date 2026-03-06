@@ -302,6 +302,7 @@ const knowledgeDB = (() => {
         unit: String(row['単位'] || ''),
         price: parseFloat(row['単価']) || 0,
         amount: parseFloat(row['金額']) || 0,
+        bukariki: parseFloat(row['歩掛']) || 0,
       });
     });
 
