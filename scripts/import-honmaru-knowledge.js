@@ -17,82 +17,82 @@ const XLSX = require('xlsx');
 const path = require('path');
 const fs   = require('fs');
 
-// ===== 自動計算行の判定（convert-honmaru.js と同じ） =====
-const AUTO_CODE_RE = /^[A-Z]\d+$/;
+// ===== 自動計算行の判定 =====
+const AUTO_CODE_RE = /^[A-Z]+\d+$/;
 const AUTO_NAMES = [
   '雑材料消耗品', '電工労務費', '器具取付費', '器具取付け費', '器具取付け接続費',
   '埋込器具用天井材開口費', '天井材開口費', '運搬費', '機器取付費',
   '機器取付け及び試験調整費', 'UTPケーブル試験費',
 ];
 
-function isAutoRow(r) {
+// ===== レイアウト自動検出 =====
+// 旧形式(.xls): col[1] にキー（工事名等）、col[2] に品目コード
+// 新形式(.xlsx): col[0] にキー、col[0 or 1] に品目コード
+function detectLayout(rows) {
+  for (const r of rows.slice(0, 30)) {
+    const c1 = String(r[1] || '').trim();
+    if (['工事名', '得意先', '工種名'].includes(c1)) return 'old';
+    const c0 = String(r[0] || '').trim();
+    if (['工事名', '得意先', '工種名'].includes(c0)) return 'new';
+  }
+  return 'old'; // デフォルト
+}
+
+// ===== 旧形式: 自動計算行の判定 =====
+// col[2] にコード(A10, X89...)、col[7] にスペック、col[3] に名称
+function isAutoRowOld(r) {
+  const code = String(r[2] || '').trim();
+  if (AUTO_CODE_RE.test(code)) return true;
+  if (String(r[7] || '').startsWith('＜自動計算')) return true;
+  if (AUTO_NAMES.includes(String(r[3] || '').trim())) return true;
+  return false;
+}
+
+// ===== 新形式: 自動計算行の判定 =====
+function isAutoRowNew(r) {
   const c0 = String(r[0] || '');
   const c1 = String(r[1] || '');
   if (AUTO_CODE_RE.test(c0) || AUTO_CODE_RE.test(c1)) return true;
-  const s9  = String(r[9]  || '');
-  const s10 = String(r[10] || '');
-  if (s9.startsWith('＜自動計算') || s10.startsWith('＜自動計算')) return true;
-  const name = String(r[3] || '').trim();
-  if (AUTO_NAMES.includes(name)) return true;
+  if (String(r[9]  || '').startsWith('＜自動計算')) return true;
+  if (String(r[10] || '').startsWith('＜自動計算')) return true;
+  if (AUTO_NAMES.includes(String(r[3] || '').trim())) return true;
   return false;
 }
 
-// ===== ヘッダー行・空行の判定 =====
-const HEADER_KEYWORDS = [
-  '集計', '工種名', '使用パターン', '工事名', '工事名２',
-  '得意先', 'ｺｰﾄﾞ', '品 名', '品名', '規格', '数量',
-];
-function isSkipRow(r) {
-  const c0 = String(r[0] || '');
-  const c3 = String(r[3] || '');
-  if (HEADER_KEYWORDS.includes(c0) || HEADER_KEYWORDS.includes(c3)) return true;
-  if (r.every(v => v === '' || v === null || v === undefined)) return true;
-  return false;
+// ===== 空行判定（共通） =====
+function isEmptyRow(r) {
+  return r.every(v => v === '' || v === null || v === undefined);
 }
 
-// ===== ヘッダー行から物件情報を抽出 =====
-function extractProjectInfo(r, info) {
-  const c0 = String(r[0] || '').trim();
-  const c3 = String(r[3] || '').trim();
-  if (c0 === '工事名' || c0 === '工事名２') {
-    if (!info.name && c3) info.name = c3;
-  }
-  if (c0 === '得意先') {
-    if (!info.client && c3) info.client = c3;
-  }
-}
-
-// ===== セクション行の判定（工種区切り） =====
-function isSectionHeader(r) {
+// ===== 旧形式: 1行から品目データを抽出 =====
+// col[2]=code, col[3]=品名, col[7]=規格, col[9]=単位,
+// col[10]=見積数量, col[13]=見積単価, col[15]=見積金額,
+// col[17]=原価単価, col[19]=原価金額
+function extractItemOld(r) {
   const name = String(r[3] || '').trim();
-  if (!name || name.length === 0 || name.length > 40) return false;
+  if (!name) return null;
 
-  // 価格がある行は品目行
-  const isLayoutB = typeof r[0] === 'number';
-  const prices = isLayoutB
-    ? [r[20], r[28]]
-    : [r[19], r[27]];
-  if (prices.some(v => parseFloat(v) > 0)) return false;
+  const spec      = String(r[7]  || '').trim();
+  const unit      = String(r[9]  || '').trim();
+  const qty       = parseFloat(r[10]) || 0;
+  const sellPrice = parseFloat(r[13]) || 0;
+  const sellAmt   = parseFloat(r[15]) || Math.round(qty * sellPrice);
+  const costPrice = parseFloat(r[17]) || 0;
+  const costAmt   = parseFloat(r[19]) || Math.round(qty * costPrice);
 
-  // 数量がある行も品目行
-  const qty = isLayoutB ? r[16] : r[15];
-  if (parseFloat(qty) > 0) return false;
+  if (!unit || sellPrice <= 0) return null;
 
-  // 単位のある行も品目行
-  const unit = String(r[14] || '').trim();
-  if (unit) return false;
-
-  // AUTO_NAMES に含まれる行は自動計算行
-  if (AUTO_NAMES.includes(name)) return false;
-
-  // HEADER_KEYWORDS に含まれる行はスキップ行
-  if (HEADER_KEYWORDS.includes(name)) return false;
-
-  return true;
+  return {
+    name, spec, qty, unit,
+    price:      sellPrice,
+    costPrice,
+    amount:     Math.round(sellAmt),
+    costAmount: Math.round(costAmt),
+  };
 }
 
-// ===== 1行から品目データを抽出 =====
-function extractItem(r) {
+// ===== 新形式: 1行から品目データを抽出 =====
+function extractItemNew(r) {
   const name = String(r[3] || '').trim();
   if (!name) return null;
 
@@ -116,13 +116,10 @@ function extractItem(r) {
   if (!unit || sellPrice <= 0) return null;
 
   return {
-    name,
-    spec,
-    qty,
-    unit,
-    price:    sellPrice,
+    name, spec, qty, unit,
+    price:      sellPrice,
     costPrice,
-    amount:   Math.round(qty * sellPrice),
+    amount:     Math.round(qty * sellPrice),
     costAmount: Math.round(qty * costPrice),
   };
 }
@@ -133,6 +130,9 @@ function parseHonmaruFile(filePath) {
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
+  const layout = detectLayout(rows);
+  const isOld  = layout === 'old';
+
   const info = { name: '', client: '' };
   const sections = {};   // 工種名 → items[]
   let currentSection = '一式';
@@ -140,36 +140,30 @@ function parseHonmaruFile(filePath) {
   let costTotal = 0;
 
   for (const r of rows) {
-    // 実際のレイアウト: 工事名・得意先・工種名は col[0] にキー、col[4] に値
-    const c0 = String(r[0] || '').trim();
-    const c4 = String(r[4] || '').trim();
+    if (isEmptyRow(r)) continue;
 
-    if (c0 === '工事名' || c0 === '工事名２') {
-      if (!info.name && c4) info.name = c4;
+    // ヘッダーキーの位置はレイアウトで異なる（旧: col[1]、新: col[0]）
+    const key = String(r[isOld ? 1 : 0] || '').trim();
+    const val = String(r[4] || '').trim();
+
+    if (key === '工事名' || key === '工事名２') {
+      if (!info.name && val) info.name = val;
       continue;
     }
-    if (c0 === '得意先') {
-      if (!info.client && c4) info.client = c4;
+    if (key === '得意先') {
+      if (!info.client && val) info.client = val;
       continue;
     }
-    if (c0 === '工種名') {
-      // 工種切替（isSkipRow より先に処理する）
-      if (c4) currentSection = c4;
+    if (key === '工種名') {
+      if (val) currentSection = val;
       continue;
     }
 
-    if (isSkipRow(r)) continue;
-    if (isAutoRow(r)) continue;
-
-    // セクション行（工種名以外での区切り検出）
-    const c3 = String(r[3] || '').trim();
-    if (isSectionHeader(r)) {
-      currentSection = c3 || currentSection;
-      continue;
-    }
+    // 自動計算行・ヘッダ列行をスキップ
+    if (isOld ? isAutoRowOld(r) : isAutoRowNew(r)) continue;
 
     // 品目行
-    const item = extractItem(r);
+    const item = isOld ? extractItemOld(r) : extractItemNew(r);
     if (!item) continue;
 
     if (!sections[currentSection]) sections[currentSection] = [];
