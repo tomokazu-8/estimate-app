@@ -37,7 +37,7 @@ function classifyForLabor(name, spec) {
 function calcLaborBreakdown(catId) {
   const list = items[catId] || [];
   let wiringKosu = 0, fixtureKosu = 0, equipKosu = 0, ceilingCount = 0;
-  let撤去Kosu = 0, 開口Kosu = 0;
+  let 撤去Kosu = 0, 開口Kosu = 0;
   const details = [];
 
   for (const item of list) {
