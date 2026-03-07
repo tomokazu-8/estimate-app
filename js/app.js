@@ -1170,6 +1170,7 @@ function renderCatTabs() {
 }
 
 function switchCat(catId) {
+  _selectedItems.clear();
   currentCat = catId;
   renderCatTabs();
   renderItems();
@@ -1556,7 +1557,7 @@ function renderItems() {
   tbl.classList.toggle('hide-buk2', !showBuk2);
   tbl.classList.toggle('hide-buk3', !showBuk3);
 
-  tbody.innerHTML = list.map((item, idx) => {
+  tbody.innerHTML = list.map((item) => {
     const isAuto = AUTO_NAMES.includes(item.name);
     const isLaborLocked = LABOR_LOCKED_NAMES.includes(item.name);
     const copperMult = (!isAuto && isCableItem(item.name, item.spec || '')) ? getCopperMultiplier(item.name, item.spec || '') : 1.0;
@@ -1580,9 +1581,13 @@ function renderItems() {
     const disabledAuto = isAuto ? 'disabled' : '';
     const dimCell = 'style="background:var(--bg-alt);color:var(--text-sub);font-size:11px;"';
 
+    const isSelected = _selectedItems.has(item.id);
     return `
-    <tr data-id="${item.id}" class="${isAuto ? 'auto-calc' : ''}">
-      <td class="td-center" style="color:var(--text-dim);font-size:11px;">${idx+1}</td>
+    <tr data-id="${item.id}" class="${isAuto ? 'auto-calc' : ''}${isSelected ? ' row-selected' : ''}">
+      <td class="td-center" style="padding:0 4px;">
+        <input type="checkbox" id="chk-${item.id}" ${isSelected ? 'checked' : ''}
+          onchange="toggleSelectItem(${item.id})" style="cursor:pointer;width:14px;height:14px;">
+      </td>
       <td class="suggest-wrap">
         <input value="${esc(item.name)}" onchange="updateItem(${item.id},'name',this.value)" oninput="showSuggestions(${item.id},this.value)" onblur="hideSuggestions(${item.id})" placeholder="品名（入力で候補表示）">
         <div class="suggest-list" id="suggest-${item.id}"></div>
@@ -1603,17 +1608,20 @@ function renderItems() {
       <td class="td-right" style="font-weight:500;">${item.amount ? '¥'+formatNum(Math.round(item.amount)) : ''}${copperBadge}</td>
       <td><input value="${esc(item.note)}" onchange="updateItem(${item.id},'note',this.value)" placeholder="${isLaborLocked ? '自動計算' : (item.name==='雑材料消耗品'||item.name==='運搬費') ? '例: 5.0%' : '備考'}" style="font-size:11px;color:var(--text-sub);" ${isLaborLocked ? 'readonly' : ''}></td>
       <td>
-        <span style="display:flex;gap:2px;">
+        <span style="display:flex;gap:2px;flex-wrap:wrap;">
           <button class="row-delete" onclick="openSearchModal(${item.id})" title="材料DBから検索" style="opacity:0.5;color:var(--accent);">🔍</button>
-          ${!isAuto ? `<button id="aiQueryBtn-${item.id}" class="row-delete" onclick="aiQueryItem(${item.id})" title="AI単価・仕様調査（品名・型番からメーカー定価・スペックを取得）" style="opacity:0.6;color:#6366f1;">✨</button>` : ''}
+          ${!isAuto ? `<button id="aiQueryBtn-${item.id}" class="row-delete" onclick="aiQueryItem(${item.id})" title="AI単価・仕様調査" style="opacity:0.6;color:#6366f1;">✨</button>` : ''}
+          <button class="row-delete" onclick="insertItemAfter(${item.id})" title="この行の下に新規行を挿入" style="opacity:0.6;color:#059669;">＋</button>
+          <button class="row-delete" onclick="copyItem(${item.id})" title="この行をコピー" style="opacity:0.6;color:#d97706;">⧉</button>
           <button class="row-delete" onclick="deleteItem(${item.id})">✕</button>
         </span>
       </td>
     </tr>`;
   }).join('');
 
-  // tfoot のcolspan を可視列数に合わせて更新（見積金額列の前まで）
-  const baseCols = 15; // #〜見積単価まで（歩掛3列除く）
+  // tfoot のcolspan を可視列数に合わせて更新
+  // 列構成: チェックボックス(1) + 品名〜見積単価(14) + 歩掛(0〜3) = 合計列の前まで
+  const baseCols = 15; // チェック + 品名〜見積単価（歩掛除く）
   const bukCols  = (showBuk1 ? 1 : 0) + (showBuk2 ? 1 : 0) + (showBuk3 ? 1 : 0);
   const tfoot = document.querySelector('#itemTable tfoot tr');
   if (tfoot) {
@@ -1623,6 +1631,9 @@ function renderItems() {
       <td colspan="2"></td>`;
   }
   document.getElementById('catTotal').textContent = '¥' + formatNum(Math.round(getCatTotal(currentCat)));
+
+  // ツールバー更新
+  _updateBatchToolbar();
   renderLaborSection();
   updateSummaryBar();
 }
@@ -1708,9 +1719,110 @@ function updateItem(id, field, value) {
 
 function deleteItem(id) {
   saveUndoState();
+  _selectedItems.delete(id);
   items[currentCat] = items[currentCat].filter(i => i.id !== id);
   renderItems();
   renderCatTabs();
+}
+
+// ===== 行操作: 途中挿入 / コピー =====
+function insertItemAfter(id) {
+  if (!currentCat) return;
+  saveUndoState();
+  const list = items[currentCat] || [];
+  const idx  = list.findIndex(i => i.id === id);
+  const newId = itemIdCounter++;
+  list.splice(idx + 1, 0, {
+    id: newId, name:'', spec:'', qty:'', unit:'式', price:'', amount:0, note:'',
+    bukariki1:'', bukariki2:'', bukariki3:'', listPrice:'', basePrice:'', costRate:'', sellRate:'',
+  });
+  renderItems();
+  setTimeout(() => {
+    const rows = document.querySelectorAll('#itemBody tr');
+    if (rows[idx + 1]) rows[idx + 1].querySelector('input').focus();
+  }, 50);
+}
+
+function copyItem(id) {
+  if (!currentCat) return;
+  saveUndoState();
+  const list = items[currentCat] || [];
+  const idx  = list.findIndex(i => i.id === id);
+  const src  = list[idx];
+  list.splice(idx + 1, 0, { ...src, id: itemIdCounter++ });
+  renderItems();
+}
+
+// ===== 選択・一括編集 =====
+let _selectedItems = new Set();
+
+function toggleSelectItem(id) {
+  if (_selectedItems.has(id)) _selectedItems.delete(id);
+  else _selectedItems.add(id);
+  // チェックボックスとツールバーのみ更新（全再レンダリングしない）
+  const cb = document.getElementById('chk-' + id);
+  if (cb) cb.checked = _selectedItems.has(id);
+  const row = document.querySelector(`#itemBody tr[data-id="${id}"]`);
+  if (row) row.classList.toggle('row-selected', _selectedItems.has(id));
+  _updateBatchToolbar();
+}
+
+function selectAllItems() {
+  const list = items[currentCat] || [];
+  list.forEach(i => _selectedItems.add(i.id));
+  renderItems();
+}
+
+function clearSelection() {
+  _selectedItems.clear();
+  renderItems();
+}
+
+function _updateBatchToolbar() {
+  const bar = document.getElementById('batchToolbar');
+  if (!bar) return;
+  const count = _selectedItems.size;
+  if (count > 0) {
+    bar.style.display = 'flex';
+    bar.querySelector('.batch-count').textContent = count + '件選択中';
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function deleteSelectedItems() {
+  if (_selectedItems.size === 0) return;
+  if (!confirm(_selectedItems.size + '件の行を削除しますか？')) return;
+  saveUndoState();
+  items[currentCat] = (items[currentCat] || []).filter(i => !_selectedItems.has(i.id));
+  _selectedItems.clear();
+  renderItems();
+  renderCatTabs();
+}
+
+function batchSetRate(field) {
+  const label = field === 'sellRate' ? '見積掛率' : '原価掛率';
+  const val = prompt(label + 'を入力（例: 0.85 = 85%）');
+  if (val === null || val.trim() === '') return;
+  const rate = parseFloat(val);
+  if (isNaN(rate) || rate <= 0 || rate > 2) { showToast('有効な掛率を入力してください'); return; }
+  saveUndoState();
+  (items[currentCat] || []).forEach(item => {
+    if (!_selectedItems.has(item.id)) return;
+    item[field] = rate;
+    if (field === 'sellRate') {
+      const listP  = parseFloat(item.listPrice) || 0;
+      const baseP  = parseFloat(item.basePrice) || 0;
+      const effBase = listP > 0 ? listP : baseP;
+      if (effBase > 0) {
+        item.price  = Math.round(effBase * rate);
+        const qty   = parseFloat(item.qty) || 0;
+        item.amount = qty * item.price * getCopperMultiplier(item.name, item.spec || '');
+      }
+    }
+  });
+  renderItems();
+  showToast(label + 'を ' + rate + ' に一括設定しました');
 }
 
 function recalcAll() {

@@ -24,6 +24,8 @@
 #itemTable.hide-buk1 .col-buk1 { display: none; }
 #itemTable.hide-buk2 .col-buk2 { display: none; }
 #itemTable.hide-buk3 .col-buk3 { display: none; }
+/* 選択行ハイライト */
+#itemBody tr.row-selected { background: #eff6ff !important; outline: 1px solid #bfdbfe; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
@@ -66,7 +68,7 @@
   <nav class="sidebar">
     <div class="sidebar-brand">
       <h1>Hachitomo</h1>
-      <p>見積管理システム v3.2</p>
+      <p>見積管理システム v3.3</p>
       <div style="margin-top:6px;display:flex;align-items:center;gap:4px;">
         <div id="dbBadge" style="padding:2px 8px;border-radius:6px;font-size:10px;background:#fef3c7;color:#92400e;cursor:pointer;display:inline-block;" onclick="showDbOverlay()">内蔵DB</div>
         <button id="ejectBtn" onclick="ejectTridge()" title="トリッジを取り外す" style="display:none;padding:1px 6px;border-radius:5px;font-size:10px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;cursor:pointer;">⏏ 取り外し</button>
@@ -362,12 +364,24 @@
               <button class="btn btn-success btn-sm" onclick="calcAutoRows()">♻ 自動計算</button>
             </div>
           </div>
+          <!-- 一括操作ツールバー（選択時のみ表示） -->
+          <div id="batchToolbar" style="display:none;align-items:center;gap:8px;padding:6px 12px;background:#f0f9ff;border-top:1px solid #bae6fd;border-bottom:1px solid #bae6fd;flex-wrap:wrap;">
+            <span class="batch-count" style="font-size:13px;color:#0369a1;font-weight:600;min-width:70px;"></span>
+            <button class="btn btn-secondary btn-sm" onclick="batchSetRate('sellRate')" style="font-size:12px;">見積掛率を一括設定</button>
+            <button class="btn btn-secondary btn-sm" onclick="batchSetRate('costRate')" style="font-size:12px;">原価掛率を一括設定</button>
+            <button class="btn btn-sm" onclick="deleteSelectedItems()" style="font-size:12px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:6px;padding:3px 10px;cursor:pointer;">一括削除</button>
+            <button class="btn btn-secondary btn-sm" onclick="clearSelection()" style="font-size:12px;">選択解除</button>
+          </div>
           <div class="card-body" style="padding:0;">
             <div class="table-wrap" style="max-height:calc(100vh - 340px); overflow-y:auto; overflow-x:auto;">
               <table id="itemTable">
                 <thead>
                   <tr>
-                    <th style="width:28px">#</th>
+                    <th style="width:28px;text-align:center;">
+                      <input type="checkbox" id="selectAllChk" title="全選択/解除"
+                        onchange="this.checked ? selectAllItems() : clearSelection()"
+                        style="cursor:pointer;width:14px;height:14px;">
+                    </th>
                     <th style="min-width:180px">品名</th>
                     <th style="min-width:120px">規格</th>
                     <th style="width:52px">数量</th>
