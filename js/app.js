@@ -1640,20 +1640,26 @@ function renderItems() {
 
 function addItem() {
   if (!currentCat) { showToast('工種タブを選択してください'); return; }
-  saveUndoState();
-  const id = itemIdCounter++;
-  if (!items[currentCat]) items[currentCat] = [];
-  items[currentCat].push({ id, name:'', spec:'', qty:'', unit:'式', price:'', amount:0, note:'',
-    bukariki1:'', bukariki2:'', bukariki3:'', listPrice:'', basePrice:'', costRate:'', sellRate:'' });
-  renderItems();
-  // Focus the new row's name input
-  setTimeout(() => {
-    const rows = document.querySelectorAll('#itemBody tr');
-    if (rows.length) {
-      const nameInput = rows[rows.length-1].querySelector('input:not([type="checkbox"])');
-      if (nameInput) nameInput.focus();
-    }
-  }, 50);
+  try {
+    saveUndoState();
+    const id = itemIdCounter++;
+    if (!items[currentCat]) items[currentCat] = [];
+    items[currentCat].push({ id, name:'', spec:'', qty:'', unit:'式', price:'', amount:0, note:'',
+      bukariki1:'', bukariki2:'', bukariki3:'', listPrice:'', basePrice:'', costRate:'', sellRate:'' });
+    renderItems();
+    setTimeout(() => {
+      const rows = document.querySelectorAll('#itemBody tr');
+      if (rows.length) {
+        const lastRow = rows[rows.length - 1];
+        lastRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        const nameInput = lastRow.querySelector('input:not([type="checkbox"])');
+        if (nameInput) nameInput.focus();
+      }
+    }, 50);
+  } catch(e) {
+    console.error('addItem error:', e);
+    showToast('エラー: ' + e.message);
+  }
 }
 
 // addAutoCalcRows is in calc-engine.js
