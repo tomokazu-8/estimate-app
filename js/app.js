@@ -443,7 +443,7 @@ function clearApiKey() {
 }
 
 // --- Claude API 呼び出し ---
-async function callClaude(prompt) {
+async function callClaude(prompt, maxTokens = 4096) {
   const apiKey = getApiKey();
   if (!apiKey) {
     openApiSettings();
@@ -460,7 +460,7 @@ async function callClaude(prompt) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
+      max_tokens: maxTokens,
       messages: [{ role: 'user', content: prompt }],
     }),
   });
@@ -732,11 +732,16 @@ async function parseSupplierFile(file) {
       });
     });
 
-    const responseText = await callClaude(_buildSupplierParsePrompt(csvText, file.name));
+    const responseText = await callClaude(_buildSupplierParsePrompt(csvText, file.name), 8192);
 
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('AIの回答からJSONを取り出せませんでした');
-    const result = JSON.parse(jsonMatch[0]);
+    let result;
+    try {
+      result = JSON.parse(jsonMatch[0]);
+    } catch (jsonErr) {
+      throw new Error('AIの回答が長すぎてJSONが途中で切れました。ファイルの品目数を減らすか、不要行を削除してから再試行してください。');
+    }
     if (!Array.isArray(result.items)) throw new Error('品目データが取得できませんでした');
 
     document.getElementById('supplierImportModal')._result = result;
