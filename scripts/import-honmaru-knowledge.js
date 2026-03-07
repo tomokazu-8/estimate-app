@@ -1,16 +1,16 @@
 /**
- * 本丸EX 明細チェックリスト → ナレッジDB一括インポートスクリプト
+ * 本丸EX 明細チェックリスト + 実行予算書（機器）→ ナレッジDB一括インポートスクリプト
  *
  * 使い方:
  *   node scripts/import-honmaru-knowledge.js <フォルダパス>
- *   node scripts/import-honmaru-knowledge.js <ファイル1.xlsx> <ファイル2.xlsx> ...
+ *   node scripts/import-honmaru-knowledge.js <ファイル1.xls> <ファイル2.xls> ...
+ *
+ * 対応ファイル:
+ *   - 明細チェックリスト (.xls/.xlsx)
+ *   - 実行予算書（機器）(.xls/.xlsx) — 定価・掛率・原価を明細に付与
  *
  * 出力:
  *   knowledge_import_YYYYMMDD.xlsx（2シート構成）
- *   → estimate-app の「ナレッジDBインポート」で読み込む
- *
- * 注意:
- *   構造・種別・用途・坪数は出力後Excelで記入してからインポートしてください
  */
 
 const XLSX = require('xlsx');
@@ -25,9 +25,139 @@ const AUTO_NAMES = [
   '機器取付け及び試験調整費', 'UTPケーブル試験費',
 ];
 
+// ===== 実行予算書（機器）判定 =====
+function isJikkoFile(rows) {
+  for (const r of rows.slice(0, 5)) {
+    for (const cell of r) {
+      if (String(cell).replace(/\s/g, '').includes('\u5b9f\u884c\u8a08\u7b97\u66f8')) return true;
+    }
+  }
+  return false;
+}
+
+// ===== 実行予算書（表紙総括表）判定 =====
+function isHyoshiFile(rows) {
+  for (const r of rows.slice(0, 5)) {
+    for (const cell of r) {
+      if (String(cell).replace(/\s/g, '').includes('総括表')) return true;
+    }
+  }
+  return false;
+}
+
+// ===== 実行予算書（表紙総括表）から工事名・見積合計・利益率を抽出 =====
+// row[1]: col[8]='工事名', col[9]=工事名値
+// 合計行: col[1]に「合計」を含む, col[13]=見積合計, col[20]=粗利率
+function parseHyoshiFile(filePath) {
+  const wb = XLSX.readFile(filePath);
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+  let kojiName = '';
+  let estimateNo = '';
+  let grandTotal = 0;
+  let profitRate = 0;
+
+  for (const r of rows) {
+    if (String(r[8] || '').trim() === '工事名' && !kojiName) {
+      kojiName = String(r[9] || '').trim();
+    }
+    // 見積番号: col[19]='見積番号', col[21]=番号値
+    if (String(r[19] || '').trim() === '見積番号' && !estimateNo) {
+      estimateNo = String(r[21] || '').trim();
+    }
+    // 合計行: col[1]に「合計」を含み、col[13]が正の数値
+    if (!grandTotal &&
+        String(r[1] || '').replace(/[\s\u3000]/g, '').includes('合計') &&
+        parseFloat(r[13]) > 0) {
+      grandTotal = parseFloat(r[13]) || 0;
+      profitRate = Math.round((parseFloat(r[20]) || 0) * 10) / 10;
+    }
+  }
+
+  return { kojiName, estimateNo, grandTotal: Math.round(grandTotal), profitRate };
+}
+
+// ===== 工事名で対応する表紙総括表データを取得 =====
+function findHyoshi(kojiName, hyoshiList) {
+  const normA = normKoji(kojiName);
+  if (!normA) return null;
+  for (const h of hyoshiList) {
+    const normB = normKoji(h.kojiName);
+    if (normA.includes(normB) || normB.includes(normA)) return h;
+  }
+  return null;
+}
+
+// ===== 実行予算書から工事名・品目を抽出 =====
+// col[1]=品名, col[5]=規格, col[8]=単位, col[9]=数量
+// col[13]=定価, col[15]=見積掛率(%), col[20]=原価単価, col[21]=原価金額
+function parseJikkoFile(filePath) {
+  const wb = XLSX.readFile(filePath);
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  let kojiName = '';
+  const items = [];
+  for (const r of rows) {
+    const c1 = String(r[1] || '').trim();
+    if (c1 === '\u5de5\u4e8b\u540d' || c1 === '\u5de5\u4e8b\u540d\uff12') {
+      const val = String(r[2] || '').trim();
+      if (!kojiName && val) kojiName = val;
+      continue;
+    }
+    const name = String(r[1] || '').trim();
+    if (!name) continue;
+    if (/\uff3c|\u5c0f\u3000\u3000\u8a08|\u5408\u3000\u3000\u8a08/.test(name)) continue;
+    if (['\u54c1\u3000\u540d', '\u54c1\u540d', '\u5f97\u610f\u5148', '\u898b\u7a4d\u756a\u53f7', '\u62c5\u5f53\u8005\u540d'].includes(name)) continue;
+    const unit      = String(r[8] || '').trim();
+    const listPrice = parseFloat(r[13]) || 0;
+    if (!unit || listPrice <= 0) continue;
+    const spec       = String(r[5] || '').trim();
+    const qty        = parseFloat(r[9])  || 0;
+    const sellRate   = parseFloat(r[15]) || 0;
+    const costPrice  = parseFloat(r[20]) || 0;
+    const costAmount = parseFloat(r[21]) || 0;
+    items.push({ name, spec, unit, qty, listPrice, sellRate, costPrice, costAmount });
+  }
+  return { kojiName, items };
+}
+
+// ===== 工事名正規化（照合用）=====
+function normKoji(s) {
+  return String(s).replace(/[\s\u3000]/g, '').replace(/\uff08[^\uff09]*\uff09/g, '').replace(/\([^)]*\)/g, '');
+}
+
+// ===== 品目照合キー（品名+規格の<以前）=====
+function normKey(name, spec) {
+  const n = String(name).replace(/[\s\u3000]/g, '');
+  const s = String(spec).split('<')[0].replace(/[\s\u3000]/g, '');
+  return n + '|' + s;
+}
+
+// ===== 実行予算書マップを構築 =====
+function buildJikkoMap(items) {
+  const map = {};
+  for (const item of items) {
+    const key = normKey(item.name, item.spec);
+    if (!map[key]) {
+      map[key] = { listPrice: item.listPrice, sellRate: item.sellRate, costPrice: item.costPrice, costAmount: item.costAmount };
+    }
+  }
+  return map;
+}
+
+// ===== 工事名で対応する実行予算書マップを取得 =====
+function findJikkoMap(kojiName, jikkoList) {
+  const normA = normKoji(kojiName);
+  if (!normA) return null;
+  for (const { kojiName: jKoji, jikkoMap } of jikkoList) {
+    const normB = normKoji(jKoji);
+    if (normA.includes(normB) || normB.includes(normA)) return jikkoMap;
+  }
+  return null;
+}
+
 // ===== レイアウト自動検出 =====
-// 旧形式(.xls): col[1] にキー（工事名等）、col[2] に品目コード
-// 新形式(.xlsx): col[0] にキー、col[0 or 1] に品目コード
 function detectLayout(rows) {
   for (const r of rows.slice(0, 30)) {
     const c1 = String(r[1] || '').trim();
@@ -177,7 +307,7 @@ function parseHonmaruFile(filePath) {
   const layout = detectLayout(rows);
   const isOld  = layout === 'old';
 
-  const info = { name: '', client: '' };
+  const info = { name: '', client: '', estimateNo: '' };
   const sections = {};   // 工種名 → items[]
   let currentSection = '一式';
   let sellTotal = 0;
@@ -196,6 +326,10 @@ function parseHonmaruFile(filePath) {
     }
     if (key === '得意先') {
       if (!info.client && val) info.client = val;
+      continue;
+    }
+    if (key === '見積番号') {
+      if (!info.estimateNo && val) info.estimateNo = val;
       continue;
     }
     if (key === '工種名') {
@@ -228,12 +362,14 @@ function parseHonmaruFile(filePath) {
   const meta = parseFilename(filePath);
 
   return {
+    kojiName:   info.name,
     name:       info.name,
+    estimateNo: info.estimateNo,
     client:     info.client,
     struct:     meta.struct,
     type:       meta.type,
     usage:      meta.usage,
-    sections,   // { 工種名: [ items ] }
+    sections,
     grandTotal: Math.round(sellTotal),
     profitRate,
     itemCount:  Object.values(sections).reduce((n, items) => n + items.length, 0),
@@ -248,13 +384,13 @@ function main() {
     process.exit(1);
   }
 
-  // 対象ファイルを収集
+  // 対象ファイルを収集（スクリプト自身の出力ファイルは除外）
   const targetFiles = [];
   for (const arg of args) {
     const resolved = path.resolve(arg);
     if (fs.statSync(resolved).isDirectory()) {
       fs.readdirSync(resolved)
-        .filter(f => f.match(/\.xlsx?$/i) && !f.startsWith('~'))
+        .filter(f => f.match(/\.xlsx?$/i) && !f.startsWith('~') && !f.startsWith('knowledge_'))
         .forEach(f => targetFiles.push(path.join(resolved, f)));
     } else if (arg.match(/\.xlsx?$/i)) {
       targetFiles.push(resolved);
@@ -268,17 +404,58 @@ function main() {
 
   console.log(`処理対象: ${targetFiles.length} 件`);
 
-  // ===== 各ファイルを変換 =====
-  const projects = [];
-  let idCounter = 1;
+  // ===== ファイル種別を判定して分類 =====
+  const meisaiFiles = [];
+  const jikkoList   = [];
+  const hyoshiList  = [];
 
   for (const filePath of targetFiles) {
     const fname = path.basename(filePath);
     try {
+      const wb = XLSX.readFile(filePath);
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      if (isHyoshiFile(rows)) {
+        const h = parseHyoshiFile(filePath);
+        hyoshiList.push(h);
+        console.log(`  [表紙総括表] ${fname}: 「${h.kojiName}」見積合計¥${h.grandTotal.toLocaleString()} / 利益率${h.profitRate}%`);
+      } else if (isJikkoFile(rows)) {
+        const { kojiName, items } = parseJikkoFile(filePath);
+        jikkoList.push({ kojiName, jikkoMap: buildJikkoMap(items) });
+        console.log(`  [実行予算書] ${fname}: 「${kojiName}」(${items.length}品目)`);
+      } else {
+        meisaiFiles.push(filePath);
+      }
+    } catch (e) { console.warn(`  [スキップ] ${fname}: ${e.message}`); }
+  }
+
+  console.log(`\n明細チェックリスト: ${meisaiFiles.length} 件 / 実行予算書: ${jikkoList.length} 件 / 表紙総括表: ${hyoshiList.length} 件`);
+
+  // ===== 各明細ファイルを変換 =====
+  const projects = [];
+  let idCounter = 1;
+
+  for (const filePath of meisaiFiles) {
+    const fname = path.basename(filePath);
+    try {
       const data = parseHonmaruFile(filePath);
+      const jikkoMap = findJikkoMap(data.kojiName, jikkoList);
+      const hyoshi   = findHyoshi(data.kojiName, hyoshiList);
+
+      // 表紙総括表があれば見積合計・利益率・見積番号を正確な値で上書き（諸経費・値引き込み）
+      if (hyoshi && hyoshi.grandTotal > 0) {
+        data.grandTotal = hyoshi.grandTotal;
+        data.profitRate = hyoshi.profitRate;
+      }
+      // 見積番号: 表紙総括表 > 明細チェックリストの順で優先
+      const estimateNo = (hyoshi && hyoshi.estimateNo) || data.estimateNo || '';
+      data.estimateNo  = estimateNo;
+
       const meta = `${data.struct||'?'} ${data.type||'?'} ${data.usage||'?'}`;
-      console.log(`  [${idCounter}] ${data.name} [${meta}] — ${data.itemCount}品目 / ¥${data.grandTotal.toLocaleString()} / 利益率: ${data.profitRate}%`);
-      projects.push({ id: idCounter++, ...data });
+      const notes = [jikkoMap ? '実行予算書照合済' : '', hyoshi ? '表紙総括表照合済' : ''].filter(Boolean).join(', ');
+      const noteStr = notes ? ` [${notes}]` : '';
+      console.log(`  [${idCounter}] ${data.name} [${meta}]${noteStr} — ${data.itemCount}品目 / ¥${data.grandTotal.toLocaleString()} / 利益率: ${data.profitRate}%`);
+      projects.push({ id: idCounter++, ...data, jikkoMap });
     } catch (e) {
       console.warn(`  [スキップ] ${fname}: ${e.message}`);
     }
@@ -294,35 +471,47 @@ function main() {
   const today = new Date().toISOString().split('T')[0];
 
   // Sheet1: プロジェクト一覧
-  const rows1 = [['id', '登録日', '物件名', '構造', '種別', '用途', '坪数', '合計金額', '利益率', '有効', '得意先（参考）']];
-  projects.forEach(p => rows1.push([
-    p.id, today, p.name,
-    p.struct,  // ファイル名から自動抽出（要確認）
-    p.type,    // ファイル名から自動抽出（要確認）
-    p.usage,   // ファイル名から自動抽出（要確認）
-    '',        // 坪数 ← 記入してください
-    p.grandTotal, p.profitRate, '○', p.client,
-  ]));
+  const rows1 = [['id', '登録日', '見積番号', '物件名', '構造', '種別', '用途', '坪数', '合計金額', '利益率', '有効', '得意先（参考）']];
+  projects.forEach(p => {
+    // 物件名は「見積番号 工事名」形式（見積番号がある場合）
+    const dispName = p.estimateNo ? `${p.estimateNo} ${p.name}` : p.name;
+    rows1.push([
+      p.id, today, p.estimateNo, dispName,
+      p.struct, p.type, p.usage,
+      '',
+      p.grandTotal, p.profitRate, '○', p.client,
+    ]);
+  });
   const ws1 = XLSX.utils.aoa_to_sheet(rows1);
   ws1['!cols'] = [
-    { wch: 5 }, { wch: 12 }, { wch: 30 }, { wch: 8 }, { wch: 8 },
+    { wch: 5 }, { wch: 12 }, { wch: 10 }, { wch: 36 }, { wch: 8 }, { wch: 8 },
     { wch: 12 }, { wch: 6 }, { wch: 12 }, { wch: 8 }, { wch: 6 }, { wch: 24 },
   ];
   XLSX.utils.book_append_sheet(wb, ws1, 'プロジェクト一覧');
 
-  // Sheet2: 明細
-  const rows2 = [['project_id', '工種名', '品目名', '規格', '数量', '単位', '単価', '金額', '歩掛']];
+  // Sheet2: 明細（原価・定価・掛率列追加）
+  const rows2 = [['project_id', '工種名', '品目名', '規格', '数量', '単位', '単価', '金額', '歩掛', '原価単価', '原価金額', '定価', '見積掛率(%)']];
   projects.forEach(p => {
     Object.entries(p.sections).forEach(([catName, items]) => {
       items.forEach(i => {
-        rows2.push([p.id, catName, i.name, i.spec, i.qty, i.unit, i.price, i.amount, i.bukariki || 0]);
+        const key   = normKey(i.name, i.spec);
+        const jikko = p.jikkoMap ? (p.jikkoMap[key] || null) : null;
+        rows2.push([
+          p.id, catName, i.name, i.spec, i.qty, i.unit, i.price, i.amount,
+          i.bukariki || 0,
+          i.costPrice  || (jikko ? jikko.costPrice  : 0),   // 原価単価
+          i.costAmount || (jikko ? jikko.costAmount  : 0),  // 原価金額
+          jikko ? jikko.listPrice : '',                       // 定価（機器のみ）
+          jikko ? jikko.sellRate  : '',                       // 見積掛率(%)（機器のみ）
+        ]);
       });
     });
   });
   const ws2 = XLSX.utils.aoa_to_sheet(rows2);
   ws2['!cols'] = [
     { wch: 5 }, { wch: 16 }, { wch: 30 }, { wch: 20 },
-    { wch: 6 }, { wch: 6 }, { wch: 10 }, { wch: 10 }, { wch: 8 },
+    { wch: 6 }, { wch: 6 }, { wch: 10 }, { wch: 10 }, { wch: 6 },
+    { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 },
   ];
   XLSX.utils.book_append_sheet(wb, ws2, '明細');
 
@@ -333,13 +522,16 @@ function main() {
 
   XLSX.writeFile(wb, outPath);
 
+  const jikkoMatched  = projects.filter(p => p.jikkoMap).length;
+  const hyoshiMatched = projects.filter(p => hyoshiList.some(h => normKoji(p.kojiName) && normKoji(h.kojiName) && (normKoji(p.kojiName).includes(normKoji(h.kojiName)) || normKoji(h.kojiName).includes(normKoji(p.kojiName))))).length;
   console.log(`\n✅ 出力完了: ${outPath}`);
   console.log(`  ${projects.length} 件の物件データを変換しました`);
+  console.log(`  うち ${jikkoMatched} 件は実行予算書（機器）と照合済み（定価・掛率付与）`);
+  console.log(`  うち ${hyoshiMatched} 件は表紙総括表と照合済み（見積合計・利益率を正確な値に更新）`);
   console.log(`  ${rows2.length - 1} 行の明細データ`);
   console.log('\n次のステップ:');
   console.log('  1. 出力されたExcelを開く');
-  console.log('  2.「プロジェクト一覧」シートの 構造・種別・用途・坪数 を記入');
-  console.log('     例: 構造=RC, 種別=新築, 用途=事務所, 坪数=120');
+  console.log('  2.「プロジェクト一覧」シートの 構造・種別・用途・坪数 を記入/確認');
   console.log('  3. estimate-app のナレッジDB画面 → 「インポート」で読み込む');
 }
 

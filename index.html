@@ -93,7 +93,10 @@
     </div>
 
     <div class="sidebar-footer">
-      <p>Phase 2 — 基本機能</p>
+      <button onclick="openApiSettings()" style="width:100%;padding:7px;background:transparent;border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:rgba(255,255,255,0.7);font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;" title="Claude APIキーを設定してAI機能を有効にします">
+        <span>⚙</span><span>AI設定（APIキー）</span>
+      </button>
+      <p style="margin-top:6px;">Phase 2 — 基本機能</p>
     </div>
   </nav>
 
@@ -105,9 +108,15 @@
       <div class="topbar-actions">
         <button id="backBtn" class="btn btn-secondary btn-sm" onclick="undoAction()" style="display:none;" title="元に戻す (Ctrl+Z)">↩ 元に戻す</button>
         <button id="redoBtn" class="btn btn-secondary btn-sm" onclick="redoAction()" style="display:none;" title="やり直し (Ctrl+Y)">↪ やり直し</button>
-        <button class="btn btn-secondary btn-sm" onclick="saveToLocalStorage()">
+        <button class="btn btn-secondary btn-sm" onclick="saveEstimateToList()" title="現在の見積を保存（複数スロット）">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1-2 2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
           保存
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="openSavedEstimatesModal()" title="保存済み見積の読み込み・修正・流用">
+          📂 保存済み
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="checkSellRates()" title="同得意先の過去見積と単価を比較（5%以上の乖離を検出）">
+          ⚠ 掛率チェック
         </button>
         <button class="btn btn-primary btn-sm" onclick="exportEstimate()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>
@@ -135,7 +144,11 @@
               </div>
               <div class="form-group">
                 <label class="form-label">見積番号</label>
-                <input type="text" class="form-input" id="pj-number" placeholder="0000-01" oninput="updateProject()">
+                <div style="display:flex;gap:4px;align-items:center;">
+                  <input type="text" class="form-input" id="pj-number" placeholder="0000-01" oninput="updateProject()" style="flex:1;">
+                  <button onclick="generateEstimateNo()" title="次の見積番号を自動発番" style="padding:4px 8px;font-size:12px;white-space:nowrap;cursor:pointer;">自動発番</button>
+                  <button onclick="setEstimateNoCounter()" title="開始番号を設定" style="padding:4px 6px;font-size:12px;cursor:pointer;">⚙</button>
+                </div>
               </div>
               <div class="form-group">
                 <label class="form-label">見積日</label>
@@ -200,11 +213,14 @@
                 <input type="text" class="form-input" id="pj-person" value="八木橋　友和" oninput="updateProject()">
               </div>
             </div>
-            <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px;">
-              <button class="btn btn-primary" onclick="autoCreateEstimate()" style="font-size:14px;padding:10px 24px;">
-                🤖 見積自動作成
+            <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <button id="aiDraftBtn" onclick="aiDraftEstimate()" style="font-size:14px;padding:10px 24px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:6px;">
+                ✨ AIたたき台作成
               </button>
-              <span style="font-size:11px;color:var(--text-sub);">構造・用途・種別・面積を入力してからボタンを押すと、過去の実績から見積を自動生成します</span>
+              <button class="btn btn-secondary" onclick="autoCreateEstimate()" style="font-size:13px;padding:9px 18px;">
+                🤖 実績から自動作成
+              </button>
+              <span style="font-size:11px;color:var(--text-sub);flex:1;">構造・種別・面積を入力後にボタンを押してください。<br>「AIたたき台」はClaude APIで生成、「実績から自動作成」はナレッジDBを直接参照します。</span>
             </div>
           </div>
         </div>
@@ -554,6 +570,87 @@
       <button class="modal-close" onclick="document.getElementById('knowledgeDetailModal').classList.remove('show')">✕</button>
     </div>
     <div class="modal-body" id="knowledgeDetailBody" style="padding:16px 20px;"></div>
+  </div>
+</div>
+
+<!-- Saved Estimates Modal -->
+<div class="modal-overlay" id="savedEstimatesModal">
+  <div class="modal" style="max-width:800px;">
+    <div class="modal-header">
+      <span class="modal-title">📂 保存済み見積一覧</span>
+      <button class="modal-close" onclick="closeSavedEstimatesModal()">✕</button>
+    </div>
+    <div class="modal-body" id="savedEstimatesBody" style="padding:16px 20px;max-height:60vh;overflow-y:auto;"></div>
+    <div style="padding:12px 20px;border-top:1px solid #eee;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <span style="font-size:12px;color:#888;">「修正」: 枝番+1 ／ 「流用」: 新規採番（別物件）</span>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button onclick="exportSavedEstimates()" style="padding:5px 12px;font-size:12px;cursor:pointer;" title="全件をJSONファイルにバックアップ">📥 バックアップ</button>
+        <label style="padding:5px 12px;font-size:12px;cursor:pointer;border:1px solid #ccc;border-radius:4px;background:#fff;" title="JSONファイルから復元">
+          📤 復元
+          <input type="file" accept=".json" onchange="importSavedEstimates(this.files[0])" style="display:none;">
+        </label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- AI Settings Modal -->
+<div class="modal-overlay" id="apiSettingsModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <span class="modal-title">⚙ AI設定 — Claude APIキー</span>
+      <button class="modal-close" onclick="document.getElementById('apiSettingsModal').classList.remove('show')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:20px 24px;">
+      <p style="font-size:13px;color:#555;margin:0 0 16px;">
+        AI機能（たたき台作成・単価調査など）を使用するには Anthropic の APIキーが必要です。<br>
+        キーはブラウザのlocalStorageにのみ保存されます（外部送信なし）。
+      </p>
+      <div style="background:#f8f8f8;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#666;">
+        現在の設定: <strong id="apiKeyDisplay">未設定</strong>
+      </div>
+      <label style="display:block;font-size:13px;font-weight:500;margin-bottom:6px;">新しいAPIキー（sk-ant-... ）:</label>
+      <input type="password" id="apiKeyInput" class="form-input" placeholder="sk-ant-api03-..." style="font-family:monospace;font-size:13px;margin-bottom:16px;">
+      <div style="display:flex;gap:8px;">
+        <button onclick="saveApiKey()" style="flex:1;padding:9px;background:#6366f1;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">保存</button>
+        <button onclick="clearApiKey()" style="padding:9px 16px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:6px;cursor:pointer;font-size:13px;">削除</button>
+      </div>
+      <p style="font-size:11px;color:#999;margin:14px 0 0;">
+        APIキーの取得: <a href="https://console.anthropic.com/" target="_blank" style="color:#6366f1;">console.anthropic.com</a> →「API Keys」
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- AI Draft Preview Modal -->
+<div class="modal-overlay" id="aiDraftModal">
+  <div class="modal" style="max-width:860px;">
+    <div class="modal-header">
+      <span class="modal-title">✨ AIたたき台 — プレビュー</span>
+      <button class="modal-close" onclick="document.getElementById('aiDraftModal').classList.remove('show')">✕</button>
+    </div>
+    <div class="modal-body" id="aiDraftBody" style="padding:16px 20px;max-height:65vh;overflow-y:auto;"></div>
+    <div style="padding:12px 20px;border-top:1px solid #eee;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+      <span style="font-size:12px;color:#888;">内容を確認して「見積に取り込む」を押すと品目が投入されます。後から自由に修正できます。</span>
+      <div style="display:flex;gap:8px;">
+        <button onclick="document.getElementById('aiDraftModal').classList.remove('show')" style="padding:8px 18px;font-size:13px;cursor:pointer;border:1px solid #ccc;border-radius:6px;background:#fff;">閉じる</button>
+        <button onclick="applyAiDraft()" style="padding:8px 22px;font-size:13px;font-weight:600;cursor:pointer;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:6px;">見積に取り込む</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Sell Rate Check Modal -->
+<div class="modal-overlay" id="sellRateCheckModal">
+  <div class="modal" style="max-width:820px;">
+    <div class="modal-header">
+      <span class="modal-title">⚠ 掛率チェック — 過去単価との乖離</span>
+      <button class="modal-close" onclick="document.getElementById('sellRateCheckModal').classList.remove('show')">✕</button>
+    </div>
+    <div class="modal-body" id="sellRateCheckBody" style="padding:16px 20px;max-height:65vh;overflow-y:auto;"></div>
+    <div style="padding:10px 20px;border-top:1px solid #eee;font-size:12px;color:#888;">
+      ナレッジDBに登録された同得意先の見積実績と比較しています。実績がない場合は表示されません。
+    </div>
   </div>
 </div>
 

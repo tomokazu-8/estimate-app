@@ -80,6 +80,8 @@ document.addEventListener('DOMContentLoaded', () => {
     renderDBTable();
     // ナレッジDB空チェック → 復元バナー表示
     checkKnowledgeRestore();
+    // 保存済み見積空チェック → トースト通知
+    checkEstimatesRestore();
   });
 });
 
@@ -168,6 +170,615 @@ function redoAction() {
   document.getElementById('backBtn').style.display = '';
   document.getElementById('redoBtn').style.display = _redoStack.length > 0 ? '' : 'none';
   showToast('やり直しました');
+}
+
+// ===== 見積番号自動採番 =====
+const ESTIMATE_NO_KEY    = 'estimateNoCounter';
+const SAVED_ESTIMATES_KEY = 'hachitomo_estimates';
+const MAX_SAVED_ESTIMATES = 50;
+
+/** NNNN-EE → { base:'NNNN', branch:EE } */
+function parseEstimateNo(no) {
+  const m = String(no || '').match(/^(\d+)-(\d+)$/);
+  if (!m) return { base: no || '', branch: 0 };
+  return { base: m[1], branch: parseInt(m[2], 10) };
+}
+
+/** 同物件修正: 枝番+1 → 1111-01 → 1111-02 */
+function incrementBranch(no) {
+  const { base, branch } = parseEstimateNo(no);
+  if (!base) return no;
+  return base.padStart(4, '0') + '-' + String(branch + 1).padStart(2, '0');
+}
+
+/** 新規採番（流用・自動発番共通）: counter+1 → NNNN-01 */
+function _allocateNewNo() {
+  const counter = parseInt(localStorage.getItem(ESTIMATE_NO_KEY) || '0', 10) + 1;
+  localStorage.setItem(ESTIMATE_NO_KEY, String(counter));
+  return String(counter).padStart(4, '0') + '-01';
+}
+
+/** 「自動発番」ボタン: 初回のみ開始番号を確認 */
+function generateEstimateNo() {
+  let counter = parseInt(localStorage.getItem(ESTIMATE_NO_KEY) || '0', 10);
+  if (counter === 0) {
+    const input = prompt('見積番号の開始番号を入力してください（例: 358）\n※前回の最後の番号の次から始まります', '1');
+    if (input === null) return;
+    counter = parseInt(input, 10) - 1;
+    if (isNaN(counter) || counter < 0) counter = 0;
+    localStorage.setItem(ESTIMATE_NO_KEY, String(counter));
+  }
+  const no = _allocateNewNo();
+  document.getElementById('pj-number').value = no;
+  updateProject();
+}
+
+function setEstimateNoCounter() {
+  const current = parseInt(localStorage.getItem(ESTIMATE_NO_KEY) || '0', 10);
+  const input = prompt(
+    `現在のカウンター: ${current}（次回発番: ${String(current + 1).padStart(4, '0')}-01）\n新しいカウンター値を入力:`,
+    String(current)
+  );
+  if (input === null) return;
+  const val = parseInt(input, 10);
+  if (!isNaN(val) && val >= 0) {
+    localStorage.setItem(ESTIMATE_NO_KEY, String(val));
+    showToast(`見積番号カウンターを ${val} に設定しました（次回: ${String(val + 1).padStart(4, '0')}-01）`);
+  }
+}
+
+// ===== 複数見積スロット保存・読み込み =====
+function getSavedEstimates() {
+  try { return JSON.parse(localStorage.getItem(SAVED_ESTIMATES_KEY) || '[]'); }
+  catch { return []; }
+}
+
+function saveEstimateToList() {
+  const list = getSavedEstimates();
+  const record = {
+    id: Date.now().toString(),
+    savedAt: new Date().toISOString(),
+    project: { ...project },
+    items: JSON.parse(JSON.stringify(items)),
+    itemIdCounter,
+  };
+  // 同じ見積番号があれば上書き（番号なしは常に新規追加）
+  const idx = project.number
+    ? list.findIndex(e => e.project.number === project.number)
+    : -1;
+  if (idx >= 0) {
+    list[idx] = record;
+  } else {
+    list.unshift(record);
+    if (list.length > MAX_SAVED_ESTIMATES) list.splice(MAX_SAVED_ESTIMATES);
+  }
+  localStorage.setItem(SAVED_ESTIMATES_KEY, JSON.stringify(list));
+  // auto-restore用スロットも更新
+  localStorage.setItem('hachitomo_estimate', JSON.stringify({ project, items, itemIdCounter }));
+  autoBackupEstimates(list);
+  showToast('見積を保存しました');
+}
+
+function openSavedEstimatesModal() {
+  renderSavedEstimatesList();
+  document.getElementById('savedEstimatesModal').classList.add('show');
+}
+
+function closeSavedEstimatesModal() {
+  document.getElementById('savedEstimatesModal').classList.remove('show');
+}
+
+function renderSavedEstimatesList() {
+  const list = getSavedEstimates();
+  const body = document.getElementById('savedEstimatesBody');
+  if (list.length === 0) {
+    body.innerHTML = '<p style="color:#666;text-align:center;padding:32px;">保存済みの見積がありません<br><small>「保存」ボタンで現在の見積を保存できます</small></p>';
+    return;
+  }
+  const rows = list.map(e => {
+    const date = e.savedAt ? new Date(e.savedAt).toLocaleDateString('ja-JP') : '';
+    const no   = e.project.number || '—';
+    const name = e.project.name   || '（物件名なし）';
+    return `<tr style="border-bottom:1px solid #eee;">
+      <td style="padding:8px 10px;white-space:nowrap;font-weight:bold;">${no}</td>
+      <td style="padding:8px 10px;">${name}</td>
+      <td style="padding:8px 10px;white-space:nowrap;color:#888;font-size:12px;">${date}</td>
+      <td style="padding:8px 10px;white-space:nowrap;">
+        <button onclick="loadSavedEstimate('${e.id}','revise')" style="margin-right:4px;padding:4px 10px;font-size:12px;cursor:pointer;" title="同物件の修正版として読み込む（枝番+1）">修正</button>
+        <button onclick="loadSavedEstimate('${e.id}','copy')" style="margin-right:4px;padding:4px 10px;font-size:12px;cursor:pointer;" title="別物件として流用（新規採番）">流用</button>
+        <button onclick="deleteSavedEstimate('${e.id}')" style="padding:4px 10px;font-size:12px;cursor:pointer;color:#c00;">削除</button>
+      </td>
+    </tr>`;
+  }).join('');
+  body.innerHTML = `<table style="width:100%;border-collapse:collapse;">
+    <thead><tr style="border-bottom:2px solid #ddd;background:#f5f5f5;">
+      <th style="padding:8px 10px;text-align:left;">見積番号</th>
+      <th style="padding:8px 10px;text-align:left;">物件名</th>
+      <th style="padding:8px 10px;text-align:left;">保存日</th>
+      <th style="padding:8px 10px;text-align:left;">操作</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function loadSavedEstimate(id, mode) {
+  const list = getSavedEstimates();
+  const rec  = list.find(e => e.id === id);
+  if (!rec) return;
+
+  project       = { ...rec.project };
+  items         = JSON.parse(JSON.stringify(rec.items));
+  itemIdCounter = rec.itemIdCounter || 1;
+
+  if (mode === 'revise') {
+    // 同物件修正: 枝番+1
+    project.number = incrementBranch(project.number);
+  } else {
+    // 流用: 新規採番（別物件扱い）
+    project.number = _allocateNewNo();
+    project.name   = project.name ? project.name + '（流用）' : '';
+  }
+
+  // フォームに反映
+  document.getElementById('pj-name').value       = project.name || '';
+  document.getElementById('pj-number').value     = project.number || '';
+  document.getElementById('pj-date').value       = project.date || '';
+  document.getElementById('pj-client').value     = project.client || '';
+  document.getElementById('pj-struct').value     = project.struct || '';
+  document.getElementById('pj-usage').value      = project.usage || '';
+  document.getElementById('pj-type').value       = project.type || '';
+  document.getElementById('pj-floors').value     = project.floors || '';
+  document.getElementById('pj-area-sqm').value   = project.areaSqm || '';
+  document.getElementById('pj-area-tsubo').value = project.areaTsubo || '';
+  document.getElementById('pj-location').value   = project.location || '';
+  document.getElementById('pj-person').value     = project.person || '';
+  document.getElementById('pj-labor-rate').value = project.laborRate || 72;
+  document.getElementById('pj-labor-sell').value = project.laborSell || 33000;
+  document.getElementById('pj-tax').value        = project.tax || 10;
+  document.getElementById('pj-copper').value     = project.copper || '';
+
+  activeCategories.forEach(c => { if (!items[c.id]) items[c.id] = []; });
+  recalcAll();
+  renderCatTabs();
+  closeSavedEstimatesModal();
+
+  const label = mode === 'revise' ? `修正版 → ${project.number}` : `流用 → ${project.number}`;
+  showToast(`見積を読み込みました（${label}）`);
+}
+
+function deleteSavedEstimate(id) {
+  if (!confirm('この保存済み見積を削除しますか？')) return;
+  const list = getSavedEstimates().filter(e => e.id !== id);
+  localStorage.setItem(SAVED_ESTIMATES_KEY, JSON.stringify(list));
+  renderSavedEstimatesList();
+  showToast('削除しました');
+}
+
+/** 1日1回自動バックアップ（saveEstimateToList から呼ばれる） */
+function autoBackupEstimates(list) {
+  if (!list || list.length === 0) return;
+  const today = new Date().toISOString().split('T')[0];
+  const last  = localStorage.getItem('estimates_last_backup') || '';
+  if (last.startsWith(today)) return;  // 今日はもう済んでいる
+  const json = JSON.stringify(list, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `estimates_backup_${today}.json`; a.click();
+  URL.revokeObjectURL(url);
+  localStorage.setItem('estimates_last_backup', new Date().toISOString());
+}
+
+function exportSavedEstimates() {
+  const list = getSavedEstimates();
+  if (list.length === 0) { showToast('保存済み見積がありません'); return; }
+  const json = JSON.stringify(list, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const date = new Date().toISOString().split('T')[0];
+  a.href = url; a.download = `estimates_backup_${date}.json`; a.click();
+  URL.revokeObjectURL(url);
+  showToast(`${list.length}件の見積をバックアップしました`);
+}
+
+function importSavedEstimates(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const incoming = JSON.parse(e.target.result);
+      if (!Array.isArray(incoming)) throw new Error('フォーマットが正しくありません');
+      const existing = getSavedEstimates();
+      // 既存にないIDのみ追加（重複スキップ）、最新を先頭に
+      const existingIds = new Set(existing.map(r => r.id));
+      const newEntries  = incoming.filter(r => r.id && !existingIds.has(r.id));
+      const merged = [...newEntries, ...existing]
+        .slice(0, MAX_SAVED_ESTIMATES);
+      localStorage.setItem(SAVED_ESTIMATES_KEY, JSON.stringify(merged));
+      renderSavedEstimatesList();
+      showToast(`${newEntries.length}件を復元しました（既存: ${existing.length}件）`);
+    } catch(err) {
+      showToast('復元に失敗しました: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ===== AI設定 =====
+const ANTHROPIC_KEY_STORAGE = 'anthropic_api_key';
+
+function getApiKey() {
+  return localStorage.getItem(ANTHROPIC_KEY_STORAGE) || '';
+}
+
+function openApiSettings() {
+  const current = getApiKey();
+  const el = document.getElementById('apiKeyDisplay');
+  if (el) el.textContent = current
+    ? current.slice(0, 10) + '...' + current.slice(-4)
+    : '未設定';
+  document.getElementById('apiKeyInput').value = '';
+  document.getElementById('apiSettingsModal').classList.add('show');
+}
+
+function saveApiKey() {
+  const val = document.getElementById('apiKeyInput').value.trim();
+  if (!val.startsWith('sk-')) {
+    showToast('有効なAPIキーを入力してください（sk- で始まる文字列）');
+    return;
+  }
+  localStorage.setItem(ANTHROPIC_KEY_STORAGE, val);
+  document.getElementById('apiSettingsModal').classList.remove('show');
+  showToast('APIキーを保存しました');
+}
+
+function clearApiKey() {
+  if (!confirm('保存済みのAPIキーを削除しますか？')) return;
+  localStorage.removeItem(ANTHROPIC_KEY_STORAGE);
+  document.getElementById('apiSettingsModal').classList.remove('show');
+  showToast('APIキーを削除しました');
+}
+
+// --- Claude API 呼び出し ---
+async function callClaude(prompt) {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    openApiSettings();
+    throw new Error('APIキーが設定されていません。設定後に再度お試しください。');
+  }
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4096,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const msg = err.error?.message || `APIエラー (${res.status})`;
+    if (res.status === 401) throw new Error('APIキーが無効です。設定を確認してください。');
+    throw new Error(msg);
+  }
+
+  const data = await res.json();
+  return data.content[0].text;
+}
+
+// ===== AI たたき台作成 =====
+async function aiDraftEstimate() {
+  if (!tridgeLoaded && activeCategories.length === 0) {
+    showToast('先にトリッジを装着してください');
+    return;
+  }
+  if (!project.struct && !project.type) {
+    showToast('構造・種別を入力してください');
+    return;
+  }
+
+  const btn = document.getElementById('aiDraftBtn');
+  const origHtml = btn.innerHTML;
+  btn.innerHTML = '⏳ AI生成中...';
+  btn.disabled = true;
+
+  try {
+    // ナレッジDBから類似物件を取得（上位3件、明細付きのみ）
+    const area = parseFloat(project.areaTsubo) || 0;
+    let similar = [];
+    try {
+      const candidates = await knowledgeDB.searchSimilar({
+        struct: project.struct,
+        type: project.type,
+        usage: project.usage,
+        areaTsubo: area,
+      });
+      similar = candidates
+        .filter(r => r.categories && r.categories.some(c => c.items && c.items.length > 0))
+        .slice(0, 3);
+    } catch (e) { /* DBなしでも続行 */ }
+
+    const prompt = _buildAiDraftPrompt(similar, area);
+    const responseText = await callClaude(prompt);
+
+    // JSON抽出
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('AIの回答からJSONを取り出せませんでした');
+    const draft = JSON.parse(jsonMatch[0]);
+    if (!draft.categories || !Array.isArray(draft.categories)) throw new Error('不正なフォーマットです');
+
+    _showAiDraftPreview(draft, similar.length);
+
+  } catch (e) {
+    showToast('AI生成エラー: ' + e.message);
+  } finally {
+    btn.innerHTML = origHtml;
+    btn.disabled = false;
+  }
+}
+
+function _buildAiDraftPrompt(similar, targetArea) {
+  const catNames = activeCategories
+    .filter(c => c.active && !c.rateMode)
+    .map(c => c.name)
+    .join('・');
+
+  let pastSection = '';
+  if (similar.length > 0) {
+    pastSection = '\n【過去の類似物件】\n';
+    similar.forEach((rec, i) => {
+      const p = rec.project;
+      const recArea = parseFloat(p.areaTsubo) || 0;
+      const ratio = (targetArea > 0 && recArea > 0) ? (targetArea / recArea).toFixed(2) : '—';
+      pastSection += `\n物件${i + 1}: ${p.name}（${p.struct}/${p.type}/${p.usage || '—'}/${recArea ? recArea + '坪' : '面積不明'}）合計¥${rec.grandTotal.toLocaleString()} ※面積比${ratio}倍\n`;
+      rec.categories.forEach(cat => {
+        if (!cat.items || cat.items.length === 0) return;
+        pastSection += `[${cat.name}]\n`;
+        cat.items.slice(0, 25).forEach(item => {
+          if (AUTO_NAMES.includes(item.name)) return;
+          pastSection += `  ${item.name}  ${item.spec || ''}  ${item.qty}${item.unit}  ¥${item.price}\n`;
+        });
+      });
+    });
+  } else {
+    pastSection = '\n【過去の類似物件】\nナレッジDBに類似物件が登録されていないため、電気工事の一般的な知識に基づいて作成してください。\n';
+  }
+
+  const areaNote = targetArea > 0 ? `${targetArea}坪` : '未入力';
+
+  return `あなたは電気工事会社の熟練見積担当者です。以下の物件情報と過去実績をもとに、見積のたたき台をJSON形式で作成してください。
+
+【新規物件情報】
+- 構造: ${project.struct || '未入力'}
+- 種別: ${project.type || '未入力'}
+- 用途: ${project.usage || '未入力'}
+- 延床面積: ${areaNote}
+- 施工場所: ${project.location || '未入力'}
+${pastSection}
+【使用できる工種】（必ずこの一覧から選ぶこと）
+${catNames}
+
+【出力形式】JSONのみで回答してください（前後の説明文は不要）:
+{
+  "comment": "見積作成の根拠と注意点を1〜2文で",
+  "categories": [
+    {
+      "name": "工種名（上記一覧から選ぶ）",
+      "items": [
+        {"name": "品目名", "spec": "規格・型番", "qty": 数値, "unit": "単位", "price": 単価数値}
+      ]
+    }
+  ]
+}
+
+【注意事項】
+- 工種名は必ず上記「使用できる工種」の中から選ぶこと
+- qty・price は整数の数値型（文字列不可）
+- 雑材料費・労務費・諸経費・小計 等の自動計算行は含めない（システムが自動追加する）
+- 実際の電気工事に使用する材料・機器のみ列挙する
+- 過去データがある場合は面積比を考慮して数量を調整する`;
+}
+
+function _showAiDraftPreview(draft, similarCount) {
+  const body = document.getElementById('aiDraftBody');
+  body._draft = draft;
+
+  let html = `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#1e40af;">
+    <strong>AI コメント:</strong> ${draft.comment || ''}
+    <div style="font-size:11px;color:#3b82f6;margin-top:4px;">
+      ${similarCount > 0 ? `ナレッジDBの類似物件 ${similarCount}件を参照して生成` : 'ナレッジDBに類似物件がないため一般知識から生成（実績が蓄積されると精度が向上します）'}
+    </div>
+  </div>`;
+
+  let totalAmount = 0;
+  (draft.categories || []).forEach(cat => {
+    const catTotal = (cat.items || []).reduce((s, i) => s + ((i.qty || 0) * (i.price || 0)), 0);
+    totalAmount += catTotal;
+    html += `<div style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;font-weight:600;font-size:13px;padding:6px 10px;background:#f0f4ff;border-radius:6px 6px 0 0;border:1px solid #dbeafe;border-bottom:none;">
+        <span>${cat.name}</span>
+        <span style="font-family:'JetBrains Mono';">¥${catTotal.toLocaleString()}</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;border:1px solid #dbeafe;font-size:12px;">
+        <thead><tr style="background:#f8fafc;color:#64748b;">
+          <th style="padding:5px 8px;text-align:left;font-weight:500;border-bottom:1px solid #e2e8f0;">品目</th>
+          <th style="padding:5px 8px;text-align:left;font-weight:500;border-bottom:1px solid #e2e8f0;">規格</th>
+          <th style="padding:5px 8px;text-align:right;font-weight:500;border-bottom:1px solid #e2e8f0;">数量</th>
+          <th style="padding:5px 8px;text-align:left;font-weight:500;border-bottom:1px solid #e2e8f0;">単位</th>
+          <th style="padding:5px 8px;text-align:right;font-weight:500;border-bottom:1px solid #e2e8f0;">単価</th>
+          <th style="padding:5px 8px;text-align:right;font-weight:500;border-bottom:1px solid #e2e8f0;">金額</th>
+        </tr></thead>
+        <tbody>`;
+    (cat.items || []).forEach(item => {
+      const amount = (item.qty || 0) * (item.price || 0);
+      html += `<tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:4px 8px;">${item.name}</td>
+        <td style="padding:4px 8px;color:#666;">${item.spec || ''}</td>
+        <td style="padding:4px 8px;text-align:right;font-family:'JetBrains Mono';">${item.qty}</td>
+        <td style="padding:4px 8px;">${item.unit || ''}</td>
+        <td style="padding:4px 8px;text-align:right;font-family:'JetBrains Mono';">${(item.price || 0).toLocaleString()}</td>
+        <td style="padding:4px 8px;text-align:right;font-family:'JetBrains Mono';">${amount.toLocaleString()}</td>
+      </tr>`;
+    });
+    html += `</tbody></table></div>`;
+  });
+
+  html += `<div style="text-align:right;padding:10px 8px 4px;font-size:14px;font-weight:700;color:var(--accent);border-top:2px solid #e2e8f0;">
+    材料合計（自動計算行除く）: ¥${totalAmount.toLocaleString()}
+  </div>`;
+
+  body.innerHTML = html;
+  body._draft = draft;  // innerHTML代入後も保持
+  document.getElementById('aiDraftModal').classList.add('show');
+}
+
+function applyAiDraft() {
+  const draft = document.getElementById('aiDraftBody')._draft;
+  if (!draft) { showToast('データがありません'); return; }
+
+  saveUndoState();
+  let addedItems = 0;
+
+  (draft.categories || []).forEach(cat => {
+    // 工種名で照合（前方一致・部分一致も許容）
+    const targetCat = activeCategories.find(c =>
+      c.active && (c.name === cat.name || c.name.includes(cat.name) || cat.name.includes(c.name))
+    );
+    if (!targetCat) return;
+
+    if (!items[targetCat.id]) items[targetCat.id] = [];
+    const existing = items[targetCat.id].filter(i => i.name);
+    if (existing.length > 0) {
+      if (!confirm(`「${targetCat.name}」には既に${existing.length}件の品目があります。上書きしますか？\n（キャンセルでこの工種をスキップ）`)) return;
+      items[targetCat.id] = [];
+    }
+
+    (cat.items || []).forEach(item => {
+      const qty   = parseFloat(item.qty)   || 0;
+      const price = parseFloat(item.price) || 0;
+      items[targetCat.id].push({
+        id:       itemIdCounter++,
+        name:     item.name  || '',
+        spec:     item.spec  || '',
+        qty,
+        unit:     item.unit  || '',
+        price,
+        amount:   qty * price,
+        bukariki: '',
+        note:     '',
+      });
+      addedItems++;
+    });
+  });
+
+  document.getElementById('aiDraftModal').classList.remove('show');
+
+  const firstCat = activeCategories.find(
+    c => c.active && !c.rateMode && items[c.id] && items[c.id].filter(i => i.name).length > 0
+  );
+  if (firstCat) currentCat = firstCat.id;
+
+  renderCatTabs();
+  renderItems();
+  updateSummaryBar();
+  showToast(`${addedItems}品目をAIたたき台として投入しました`);
+}
+
+// ===== ⑤ 掛率チェック =====
+function _normItemKey(name, spec) {
+  const n = norm(name || '').trim();
+  const s = norm(spec || '').replace(/<.*/, '').trim();
+  return s ? `${n}|${s}` : n;
+}
+
+async function checkSellRates() {
+  if (!project.client) {
+    showToast('得意先を入力してからチェックしてください');
+    return;
+  }
+
+  let history;
+  try {
+    history = await knowledgeDB.getClientItemHistory(project.client);
+  } catch (e) {
+    showToast('ナレッジDB読み込みエラー: ' + e.message);
+    return;
+  }
+
+  const alerts = [];
+  activeCategories.forEach(cat => {
+    (items[cat.id] || []).forEach(item => {
+      const price = parseFloat(item.price);
+      if (!item.name || !(price > 0)) return;
+      const key  = _normItemKey(item.name, item.spec);
+      const past = history[key];
+      if (!past || past.length === 0) return;
+
+      const avgPrice = past.reduce((s, r) => s + r.price, 0) / past.length;
+      const diff = (price - avgPrice) / avgPrice;
+      if (Math.abs(diff) >= 0.05) {
+        alerts.push({
+          catName:     cat.name,
+          name:        item.name,
+          spec:        item.spec || '',
+          currentPrice: price,
+          avgPrice:    Math.round(avgPrice),
+          diff,
+          pastCount:   past.length,
+          lastProject: past[past.length - 1].projectName,
+        });
+      }
+    });
+  });
+
+  _renderSellRateCheck(alerts);
+  document.getElementById('sellRateCheckModal').classList.add('show');
+}
+
+function _renderSellRateCheck(alerts) {
+  const body = document.getElementById('sellRateCheckBody');
+  if (alerts.length === 0) {
+    body.innerHTML = '<p style="text-align:center;padding:40px;color:#27ae60;font-size:14px;">⭕ 過去単価との大きな乖離は検出されませんでした</p>';
+    return;
+  }
+  const rows = alerts.map(a => {
+    const pct   = (a.diff * 100).toFixed(1);
+    const color = a.diff > 0 ? '#c0392b' : '#2471a3';
+    const sign  = a.diff > 0 ? '▲' : '▼';
+    return `<tr style="border-bottom:1px solid #eee;">
+      <td style="padding:7px 10px;font-size:12px;color:#666;">${a.catName}</td>
+      <td style="padding:7px 10px;">${a.name}${a.spec ? '<br><small style="color:#888;">' + a.spec + '</small>' : ''}</td>
+      <td style="padding:7px 10px;text-align:right;">${a.currentPrice.toLocaleString()}</td>
+      <td style="padding:7px 10px;text-align:right;color:#555;">${a.avgPrice.toLocaleString()}</td>
+      <td style="padding:7px 10px;text-align:right;font-weight:bold;color:${color};">${sign}${Math.abs(pct)}%</td>
+      <td style="padding:7px 10px;font-size:11px;color:#888;">${a.pastCount}件 / ${a.lastProject}</td>
+    </tr>`;
+  }).join('');
+
+  body.innerHTML = `
+    <p style="margin:0 0 12px;font-size:13px;color:#555;">
+      得意先「${project.client}」の過去見積と <strong>5%以上</strong> 乖離している品目:
+      <strong style="color:#c0392b;">${alerts.length}件</strong>
+    </p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead><tr style="border-bottom:2px solid #ddd;background:#f5f5f5;">
+        <th style="padding:7px 10px;text-align:left;">工種</th>
+        <th style="padding:7px 10px;text-align:left;">品目</th>
+        <th style="padding:7px 10px;text-align:right;">現在単価</th>
+        <th style="padding:7px 10px;text-align:right;">過去平均</th>
+        <th style="padding:7px 10px;text-align:right;">差異</th>
+        <th style="padding:7px 10px;text-align:left;">参照</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
 }
 
 // ===== PROJECT =====
@@ -1203,6 +1814,18 @@ async function exportEstimate() {
   try {
     await knowledgeDB.autoBackup();
   } catch(e) { console.warn('ナレッジDBバックアップ失敗:', e); }
+}
+
+// ===== 保存済み見積 起動時チェック =====
+function checkEstimatesRestore() {
+  const list       = getSavedEstimates();
+  const lastBackup = localStorage.getItem('estimates_last_backup');
+  if (list.length === 0 && lastBackup) {
+    // localStorageが消えたが、バックアップ記録が残っている → 復元を促す
+    setTimeout(() => {
+      showToast('保存済み見積が見つかりません。「📂 保存済み」→「📤 復元」でバックアップから復元できます');
+    }, 2000);
+  }
 }
 
 // ===== ナレッジDB復元バナー =====

@@ -222,17 +222,24 @@ const knowledgeDB = (() => {
     XLSX.utils.book_append_sheet(wb, ws1, 'プロジェクト一覧');
 
     // Sheet2: 明細
-    const rows2 = [['project_id','工種名','品目名','規格','数量','単位','単価','金額']];
+    const rows2 = [['project_id','工種名','品目名','規格','数量','単位','単価','金額','歩掛','原価単価','原価金額','定価','見積掛率(%)']];
     all.forEach(r => {
       (r.categories || []).forEach(c => {
         (c.items || []).forEach(i => {
-          rows2.push([r.id, c.name, i.name, i.spec, i.qty, i.unit, i.price, i.amount]);
+          rows2.push([
+            r.id, c.name, i.name, i.spec, i.qty, i.unit, i.price, i.amount,
+            i.bukariki || 0,
+            i.costPrice  || 0,
+            i.costAmount || 0,
+            i.listPrice  || '',
+            i.sellRate   || '',
+          ]);
         });
       });
     });
     const ws2 = XLSX.utils.aoa_to_sheet(rows2);
     ws2['!cols'] = [
-      {wch:6},{wch:12},{wch:30},{wch:20},{wch:6},{wch:6},{wch:10},{wch:10},
+      {wch:6},{wch:12},{wch:30},{wch:20},{wch:6},{wch:6},{wch:10},{wch:10},{wch:6},{wch:10},{wch:10},{wch:10},{wch:10},
     ];
     XLSX.utils.book_append_sheet(wb, ws2, '明細');
 
@@ -296,13 +303,17 @@ const knowledgeDB = (() => {
       const catName = String(row['工種名'] || '');
       if (!detailMap[pid][catName]) detailMap[pid][catName] = [];
       detailMap[pid][catName].push({
-        name: String(row['品目名'] || ''),
-        spec: String(row['規格'] || ''),
-        qty: parseFloat(row['数量']) || 0,
-        unit: String(row['単位'] || ''),
-        price: parseFloat(row['単価']) || 0,
-        amount: parseFloat(row['金額']) || 0,
-        bukariki: parseFloat(row['歩掛']) || 0,
+        name:       String(row['品目名'] || ''),
+        spec:       String(row['規格'] || ''),
+        qty:        parseFloat(row['数量']) || 0,
+        unit:       String(row['単位'] || ''),
+        price:      parseFloat(row['単価']) || 0,
+        amount:     parseFloat(row['金額']) || 0,
+        bukariki:   parseFloat(row['歩掛']) || 0,
+        costPrice:  parseFloat(row['原価単価']) || 0,
+        costAmount: parseFloat(row['原価金額']) || 0,
+        listPrice:  parseFloat(row['定価']) || 0,
+        sellRate:   parseFloat(row['見積掛率(%)']) || 0,
       });
     });
 
@@ -347,6 +358,50 @@ const knowledgeDB = (() => {
     return importJSON(file);
   }
 
+  // --- 得意先名の正規化（株式会社等を除去） ---
+  function _normClient(s) {
+    if (!s) return '';
+    return norm(s)
+      .replace(/[\(（]?(株式会社|有限会社|合同会社|㈱|㈲)[\)）]?/g, '')
+      .replace(/\s+/g, '')
+      .trim();
+  }
+
+  // --- 品目キーの正規化（品名+規格、規格は<以降除去） ---
+  function _normItemKey(name, spec) {
+    const n = norm(name || '').trim();
+    const s = norm(spec || '').replace(/<.*/, '').trim();
+    return s ? `${n}|${s}` : n;
+  }
+
+  // --- 得意先別品目単価履歴取得 ---
+  // 戻り値: { normKey → [{price, projectName, date}] }
+  async function getClientItemHistory(clientName) {
+    const normC = _normClient(clientName);
+    const all = await getAll();
+    const history = {};
+
+    all
+      .filter(rec => !rec.excluded && _normClient(rec.project.client) === normC)
+      .forEach(rec => {
+        (rec.categories || []).forEach(cat => {
+          (cat.items || []).forEach(item => {
+            if (!item.name || !(parseFloat(item.price) > 0)) return;
+            const key = _normItemKey(item.name, item.spec);
+            if (!history[key]) history[key] = [];
+            history[key].push({
+              price: parseFloat(item.price),
+              sellRate: parseFloat(item.sellRate) || 0,
+              projectName: rec.project.name || '',
+              date: rec.registeredAt || '',
+            });
+          });
+        });
+      });
+
+    return history;
+  }
+
   return {
     save,
     getAll,
@@ -360,5 +415,6 @@ const knowledgeDB = (() => {
     importFile,
     autoBackup,
     restoreFromBackup: importFile,
+    getClientItemHistory,
   };
 })();
