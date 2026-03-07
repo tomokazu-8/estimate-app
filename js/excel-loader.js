@@ -317,6 +317,10 @@ function loadExcelDB(file) {
       console.error(err);
     }
   };
+  reader.onerror = function() {
+    status.textContent = '❌ 読み込みエラー: ファイルを開けませんでした（フォルダではなく .xlsx ファイルを指定してください）';
+    status.style.color = '#dc2626';
+  };
   reader.readAsArrayBuffer(file);
 }
 
