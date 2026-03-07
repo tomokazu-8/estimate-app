@@ -32,13 +32,13 @@
 </head>
 <body>
 
-  <!-- Excel DB読み込みオーバーレイ -->
+  <!-- Tridge読み込みオーバーレイ -->
   <div id="dbOverlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;">
     <div style="background:#fff;border-radius:16px;padding:40px;max-width:500px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-      <div style="font-size:48px;margin-bottom:16px;">📊</div>
-      <h2 style="margin:0 0 8px;font-size:20px;">マスタDB読み込み</h2>
-      <p style="color:#666;margin:0 0 4px;font-size:13px;">使用するDBファイル（.xlsx）を読み込んでください</p>
-      <p style="color:#aaa;margin:0 0 20px;font-size:11px;">例：新築木造用DB.xlsx / 新築RC用DB.xlsx / 改修工事用DB.xlsx</p>
+      <div style="font-size:48px;margin-bottom:16px;">🎮</div>
+      <h2 style="margin:0 0 8px;font-size:20px;">Tridge 読み込み</h2>
+      <p style="color:#666;margin:0 0 4px;font-size:13px;">使用するTridgeファイル（.xlsx）を読み込んでください</p>
+      <p style="color:#aaa;margin:0 0 20px;font-size:11px;">例：電気設備Tridge.xlsx / 空調設備Tridge.xlsx / 給排水Tridge.xlsx</p>
       <div id="dbDropZone" style="border:3px dashed #3b82f6;border-radius:12px;padding:40px 20px;margin-bottom:16px;cursor:pointer;transition:all 0.2s;"
            ondragover="event.preventDefault();this.style.background='#eff6ff';this.style.borderColor='#2563eb';"
            ondragleave="this.style.background='';this.style.borderColor='#3b82f6';"
@@ -358,7 +358,7 @@
             <div style="display:flex;gap:6px;">
               <button class="btn btn-secondary btn-sm" onclick="openSearchModal(null)">🔍 DB検索</button>
               <button class="btn btn-secondary btn-sm" onclick="openSupplierImportModal()" title="仕入れ業者の見積書（Excel）をAIで解析して品目を取り込む" style="color:#6366f1;border-color:#a5b4fc;">📋 仕入れ見積</button>
-              <button class="btn btn-secondary btn-sm" onclick="showDbOverlay()" title="マスタDB読み込み">💾 DB</button>
+              <button class="btn btn-secondary btn-sm" onclick="showDbOverlay()" title="Tridge読み込み">🎮 Tridge</button>
               <button class="btn btn-primary btn-sm" onclick="addItem()">＋ 行追加</button>
               <button class="btn btn-secondary btn-sm" onclick="addAutoCalcRows()">⚙ 自動行追加</button>
               <button class="btn btn-success btn-sm" onclick="calcAutoRows()">♻ 自動計算</button>
