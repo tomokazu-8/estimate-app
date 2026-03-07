@@ -692,6 +692,131 @@ function applyAiDraft() {
   showToast(`${addedItems}品目をAIたたき台として投入しました`);
 }
 
+// ===== ④ AI単価・仕様調査（B-2/B-3） =====
+
+async function aiQueryItem(itemId) {
+  const list = items[currentCat];
+  const item = list && list.find(i => i.id === itemId);
+  if (!item || !item.name) { showToast('品名を入力してからAI調査してください'); return; }
+
+  // ボタンをローディング状態に
+  const btn = document.getElementById(`aiQueryBtn-${itemId}`);
+  if (btn) { btn.textContent = '…'; btn.disabled = true; }
+
+  try {
+    const prompt = _buildItemQueryPrompt(item.name, item.spec || '');
+    const responseText = await callClaude(prompt);
+
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('AIの回答を解析できませんでした');
+    const result = JSON.parse(jsonMatch[0]);
+
+    _showItemQueryResult(itemId, item, result);
+  } catch (e) {
+    showToast('AI調査エラー: ' + e.message);
+  } finally {
+    if (btn) { btn.textContent = '✨'; btn.disabled = false; }
+  }
+}
+
+function _buildItemQueryPrompt(name, spec) {
+  return `あなたは電気工事資材・設備機器の専門家です。以下の品目について詳しく調査してください。
+
+品名: ${name}
+規格・型番: ${spec || '（未入力）'}
+
+以下のJSON形式のみで回答してください（前後の説明文は不要）:
+{
+  "maker": "代表的なメーカー名（複数ある場合はカンマ区切り）",
+  "partNo": "標準的な品番・型番（わからない場合は空文字）",
+  "listPrice": 標準定価の数値（円、メーカー希望小売価格。不明な場合は0）,
+  "unit": "単価の単位（m/個/台/組/式等）",
+  "spec": "定格・仕様・主要スペック（電圧/容量/寸法/色温度等）を簡潔に",
+  "usage": "主な用途・適用場所",
+  "alternatives": "代替品・類似品の品名（あれば）",
+  "note": "見積上の注意点・補足（なければ空文字）"
+}
+
+注意事項:
+- listPrice は整数の数値型（文字列不可）
+- 電気工事で実際に使用される材料・機器の情報を優先する
+- 不明な項目は空文字または0にする（推測で記入しない）`;
+}
+
+function _showItemQueryResult(itemId, item, result) {
+  const modal = document.getElementById('itemQueryModal');
+  const body  = document.getElementById('itemQueryBody');
+
+  // モーダルにitemIdを記憶
+  modal._itemId = itemId;
+  modal._result = result;
+
+  const listPriceStr = result.listPrice > 0
+    ? `¥${result.listPrice.toLocaleString()} / ${result.unit || '—'}`
+    : '不明';
+
+  body.innerHTML = `
+    <div style="margin-bottom:16px;">
+      <div style="font-size:12px;color:#888;margin-bottom:4px;">調査対象</div>
+      <div style="font-weight:600;font-size:14px;">${item.name}${item.spec ? '　<span style="font-weight:400;color:#666;font-size:13px;">' + item.spec + '</span>' : ''}</div>
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      ${_qRow('メーカー', result.maker || '不明')}
+      ${_qRow('品番・型番', result.partNo || '不明')}
+      ${_qRow('標準定価', `<strong style="color:${result.listPrice > 0 ? '#1e40af' : '#999'};">${listPriceStr}</strong>`)}
+      ${_qRow('仕様・スペック', result.spec || '—')}
+      ${_qRow('用途', result.usage || '—')}
+      ${result.alternatives ? _qRow('代替品', result.alternatives) : ''}
+      ${result.note ? _qRow('注意・補足', `<span style="color:#c0392b;">${result.note}</span>`) : ''}
+    </table>
+
+    ${result.listPrice > 0 ? `
+    <div style="margin-top:16px;padding:12px;background:#eff6ff;border-radius:8px;border:1px solid #bfdbfe;">
+      <div style="font-size:12px;color:#1e40af;margin-bottom:8px;font-weight:500;">単価に反映する</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button onclick="applyItemQueryPrice(${itemId}, ${result.listPrice}, 'note')"
+          style="padding:7px 14px;font-size:12px;cursor:pointer;background:#fff;border:1px solid #93c5fd;border-radius:6px;color:#1e40af;">
+          備考欄に定価を記録
+        </button>
+        <button onclick="applyItemQueryPrice(${itemId}, ${result.listPrice}, 'price')"
+          style="padding:7px 14px;font-size:12px;cursor:pointer;background:#3b82f6;border:none;border-radius:6px;color:#fff;font-weight:600;">
+          単価として反映（上書き）
+        </button>
+      </div>
+      <div style="font-size:11px;color:#64748b;margin-top:6px;">「備考欄に定価を記録」は現在の単価はそのままで定価をメモします</div>
+    </div>` : ''}`;
+
+  modal.classList.add('show');
+}
+
+function _qRow(label, value) {
+  return `<tr style="border-bottom:1px solid #f1f5f9;">
+    <td style="padding:8px 10px;color:#64748b;font-size:12px;white-space:nowrap;width:110px;">${label}</td>
+    <td style="padding:8px 10px;">${value}</td>
+  </tr>`;
+}
+
+function applyItemQueryPrice(itemId, listPrice, mode) {
+  const list = items[currentCat];
+  const item = list && list.find(i => i.id === itemId);
+  if (!item) return;
+
+  saveUndoState();
+  if (mode === 'price') {
+    item.price  = listPrice;
+    item.amount = (parseFloat(item.qty) || 0) * listPrice;
+    showToast(`単価を ¥${listPrice.toLocaleString()} に反映しました`);
+  } else {
+    item.note = `定価¥${listPrice.toLocaleString()}`;
+    showToast(`備考欄に定価 ¥${listPrice.toLocaleString()} を記録しました`);
+  }
+
+  document.getElementById('itemQueryModal').classList.remove('show');
+  renderItems();
+  renderCatTabs();
+}
+
 // ===== ⑤ 掛率チェック =====
 function _normItemKey(name, spec) {
   const n = norm(name || '').trim();
@@ -1239,6 +1364,7 @@ function renderItems() {
       <td>
         <span style="display:flex;gap:2px;">
           <button class="row-delete" onclick="openSearchModal(${item.id})" title="材料DBから検索" style="opacity:0.5;color:var(--accent);">🔍</button>
+          ${!isAuto ? `<button id="aiQueryBtn-${item.id}" class="row-delete" onclick="aiQueryItem(${item.id})" title="AI単価・仕様調査（品名・型番からメーカー定価・スペックを取得）" style="opacity:0.6;color:#6366f1;">✨</button>` : ''}
           <button class="row-delete" onclick="deleteItem(${item.id})">✕</button>
         </span>
       </td>
