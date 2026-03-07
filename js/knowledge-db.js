@@ -145,52 +145,74 @@ const knowledgeDB = (() => {
   // --- 現在の見積データからナレッジレコードを構築 ---
   // project, items, activeCategories はグローバル変数を参照
   function buildRecord() {
+    let workTotal = 0, miscExpenseAmt = 0, discountAmt = 0;
+
     const cats = activeCategories.filter(c => c.active).map(c => {
-      const catItems = (items[c.id] || []).filter(i => i.name).map(i => ({
-        name: i.name,
-        spec: i.spec || '',
-        qty: parseFloat(i.qty) || 0,
-        unit: i.unit || '',
-        price: parseFloat(i.price) || 0,
-        amount: parseFloat(i.amount) || 0,
-        bukariki: parseFloat(i.bukariki) || 0,
-        note: i.note || '',
-      }));
+      const amount = Math.round(getCatAmount(c.id));
+      const catItems = (items[c.id] || []).filter(i => i.name).map(i => {
+        const listP  = parseFloat(i.listPrice) || 0;
+        const priceP = parseFloat(i.price)     || 0;
+        const crPct  = parseFloat(i.costRate)  || 0;
+        const srPct  = parseFloat(i.sellRate)  || 0;
+        const qtyP   = parseFloat(i.qty)       || 0;
+        const amtP   = parseFloat(i.amount)    || 0;
+        const costP  = listP > 0 && crPct > 0 ? Math.round(listP * crPct / 100) : 0;
+        const costA  = costP > 0 ? Math.round(costP * qtyP) : 0;
+        const buk    = parseFloat(i.bukariki1) || parseFloat(i.bukariki2) || parseFloat(i.bukariki3) || 0;
+        return {
+          name: i.name, spec: i.spec || '',
+          qty: qtyP, unit: i.unit || '',
+          listPrice: listP, price: priceP, sellRate: srPct,
+          costPrice: costP, costRate: crPct,
+          amount: amtP, costAmount: costA,
+          bukariki: buk, laborHours: 0,
+          note: i.note || '',
+        };
+      });
+
+      const catCostTotal = catItems.reduce((s, i) => s + i.costAmount, 0);
+      if (c.id === 'discount') {
+        discountAmt = Math.abs(amount);
+      } else if (c.rateMode) {
+        miscExpenseAmt += amount;
+      } else {
+        workTotal += amount;
+      }
+
       return {
-        id: c.id,
-        name: c.name,
-        short: c.short || c.name,
-        rateMode: !!c.rateMode,
-        items: catItems,
-        subtotal: Math.round(getCatAmount(c.id)),
+        id: c.id, name: c.name, short: c.short || c.name,
+        rateMode: !!c.rateMode, items: catItems,
+        subtotal: amount, costTotal: Math.round(catCostTotal), laborHours: 0,
       };
     });
 
-    let grandTotal = 0;
-    cats.forEach(c => { grandTotal += c.subtotal; });
-
-    const laborRate = (project.laborRate || 72) / 100;
-    const profitRate = Math.round((1 - laborRate) * 1000) / 10;
+    const grandTotal = workTotal + miscExpenseAmt - discountAmt;
+    const costTotalAll = cats.reduce((s, c) => s + (c.costTotal || 0), 0);
+    const profitRate = costTotalAll > 0 && grandTotal > 0
+      ? Math.round((grandTotal - costTotalAll) / grandTotal * 1000) / 10
+      : Math.round((1 - (project.laborRate || 72) / 100) * 1000) / 10;
 
     return {
       registeredAt: new Date().toISOString().split('T')[0],
+      source: 'app',
       project: {
-        name: project.name || '',
-        number: project.number || '',
-        date: project.date || '',
-        client: project.client || '',
-        struct: project.struct || '',
-        usage: project.usage || '',
-        type: project.type || '',
-        floors: project.floors || '',
-        areaSqm: project.areaSqm || '',
-        areaTsubo: project.areaTsubo || '',
-        location: project.location || '',
-        person: project.person || '',
+        number: project.number || '', name: project.name || '',
+        date: project.date || '', client: project.client || '',
+        person: project.person || '', struct: project.struct || '',
+        usage: project.usage || '', type: project.type || '',
+        floors: project.floors || '', areaSqm: project.areaSqm || '',
+        areaTsubo: project.areaTsubo || '', location: project.location || '',
       },
+      workTotal:      Math.round(workTotal),
+      miscExpenseAmt: Math.round(miscExpenseAmt),
+      miscExpensePct: workTotal > 0 ? Math.round(miscExpenseAmt / workTotal * 1000) / 10 : 0,
+      discountAmt:    Math.round(discountAmt),
+      discountPct:    (workTotal + miscExpenseAmt) > 0
+                        ? Math.round(discountAmt / (workTotal + miscExpenseAmt) * 1000) / 10 : 0,
+      grandTotal:     Math.round(grandTotal),
+      costTotal:      Math.round(costTotalAll),
+      profitRate,
       categories: cats,
-      grandTotal: Math.round(grandTotal),
-      profitRate: profitRate,
     };
   }
 
@@ -209,37 +231,58 @@ const knowledgeDB = (() => {
     const wb = XLSX.utils.book_new();
 
     // Sheet1: プロジェクト一覧
-    const rows1 = [['id','登録日','物件名','構造','種別','用途','坪数','合計金額','利益率','有効']];
-    all.forEach(r => rows1.push([
-      r.id, r.registeredAt, r.project.name, r.project.struct, r.project.type,
-      r.project.usage, r.project.areaTsubo, r.grandTotal, r.profitRate,
-      r.excluded ? '×' : '○',
-    ]));
+    const h1 = [
+      'id','登録日','見積番号','物件名','得意先','担当者',
+      '構造','種別','用途','坪数','㎡数',
+      '工事費合計','諸経費金額','諸経費率%','値引き金額','値引き率%',
+      '税抜合計','原価合計','利益率%','データソース','有効',
+    ];
+    const rows1 = [h1];
+    all.forEach(r => {
+      const p = r.project || {};
+      rows1.push([
+        r.id, r.registeredAt, p.number || '', p.name || '', p.client || '', p.person || '',
+        p.struct || '', p.type || '', p.usage || '', p.areaTsubo || '', p.areaSqm || '',
+        r.workTotal || '', r.miscExpenseAmt || '', r.miscExpensePct || '',
+        r.discountAmt || '', r.discountPct || '',
+        r.grandTotal, r.costTotal || '', r.profitRate,
+        r.source || '', r.excluded ? '×' : '○',
+      ]);
+    });
     const ws1 = XLSX.utils.aoa_to_sheet(rows1);
     ws1['!cols'] = [
-      {wch:6},{wch:12},{wch:24},{wch:8},{wch:6},{wch:12},{wch:6},{wch:12},{wch:6},{wch:6},
+      {wch:4},{wch:12},{wch:10},{wch:28},{wch:18},{wch:10},
+      {wch:6},{wch:6},{wch:10},{wch:6},{wch:6},
+      {wch:12},{wch:10},{wch:8},{wch:10},{wch:8},{wch:12},{wch:12},{wch:8},
+      {wch:10},{wch:4},
     ];
     XLSX.utils.book_append_sheet(wb, ws1, 'プロジェクト一覧');
 
     // Sheet2: 明細
-    const rows2 = [['project_id','工種名','品目名','規格','数量','単位','単価','金額','歩掛','原価単価','原価金額','定価','見積掛率(%)']];
+    const h2 = [
+      'project_id','工種名','工種合計','工種原価合計','工種工数','工種粗利率%',
+      '品目名','規格','数量','単位',
+      '定価','見積単価','見積掛率%','原価単価','原価掛率%',
+      '見積金額','原価金額','歩掛','工数',
+    ];
+    const rows2 = [h2];
     all.forEach(r => {
       (r.categories || []).forEach(c => {
         (c.items || []).forEach(i => {
           rows2.push([
-            r.id, c.name, i.name, i.spec, i.qty, i.unit, i.price, i.amount,
-            i.bukariki || 0,
-            i.costPrice  || 0,
-            i.costAmount || 0,
-            i.listPrice  || '',
-            i.sellRate   || '',
+            r.id, c.name, c.subtotal || c.total || '', c.costTotal || '', c.laborHours || '', c.profitRate || '',
+            i.name, i.spec || '', i.qty, i.unit,
+            i.listPrice || '', i.price, i.sellRate || '', i.costPrice || '', i.costRate || '',
+            i.amount, i.costAmount || '', i.bukariki || '', i.laborHours || '',
           ]);
         });
       });
     });
     const ws2 = XLSX.utils.aoa_to_sheet(rows2);
     ws2['!cols'] = [
-      {wch:6},{wch:12},{wch:30},{wch:20},{wch:6},{wch:6},{wch:10},{wch:10},{wch:6},{wch:10},{wch:10},{wch:10},{wch:10},
+      {wch:4},{wch:16},{wch:12},{wch:12},{wch:8},{wch:8},
+      {wch:30},{wch:20},{wch:6},{wch:6},
+      {wch:10},{wch:10},{wch:8},{wch:10},{wch:8},{wch:10},{wch:10},{wch:8},{wch:8},
     ];
     XLSX.utils.book_append_sheet(wb, ws2, '明細');
 
@@ -295,25 +338,35 @@ const knowledgeDB = (() => {
     const ws2 = wb.Sheets['明細'];
     const details = ws2 ? XLSX.utils.sheet_to_json(ws2) : [];
 
-    // project_id → 工種名 → items[] のマップを構築
+    // project_id → 工種名 → { catInfo, items[] } のマップを構築
     const detailMap = {};
     details.forEach(row => {
       const pid = row['project_id'];
       if (!detailMap[pid]) detailMap[pid] = {};
       const catName = String(row['工種名'] || '');
-      if (!detailMap[pid][catName]) detailMap[pid][catName] = [];
-      detailMap[pid][catName].push({
-        name:       String(row['品目名'] || ''),
-        spec:       String(row['規格'] || ''),
-        qty:        parseFloat(row['数量']) || 0,
-        unit:       String(row['単位'] || ''),
-        price:      parseFloat(row['単価']) || 0,
-        amount:     parseFloat(row['金額']) || 0,
-        bukariki:   parseFloat(row['歩掛']) || 0,
-        costPrice:  parseFloat(row['原価単価']) || 0,
-        costAmount: parseFloat(row['原価金額']) || 0,
-        listPrice:  parseFloat(row['定価']) || 0,
-        sellRate:   parseFloat(row['見積掛率(%)']) || 0,
+      if (!detailMap[pid][catName]) {
+        detailMap[pid][catName] = {
+          total:      parseFloat(row['工種合計'])    || 0,
+          costTotal:  parseFloat(row['工種原価合計']) || 0,
+          laborHours: parseFloat(row['工種工数'])    || 0,
+          profitRate: parseFloat(row['工種粗利率%']) || 0,
+          items: [],
+        };
+      }
+      detailMap[pid][catName].items.push({
+        name:       String(row['品目名']   || ''),
+        spec:       String(row['規格']     || ''),
+        qty:        parseFloat(row['数量'])      || 0,
+        unit:       String(row['単位']     || ''),
+        listPrice:  parseFloat(row['定価'])      || 0,
+        price:      parseFloat(row['見積単価'])  || parseFloat(row['単価']) || 0,
+        sellRate:   parseFloat(row['見積掛率%']) || 0,
+        costPrice:  parseFloat(row['原価単価'])  || 0,
+        costRate:   parseFloat(row['原価掛率%']) || 0,
+        amount:     parseFloat(row['見積金額'])  || parseFloat(row['金額']) || 0,
+        costAmount: parseFloat(row['原価金額'])  || 0,
+        bukariki:   parseFloat(row['歩掛'])      || 0,
+        laborHours: parseFloat(row['工数'])      || 0,
       });
     });
 
@@ -325,21 +378,39 @@ const knowledgeDB = (() => {
     for (const row of projects) {
       const pid = row['id'];
       const catMap = detailMap[pid] || {};
-      const categories = Object.entries(catMap).map(([name, itms]) => ({ name, items: itms }));
+      const categories = Object.entries(catMap).map(([name, data]) => ({
+        name,
+        total:      data.total,
+        costTotal:  data.costTotal,
+        laborHours: data.laborHours,
+        profitRate: data.profitRate,
+        items:      data.items,
+      }));
 
       const record = {
         registeredAt: String(row['登録日'] || ''),
+        source:       String(row['データソース'] || ''),
         project: {
-          name: String(row['物件名'] || ''),
-          struct: String(row['構造'] || ''),
-          type: String(row['種別'] || ''),
-          usage: String(row['用途'] || ''),
-          areaTsubo: String(row['坪数'] || ''),
-          number: '', date: '', client: '', floors: '', areaSqm: '', location: '', person: '',
+          number:    String(row['見積番号'] || ''),
+          name:      String(row['物件名']   || ''),
+          client:    String(row['得意先']   || ''),
+          person:    String(row['担当者']   || ''),
+          struct:    String(row['構造']     || ''),
+          type:      String(row['種別']     || ''),
+          usage:     String(row['用途']     || ''),
+          areaTsubo: String(row['坪数']     || ''),
+          areaSqm:   String(row['㎡数']     || ''),
+          date: '', floors: '', location: '',
         },
+        workTotal:      parseFloat(row['工事費合計'])  || 0,
+        miscExpenseAmt: parseFloat(row['諸経費金額'])  || 0,
+        miscExpensePct: parseFloat(row['諸経費率%'])   || 0,
+        discountAmt:    parseFloat(row['値引き金額'])  || 0,
+        discountPct:    parseFloat(row['値引き率%'])   || 0,
+        grandTotal:     parseFloat(row['税抜合計'])    || parseFloat(row['合計金額']) || 0,
+        costTotal:      parseFloat(row['原価合計'])    || 0,
+        profitRate:     parseFloat(row['利益率%'])     || parseFloat(row['利益率']) || 0,
         categories,
-        grandTotal: parseFloat(row['合計金額']) || 0,
-        profitRate: parseFloat(row['利益率']) || 0,
         excluded: row['有効'] === '×',
       };
       store.add(record);
