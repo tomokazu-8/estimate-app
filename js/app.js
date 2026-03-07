@@ -1649,7 +1649,10 @@ function addItem() {
   // Focus the new row's name input
   setTimeout(() => {
     const rows = document.querySelectorAll('#itemBody tr');
-    if (rows.length) rows[rows.length-1].querySelector('input').focus();
+    if (rows.length) {
+      const nameInput = rows[rows.length-1].querySelector('input:not([type="checkbox"])');
+      if (nameInput) nameInput.focus();
+    }
   }, 50);
 }
 
