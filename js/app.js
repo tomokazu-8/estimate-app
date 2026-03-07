@@ -1547,6 +1547,15 @@ function renderItems() {
   const tbody = document.getElementById('itemBody');
   const list = items[currentCat] || [];
 
+  // 歩掛列の動的表示判定
+  const showBuk1 = list.some(i => { const v = i.bukariki1 !== undefined ? i.bukariki1 : i.bukariki; return parseFloat(v) > 0; });
+  const showBuk2 = list.some(i => parseFloat(i.bukariki2) > 0);
+  const showBuk3 = list.some(i => parseFloat(i.bukariki3) > 0);
+  const tbl = document.getElementById('itemTable');
+  tbl.classList.toggle('hide-buk1', !showBuk1);
+  tbl.classList.toggle('hide-buk2', !showBuk2);
+  tbl.classList.toggle('hide-buk3', !showBuk3);
+
   tbody.innerHTML = list.map((item, idx) => {
     const isAuto = AUTO_NAMES.includes(item.name);
     const isLaborLocked = LABOR_LOCKED_NAMES.includes(item.name);
@@ -1555,6 +1564,22 @@ function renderItems() {
     const copperBadge = hasCopperAdj
       ? `<span style="display:block;font-size:9px;color:var(--amber);line-height:1.2;" title="銅建値補正（基準 ¥${TRIDGE_SETTINGS.copperBase}/kg → 現在 ¥${project.copper}/kg）">銅×${copperMult.toFixed(2)}</span>`
       : '';
+
+    // 歩掛1: bukariki1 優先、旧bukarikiに後方互換フォールバック
+    const buk1Val = item.bukariki1 !== undefined ? item.bukariki1 : (item.bukariki ?? '');
+
+    // 原価・見積 計算（表示用、保存しない）
+    const listP  = parseFloat(item.listPrice)  || 0;
+    const baseP  = parseFloat(item.basePrice)  || 0;
+    const effBase = listP > 0 ? listP : baseP;
+    const cRate  = parseFloat(item.costRate)   || 0;
+    const costPr = (effBase > 0 && cRate > 0) ? Math.round(effBase * cRate) : null;
+    const qty    = parseFloat(item.qty) || 0;
+    const costAm = (costPr !== null && qty > 0) ? Math.round(costPr * qty) : null;
+
+    const disabledAuto = isAuto ? 'disabled' : '';
+    const dimCell = 'style="background:var(--bg-alt);color:var(--text-sub);font-size:11px;"';
+
     return `
     <tr data-id="${item.id}" class="${isAuto ? 'auto-calc' : ''}">
       <td class="td-center" style="color:var(--text-dim);font-size:11px;">${idx+1}</td>
@@ -1565,10 +1590,18 @@ function renderItems() {
       <td><input value="${esc(item.spec)}" onchange="updateItem(${item.id},'spec',this.value)" placeholder="規格"></td>
       <td><input class="num" value="${item.qty||''}" onchange="updateItem(${item.id},'qty',this.value)" type="number" step="any"></td>
       <td><select onchange="updateItem(${item.id},'unit',this.value)">${UNITS.map(u=>`<option${u===item.unit?' selected':''}>${u}</option>`).join('')}</select></td>
-      <td><input class="num" value="${item.bukariki !== '' && item.bukariki !== undefined ? item.bukariki : ''}" onchange="updateItem(${item.id},'bukariki',this.value)" type="number" step="0.001" placeholder="自動" ${isAuto ? 'disabled' : ''}></td>
+      <td><input class="num" value="${item.listPrice||''}" onchange="updateItem(${item.id},'listPrice',this.value)" type="number" step="any" placeholder="定価" ${disabledAuto}></td>
+      <td><input class="num" value="${item.basePrice||''}" onchange="updateItem(${item.id},'basePrice',this.value)" type="number" step="any" placeholder="基準価格" ${disabledAuto}></td>
+      <td><input class="num" value="${item.costRate||''}" onchange="updateItem(${item.id},'costRate',this.value)" type="number" step="0.01" placeholder="掛率" ${disabledAuto}></td>
+      <td><input class="num" value="${item.sellRate||''}" onchange="updateItem(${item.id},'sellRate',this.value)" type="number" step="0.01" placeholder="掛率" ${disabledAuto}></td>
+      <td class="td-right" ${dimCell}>${costPr !== null ? formatNum(costPr) : ''}</td>
+      <td class="td-right" ${dimCell}>${costAm !== null ? '¥'+formatNum(costAm) : ''}</td>
+      <td class="col-buk1"><input class="num" value="${buk1Val !== '' ? buk1Val : ''}" onchange="updateItem(${item.id},'bukariki1',this.value)" type="number" step="0.001" placeholder="自動" ${disabledAuto}></td>
+      <td class="col-buk2"><input class="num" value="${item.bukariki2||''}" onchange="updateItem(${item.id},'bukariki2',this.value)" type="number" step="0.001" placeholder="" ${disabledAuto}></td>
+      <td class="col-buk3"><input class="num" value="${item.bukariki3||''}" onchange="updateItem(${item.id},'bukariki3',this.value)" type="number" step="0.001" placeholder="" ${disabledAuto}></td>
       <td><input class="num" value="${item.price||''}" onchange="updateItem(${item.id},'price',this.value)" type="number" step="any" ${isLaborLocked ? 'disabled style="background:var(--bg-alt);color:var(--text-sub);"' : ''}></td>
       <td class="td-right" style="font-weight:500;">${item.amount ? '¥'+formatNum(Math.round(item.amount)) : ''}${copperBadge}</td>
-      <td><input value="${esc(item.note)}" onchange="updateItem(${item.id},'note',this.value)" placeholder="${isLaborLocked ? '自動計算' : (item.name==='雑材料消耗品'||item.name==='運搬費') ? '例: 5.0%' : '定価'}" style="font-size:11px;color:var(--text-sub);" ${isLaborLocked ? 'readonly' : ''}></td>
+      <td><input value="${esc(item.note)}" onchange="updateItem(${item.id},'note',this.value)" placeholder="${isLaborLocked ? '自動計算' : (item.name==='雑材料消耗品'||item.name==='運搬費') ? '例: 5.0%' : '備考'}" style="font-size:11px;color:var(--text-sub);" ${isLaborLocked ? 'readonly' : ''}></td>
       <td>
         <span style="display:flex;gap:2px;">
           <button class="row-delete" onclick="openSearchModal(${item.id})" title="材料DBから検索" style="opacity:0.5;color:var(--accent);">🔍</button>
@@ -1579,6 +1612,16 @@ function renderItems() {
     </tr>`;
   }).join('');
 
+  // tfoot のcolspan を可視列数に合わせて更新（見積金額列の前まで）
+  const baseCols = 15; // #〜見積単価まで（歩掛3列除く）
+  const bukCols  = (showBuk1 ? 1 : 0) + (showBuk2 ? 1 : 0) + (showBuk3 ? 1 : 0);
+  const tfoot = document.querySelector('#itemTable tfoot tr');
+  if (tfoot) {
+    tfoot.innerHTML = `
+      <td colspan="${baseCols + bukCols}" style="text-align:right;padding-right:12px;font-weight:600;">合　計</td>
+      <td class="td-right" id="catTotal" style="font-weight:700;"></td>
+      <td colspan="2"></td>`;
+  }
   document.getElementById('catTotal').textContent = '¥' + formatNum(Math.round(getCatTotal(currentCat)));
   renderLaborSection();
   updateSummaryBar();
@@ -1589,7 +1632,8 @@ function addItem() {
   saveUndoState();
   const id = itemIdCounter++;
   if (!items[currentCat]) items[currentCat] = [];
-  items[currentCat].push({ id, name:'', spec:'', qty:'', unit:'式', price:'', amount:0, note:'', bukariki:'' });
+  items[currentCat].push({ id, name:'', spec:'', qty:'', unit:'式', price:'', amount:0, note:'',
+    bukariki1:'', bukariki2:'', bukariki3:'', listPrice:'', basePrice:'', costRate:'', sellRate:'' });
   renderItems();
   // Focus the new row's name input
   setTimeout(() => {
@@ -1606,6 +1650,23 @@ function updateItem(id, field, value) {
   if (!item) return;
   saveUndoState();
   item[field] = value;
+
+  // 定価・基準価格・掛率 → 見積単価を自動計算
+  if (['listPrice', 'basePrice', 'costRate', 'sellRate'].includes(field)) {
+    const listP  = parseFloat(item.listPrice)  || 0;
+    const baseP  = parseFloat(item.basePrice)  || 0;
+    const effBase = listP > 0 ? listP : baseP;
+    const sRate  = parseFloat(item.sellRate)   || 0;
+    if (effBase > 0 && sRate > 0) {
+      item.price  = Math.round(effBase * sRate);
+      const qty   = parseFloat(item.qty) || 0;
+      item.amount = qty * item.price * getCopperMultiplier(item.name, item.spec || '');
+    }
+    // 定価入力時に備考へ自動記載
+    if (field === 'listPrice' && listP > 0) {
+      item.note = '定価¥' + formatNum(Math.round(listP));
+    }
+  }
 
   // Auto calc amount
   if (field === 'qty' || field === 'price') {

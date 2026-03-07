@@ -37,14 +37,18 @@ function classifyForLabor(name, spec) {
 function calcLaborBreakdown(catId) {
   const list = items[catId] || [];
   let wiringKosu = 0, fixtureKosu = 0, equipKosu = 0, ceilingCount = 0;
+  let撤去Kosu = 0, 開口Kosu = 0;
   const details = [];
 
   for (const item of list) {
     if (AUTO_NAMES.includes(item.name) || !item.qty) continue;
     const qty = parseFloat(item.qty) || 0;
     if (qty <= 0) continue;
-    const buk = (item.bukariki !== '' && item.bukariki !== undefined)
-      ? { value: parseFloat(item.bukariki) || 0, source: '手入力' }
+
+    // 歩掛1: bukariki1（旧bukarikiから後方互換フォールバック）→ 電工労務費
+    const buk1Raw = item.bukariki1 !== undefined ? item.bukariki1 : item.bukariki;
+    const buk = (buk1Raw !== '' && buk1Raw !== undefined)
+      ? { value: parseFloat(buk1Raw) || 0, source: '手入力' }
       : findBukariki(item.name, item.spec || '');
     const kosu = qty * buk.value;
     const laborType = classifyForLabor(item.name, item.spec);
@@ -52,6 +56,14 @@ function calcLaborBreakdown(catId) {
     if (laborType === 'wiring') wiringKosu += kosu;
     else if (laborType === 'equipment') equipKosu += kosu;
     else fixtureKosu += kosu;
+
+    // 歩掛2: bukariki2 → 既設器具撤去処分費
+    const buk2 = parseFloat(item.bukariki2) || 0;
+    撤去Kosu += qty * buk2;
+
+    // 歩掛3: bukariki3 → 天井及び壁材開口費
+    const buk3 = parseFloat(item.bukariki3) || 0;
+    開口Kosu += qty * buk3;
 
     // Count ceiling openings（キーワードマスタに「天井開口」フラグがある品目）
     const n = norm(item.name + ' ' + (item.spec || ''));
@@ -65,6 +77,6 @@ function calcLaborBreakdown(catId) {
   const materialTotal = list.filter(i => !AUTO_NAMES.includes(i.name))
     .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
 
-  return { wiringKosu, fixtureKosu, equipKosu, ceilingCount, materialTotal, details,
-    totalKosu: wiringKosu + fixtureKosu + equipKosu };
+  return { wiringKosu, fixtureKosu, equipKosu, ceilingCount, 撤去Kosu, 開口Kosu,
+    materialTotal, details, totalKosu: wiringKosu + fixtureKosu + equipKosu };
 }

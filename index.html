@@ -20,6 +20,10 @@
   border: 1px solid rgba(99,102,241,0.5);
 }
 .sidebar-action-primary:hover { background: rgba(99,102,241,0.6) !important; }
+/* 歩掛列の動的表示制御 */
+#itemTable.hide-buk1 .col-buk1 { display: none; }
+#itemTable.hide-buk2 .col-buk2 { display: none; }
+#itemTable.hide-buk3 .col-buk3 { display: none; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
@@ -62,7 +66,7 @@
   <nav class="sidebar">
     <div class="sidebar-brand">
       <h1>Hachitomo</h1>
-      <p>見積管理システム v3.1</p>
+      <p>見積管理システム v3.2</p>
       <div style="margin-top:6px;display:flex;align-items:center;gap:4px;">
         <div id="dbBadge" style="padding:2px 8px;border-radius:6px;font-size:10px;background:#fef3c7;color:#92400e;cursor:pointer;display:inline-block;" onclick="showDbOverlay()">内蔵DB</div>
         <button id="ejectBtn" onclick="ejectTridge()" title="トリッジを取り外す" style="display:none;padding:1px 6px;border-radius:5px;font-size:10px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;cursor:pointer;">⏏ 取り外し</button>
@@ -359,26 +363,34 @@
             </div>
           </div>
           <div class="card-body" style="padding:0;">
-            <div class="table-wrap" style="max-height:calc(100vh - 340px); overflow-y:auto;">
+            <div class="table-wrap" style="max-height:calc(100vh - 340px); overflow-y:auto; overflow-x:auto;">
               <table id="itemTable">
                 <thead>
                   <tr>
                     <th style="width:28px">#</th>
-                    <th style="width:220px">品名</th>
-                    <th style="width:160px">規格</th>
-                    <th style="width:55px">数量</th>
-                    <th style="width:46px">単位</th>
-                    <th style="width:65px">歩掛</th>
-                    <th style="width:85px">見積単価</th>
-                    <th style="width:95px">見積金額</th>
-                    <th style="width:80px">備考(定価)</th>
+                    <th style="min-width:180px">品名</th>
+                    <th style="min-width:120px">規格</th>
+                    <th style="width:52px">数量</th>
+                    <th style="width:44px">単位</th>
+                    <th style="width:82px">定価</th>
+                    <th style="width:82px">基準価格</th>
+                    <th style="width:60px" title="原価掛率">原価掛</th>
+                    <th style="width:60px" title="見積掛率">見積掛</th>
+                    <th style="width:80px" title="原価単価（自動計算）">原価単価</th>
+                    <th style="width:88px" title="原価金額（自動計算）">原価金額</th>
+                    <th class="col-buk1" style="width:58px" title="歩掛1：電工労務費">歩掛1</th>
+                    <th class="col-buk2" style="width:58px" title="歩掛2：既設器具撤去処分費">歩掛2</th>
+                    <th class="col-buk3" style="width:58px" title="歩掛3：天井及び壁材開口費">歩掛3</th>
+                    <th style="width:82px">見積単価</th>
+                    <th style="width:92px">見積金額</th>
+                    <th style="width:80px">備考</th>
                     <th style="width:28px"></th>
                   </tr>
                 </thead>
                 <tbody id="itemBody"></tbody>
                 <tfoot>
                   <tr style="background:var(--bg); font-weight:600;">
-                    <td colspan="7" style="text-align:right; padding-right:12px;">合　計</td>
+                    <td colspan="15" style="text-align:right; padding-right:12px;">合　計</td>
                     <td class="td-right" id="catTotal" style="font-weight:700;">¥0</td>
                     <td colspan="2"></td>
                   </tr>

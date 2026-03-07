@@ -26,6 +26,8 @@ function addAutoCalcRows() {
     '機器取付費':               Math.round(lb.equipKosu * LABOR_RATES.sell),
     '機器取付け及び試験調整費': Math.round(lb.totalKosu * LABOR_RATES.sell),
     '埋込器具用天井材開口費':   Math.round(lb.ceilingCount * 1410),
+    '既設器具撤去処分費':       Math.round(lb.撤去Kosu * LABOR_RATES.sell),
+    '天井及び壁材開口費':       Math.round(lb.開口Kosu * LABOR_RATES.sell),
     '雑材料消耗品':             Math.round(lb.materialTotal * miscRate),
     '運搬費':                   lb.materialTotal > 0 ? calcTransport(lb.materialTotal) : 0,
   };
@@ -35,6 +37,8 @@ function addAutoCalcRows() {
     '機器取付費':               lb.equipKosu.toFixed(2) + '人工',
     '機器取付け及び試験調整費': lb.totalKosu.toFixed(2) + '人工',
     '埋込器具用天井材開口費':   lb.ceilingCount + '箇所',
+    '既設器具撤去処分費':       lb.撤去Kosu.toFixed(2) + '人工',
+    '天井及び壁材開口費':       lb.開口Kosu.toFixed(2) + '人工',
     '雑材料消耗品':             (miscRate * 100).toFixed(1) + '%',
     '運搬費':                   lb.materialTotal > 0
       ? (calcTransport(lb.materialTotal) / lb.materialTotal * 100).toFixed(1) + '%'
@@ -42,17 +46,22 @@ function addAutoCalcRows() {
   };
 
   tmpl.forEach(name => {
+    // 歩掛2/3依存の行は、該当kosuが0なら追加しない
+    if (name === '既設器具撤去処分費' && lb.撤去Kosu <= 0) return;
+    if (name === '天井及び壁材開口費' && lb.開口Kosu <= 0) return;
+
     const exists = items[currentCat].find(i => i.name === name);
     const price = laborPrices[name] || 0;
     const note  = laborNotes[name]  || '';
     if (!exists) {
       // 新規追加：価格を自動入力
       const id = itemIdCounter++;
-      items[currentCat].push({ id, name, spec:'', qty:1, unit:'式', price, amount:price, note, bukariki:'' });
+      items[currentCat].push({ id, name, spec:'', qty:1, unit:'式', price, amount:price, note, bukariki1:'', bukariki2:'', bukariki3:'' });
     } else if (LABOR_LOCKED_NAMES.includes(name)) {
       // 固定行（電工労務費等）は既存でも更新
       exists.price  = price;
       exists.amount = price;
+      exists.note   = note;
     }
     // 雑材料消耗品・運搬費は既存行を上書きしない（手動変更を保持）
   });
