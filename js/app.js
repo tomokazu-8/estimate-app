@@ -82,6 +82,8 @@ document.addEventListener('DOMContentLoaded', () => {
     checkKnowledgeRestore();
     // 保存済み見積空チェック → トースト通知
     checkEstimatesRestore();
+    // 得意先サジェスト用リストをナレッジDBから読み込み
+    loadClientList();
   });
 });
 
@@ -333,7 +335,7 @@ function loadSavedEstimate(id, mode) {
   document.getElementById('pj-location').value   = project.location || '';
   document.getElementById('pj-person').value     = project.person || '';
   document.getElementById('pj-labor-rate').value = project.laborRate || 72;
-  document.getElementById('pj-labor-sell').value = project.laborSell || 33000;
+  document.getElementById('pj-labor-sell').value = project.laborSell || '';
   document.getElementById('pj-tax').value        = project.tax || 10;
   document.getElementById('pj-copper').value     = project.copper || '';
 
@@ -1578,8 +1580,10 @@ function renderItems() {
 }
 
 function addItem() {
+  if (!currentCat) { showToast('工種タブを選択してください'); return; }
   saveUndoState();
   const id = itemIdCounter++;
+  if (!items[currentCat]) items[currentCat] = [];
   items[currentCat].push({ id, name:'', spec:'', qty:'', unit:'式', price:'', amount:0, note:'', bukariki:'' });
   renderItems();
   // Focus the new row's name input
@@ -2037,7 +2041,7 @@ function loadFromLocalStorage() {
       document.getElementById('pj-location').value = project.location || '';
       document.getElementById('pj-person').value = project.person || '';
       document.getElementById('pj-labor-rate').value = project.laborRate || 72;
-      document.getElementById('pj-labor-sell').value = project.laborSell || 33000;
+      document.getElementById('pj-labor-sell').value = project.laborSell || '';
       document.getElementById('pj-tax').value = project.tax || 10;
       document.getElementById('pj-copper').value = project.copper || '';
     }
@@ -2156,6 +2160,17 @@ function checkEstimatesRestore() {
 }
 
 // ===== ナレッジDB復元バナー =====
+async function loadClientList() {
+  try {
+    const all = await knowledgeDB.getAll();
+    const clients = [...new Set(
+      all.map(r => r.project && r.project.client).filter(c => c && c.trim())
+    )].sort((a, b) => a.localeCompare(b, 'ja'));
+    const dl = document.getElementById('clientList');
+    if (dl) dl.innerHTML = clients.map(c => `<option value="${esc(c)}">`).join('');
+  } catch (e) { /* サイレント失敗 */ }
+}
+
 async function checkKnowledgeRestore() {
   try {
     const cnt = await knowledgeDB.count();

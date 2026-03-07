@@ -47,7 +47,7 @@
   <nav class="sidebar">
     <div class="sidebar-brand">
       <h1>八友電工</h1>
-      <p>見積管理システム v2.0</p>
+      <p>見積管理システム v3.0</p>
       <div style="margin-top:6px;display:flex;align-items:center;gap:4px;">
         <div id="dbBadge" style="padding:2px 8px;border-radius:6px;font-size:10px;background:#fef3c7;color:#92400e;cursor:pointer;display:inline-block;" onclick="showDbOverlay()">内蔵DB</div>
         <button id="ejectBtn" onclick="ejectTridge()" title="トリッジを取り外す" style="display:none;padding:1px 6px;border-radius:5px;font-size:10px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;cursor:pointer;">⏏ 取り外し</button>
@@ -119,7 +119,7 @@
           ⚠ 掛率チェック
         </button>
         <button class="btn btn-primary btn-sm" onclick="exportEstimate()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h8"/><polyline points="13 10 16 13 13 16"/></svg>
           Excel出力
         </button>
       </div>
@@ -144,10 +144,10 @@
               </div>
               <div class="form-group">
                 <label class="form-label">見積番号</label>
-                <div style="display:flex;gap:4px;align-items:center;">
-                  <input type="text" class="form-input" id="pj-number" placeholder="0000-01" oninput="updateProject()" style="flex:1;">
-                  <button onclick="generateEstimateNo()" title="次の見積番号を自動発番" style="padding:4px 8px;font-size:12px;white-space:nowrap;cursor:pointer;">自動発番</button>
-                  <button onclick="setEstimateNoCounter()" title="開始番号を設定" style="padding:4px 6px;font-size:12px;cursor:pointer;">⚙</button>
+                <input type="text" class="form-input" id="pj-number" placeholder="0000-01" oninput="updateProject()">
+                <div style="display:flex;gap:4px;margin-top:4px;">
+                  <button onclick="generateEstimateNo()" title="次の見積番号を自動発番" style="padding:3px 10px;font-size:11px;white-space:nowrap;cursor:pointer;border:1px solid #d1d5db;border-radius:4px;background:#f9fafb;">自動発番</button>
+                  <button onclick="setEstimateNoCounter()" title="カウンター設定" style="padding:3px 8px;font-size:11px;cursor:pointer;border:1px solid #d1d5db;border-radius:4px;background:#f9fafb;">⚙</button>
                 </div>
               </div>
               <div class="form-group">
@@ -156,7 +156,8 @@
               </div>
               <div class="form-group">
                 <label class="form-label">得意先（元請） *</label>
-                <input type="text" class="form-input" id="pj-client" placeholder="例：○○工務店" oninput="updateProject()">
+                <input type="text" class="form-input" id="pj-client" placeholder="例：○○工務店" oninput="updateProject()" list="clientList" autocomplete="off">
+                <datalist id="clientList"></datalist>
               </div>
               <div class="form-group">
                 <label class="form-label">構造 *</label>
@@ -194,15 +195,15 @@
               </div>
               <div class="form-group">
                 <label class="form-label">階数</label>
-                <input type="number" class="form-input" id="pj-floors" placeholder="2" min="1" max="50" oninput="updateProject()">
+                <input type="number" class="form-input" id="pj-floors" placeholder="例：2" min="1" max="50" oninput="updateProject()">
               </div>
               <div class="form-group">
                 <label class="form-label">延床面積（㎡）</label>
-                <input type="number" class="form-input" id="pj-area-sqm" placeholder="120.5" step="0.1" oninput="syncArea('sqm'); updateProject(); searchSimilar();">
+                <input type="number" class="form-input" id="pj-area-sqm" placeholder="例：120.5" step="0.1" oninput="syncArea('sqm'); updateProject(); searchSimilar();">
               </div>
               <div class="form-group">
                 <label class="form-label">延床面積（坪）</label>
-                <input type="number" class="form-input" id="pj-area-tsubo" placeholder="36.4" step="0.1" oninput="syncArea('tsubo'); updateProject();">
+                <input type="number" class="form-input" id="pj-area-tsubo" placeholder="例：36.4" step="0.1" oninput="syncArea('tsubo'); updateProject();">
               </div>
               <div class="form-group">
                 <label class="form-label">施工場所</label>
@@ -215,10 +216,10 @@
             </div>
             <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
               <button id="aiDraftBtn" onclick="aiDraftEstimate()" style="font-size:14px;padding:10px 24px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:6px;">
-                ✨ AIたたき台作成
+                ✨ AI提案作成
               </button>
               <button class="btn btn-secondary" onclick="autoCreateEstimate()" style="font-size:13px;padding:9px 18px;">
-                🤖 実績から自動作成
+                🗄️ 実績から自動作成
               </button>
               <span style="font-size:11px;color:var(--text-sub);flex:1;">構造・種別・面積を入力後にボタンを押してください。<br>「AIたたき台」はClaude APIで生成、「実績から自動作成」はナレッジDBを直接参照します。</span>
             </div>
@@ -240,7 +241,7 @@
               </div>
               <div class="form-group">
                 <label class="form-label">基準労務売価（円/人工）</label>
-                <input type="number" class="form-input" id="pj-labor-sell" value="33000" step="1000" oninput="recalcAll()">
+                <input type="number" class="form-input" id="pj-labor-sell" placeholder="例：33000" step="1000" oninput="recalcAll()">
               </div>
               <div class="form-group">
                 <label class="form-label">消費税率（%）</label>
