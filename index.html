@@ -6,6 +6,21 @@
 <title>八友電工 見積システム</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
+<style>
+.sidebar-action-btn {
+  width: 100%; padding: 8px 12px; background: transparent;
+  border: none; border-radius: 6px; color: rgba(255,255,255,0.75);
+  font-size: 13px; cursor: pointer; text-align: left;
+  display: flex; align-items: center; gap: 8px; transition: background 0.15s;
+}
+.sidebar-action-btn:hover { background: rgba(255,255,255,0.1); }
+.sidebar-action-primary {
+  background: rgba(99,102,241,0.4) !important;
+  color: #fff !important; font-weight: 600;
+  border: 1px solid rgba(99,102,241,0.5);
+}
+.sidebar-action-primary:hover { background: rgba(99,102,241,0.6) !important; }
+</style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 </head>
@@ -46,7 +61,7 @@
   <!-- Sidebar -->
   <nav class="sidebar">
     <div class="sidebar-brand">
-      <h1>八友電工</h1>
+      <h1>Hachitomo</h1>
       <p>見積管理システム v3.0</p>
       <div style="margin-top:6px;display:flex;align-items:center;gap:4px;">
         <div id="dbBadge" style="padding:2px 8px;border-radius:6px;font-size:10px;background:#fef3c7;color:#92400e;cursor:pointer;display:inline-block;" onclick="showDbOverlay()">内蔵DB</div>
@@ -92,11 +107,36 @@
       </div>
     </div>
 
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">操作</div>
+      <div style="display:flex;flex-direction:column;gap:2px;padding:0 4px;">
+        <button onclick="saveEstimateToList()" class="sidebar-action-btn" title="現在の見積を保存">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+          保存
+        </button>
+        <button onclick="openSavedEstimatesModal()" class="sidebar-action-btn" title="保存済み見積の読み込み・修正・流用">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          保存済み
+        </button>
+        <button onclick="checkSellRates()" class="sidebar-action-btn" title="同得意先の過去単価と比較">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          掛率チェック
+        </button>
+        <button onclick="exportEstimate()" class="sidebar-action-btn sidebar-action-primary" title="Excel見積書を出力">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h8"/><polyline points="13 10 16 13 13 16"/></svg>
+          Excel出力
+        </button>
+        <button onclick="showChangelog()" class="sidebar-action-btn" title="GitHubの最新コミット履歴を表示">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          最新の変更点
+        </button>
+      </div>
+    </div>
+
     <div class="sidebar-footer">
       <button onclick="openApiSettings()" style="width:100%;padding:7px;background:transparent;border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:rgba(255,255,255,0.7);font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;" title="Claude APIキーを設定してAI機能を有効にします">
         <span>⚙</span><span>AI設定（APIキー）</span>
       </button>
-      <p style="margin-top:6px;">Phase 2 — 基本機能</p>
     </div>
   </nav>
 
@@ -108,20 +148,6 @@
       <div class="topbar-actions">
         <button id="backBtn" class="btn btn-secondary btn-sm" onclick="undoAction()" style="display:none;" title="元に戻す (Ctrl+Z)">↩ 元に戻す</button>
         <button id="redoBtn" class="btn btn-secondary btn-sm" onclick="redoAction()" style="display:none;" title="やり直し (Ctrl+Y)">↪ やり直し</button>
-        <button class="btn btn-secondary btn-sm" onclick="saveEstimateToList()" title="現在の見積を保存（複数スロット）">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1-2 2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
-          保存
-        </button>
-        <button class="btn btn-secondary btn-sm" onclick="openSavedEstimatesModal()" title="保存済み見積の読み込み・修正・流用">
-          📂 保存済み
-        </button>
-        <button class="btn btn-secondary btn-sm" onclick="checkSellRates()" title="同得意先の過去見積と単価を比較（5%以上の乖離を検出）">
-          ⚠ 掛率チェック
-        </button>
-        <button class="btn btn-primary btn-sm" onclick="exportEstimate()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h8"/><polyline points="13 10 16 13 13 16"/></svg>
-          Excel出力
-        </button>
       </div>
     </div>
 
@@ -730,6 +756,17 @@
     <div style="padding:10px 20px;border-top:1px solid #eee;font-size:12px;color:#888;">
       ナレッジDBに登録された同得意先の見積実績と比較しています。実績がない場合は表示されません。
     </div>
+  </div>
+</div>
+
+<!-- Changelog Modal -->
+<div class="modal-overlay" id="changelogModal">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <span class="modal-title">最新の変更点</span>
+      <button class="modal-close" onclick="document.getElementById('changelogModal').classList.remove('show')">✕</button>
+    </div>
+    <div class="modal-body" id="changelogBody" style="padding:20px 24px;"></div>
   </div>
 </div>
 

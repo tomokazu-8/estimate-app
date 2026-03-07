@@ -2159,6 +2159,45 @@ function checkEstimatesRestore() {
   }
 }
 
+// ===== 最新の変更点（GitHub API） =====
+async function showChangelog() {
+  const modal = document.getElementById('changelogModal');
+  const body  = document.getElementById('changelogBody');
+  modal.classList.add('show');
+  body.innerHTML = '<p style="text-align:center;color:#888;padding:24px;">読み込み中...</p>';
+
+  try {
+    const res = await fetch(
+      'https://api.github.com/repos/tomokazu-8/estimate-app/commits?per_page=5',
+      { headers: { Accept: 'application/vnd.github.v3+json' } }
+    );
+    if (!res.ok) throw new Error(`GitHub API エラー (${res.status})`);
+    const commits = await res.json();
+
+    body.innerHTML = commits.map(c => {
+      const date = new Date(c.commit.author.date).toLocaleDateString('ja-JP', {
+        year: 'numeric', month: '2-digit', day: '2-digit'
+      });
+      const sha    = c.sha.slice(0, 7);
+      const lines  = c.commit.message.split('\n').filter(Boolean);
+      const title  = lines[0];
+      const detail = lines.slice(1).filter(l => l.trim() && !l.startsWith('Co-Authored'));
+      return `<div style="padding:12px 0;border-bottom:1px solid #f1f5f9;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <span style="font-size:11px;color:#94a3b8;">${date}</span>
+          <code style="font-size:10px;background:#f1f5f9;padding:1px 6px;border-radius:3px;color:#64748b;">${sha}</code>
+        </div>
+        <div style="font-size:13px;font-weight:500;color:#1e293b;">${title}</div>
+        ${detail.length ? `<ul style="margin:6px 0 0 16px;padding:0;font-size:12px;color:#64748b;">
+          ${detail.map(l => `<li style="margin-bottom:2px;">${l.replace(/^[-・]\s*/, '')}</li>`).join('')}
+        </ul>` : ''}
+      </div>`;
+    }).join('');
+  } catch (e) {
+    body.innerHTML = `<p style="color:#c00;text-align:center;padding:24px;">取得に失敗しました: ${e.message}</p>`;
+  }
+}
+
 // ===== ナレッジDB復元バナー =====
 async function loadClientList() {
   try {
