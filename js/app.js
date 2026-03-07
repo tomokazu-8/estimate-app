@@ -692,6 +692,207 @@ function applyAiDraft() {
   showToast(`${addedItems}品目をAIたたき台として投入しました`);
 }
 
+// ===== 仕入れ見積インポート =====
+
+function openSupplierImportModal() {
+  const sel = document.getElementById('supplierTargetCat');
+  sel.innerHTML = '<option value="">-- 工種を選択 --</option>' +
+    activeCategories
+      .filter(c => c.active && !c.rateMode)
+      .map(c => `<option value="${c.id}">${c.name}</option>`)
+      .join('');
+
+  document.getElementById('supplierFileInput').value = '';
+  document.getElementById('supplierNameSpan').textContent = '';
+  document.getElementById('supplierTotalSpan').textContent = '';
+  document.getElementById('supplierPreviewArea').innerHTML =
+    '<p style="color:#aaa;text-align:center;padding:40px;">ファイルを選択するとAIが自動解析してプレビューを表示します</p>';
+  document.getElementById('supplierImportModal')._result = null;
+  document.getElementById('supplierImportModal').classList.add('show');
+}
+
+async function parseSupplierFile(file) {
+  const area = document.getElementById('supplierPreviewArea');
+  area.innerHTML = '<p style="text-align:center;padding:40px;color:#6366f1;">⏳ AI解析中... しばらくお待ちください</p>';
+
+  try {
+    const buf = await file.arrayBuffer();
+    const wb  = XLSX.read(buf, { type: 'array' });
+    let csvText = '';
+
+    wb.SheetNames.forEach(sheetName => {
+      const ws   = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      csvText += `\n[シート: ${sheetName}]\n`;
+      rows.slice(0, 120).forEach(row => {
+        const line = row.map(c => String(c).replace(/\r\n|\n/g, '/')).join('\t');
+        if (line.trim()) csvText += line + '\n';
+      });
+    });
+
+    const responseText = await callClaude(_buildSupplierParsePrompt(csvText, file.name));
+
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('AIの回答からJSONを取り出せませんでした');
+    const result = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(result.items)) throw new Error('品目データが取得できませんでした');
+
+    document.getElementById('supplierImportModal')._result = result;
+    _renderSupplierPreview(result);
+
+  } catch (e) {
+    area.innerHTML = `<p style="color:#c00;text-align:center;padding:32px;">エラー: ${e.message}</p>`;
+  }
+}
+
+function _buildSupplierParsePrompt(csvText, filename) {
+  return `あなたは電気工事会社の積算担当者です。以下は仕入れ業者から届いた見積書（Excel）のデータです。品目情報を抽出してJSONで返してください。
+
+ファイル名: ${filename}
+
+【見積書データ（タブ区切り）】
+${csvText}
+
+以下のJSON形式のみで回答してください（前後の説明文不要）:
+{
+  "supplier": "仕入れ業者名",
+  "totalAmount": 総合計金額の数値（不明または0なら0）,
+  "items": [
+    {
+      "symbol": "記号（F1/A5等。なければ空文字）",
+      "name": "品名（商品名のみ。型番は含めない）",
+      "partNo": "品番・型番",
+      "maker": "メーカー名",
+      "qty": 数量の数値,
+      "unit": "単位（台/個/m/式等。不明は台）",
+      "listPrice": 定価の数値（オープン価格・不明は0）,
+      "costPrice": 仕入れ単価の数値（実際の請求単価）,
+      "amount": 金額の数値
+    }
+  ]
+}
+
+【注意事項】
+- 合計行・小計行・送料・フィッティング費用等の役務行は除外
+- 数値はカンマなしの整数（文字列不可）
+- 定価が「オープン」「OP」の場合は listPrice=0
+- セル内改行は / で区切られている: 「品番/品名」の形式に注意
+- qty・listPrice・costPrice・amount は数値型`;
+}
+
+function _renderSupplierPreview(result) {
+  const area = document.getElementById('supplierPreviewArea');
+  document.getElementById('supplierNameSpan').textContent = result.supplier || '（業者名不明）';
+  document.getElementById('supplierTotalSpan').textContent =
+    result.totalAmount > 0 ? `¥${result.totalAmount.toLocaleString()}` : '—';
+
+  const rate = parseFloat(document.getElementById('supplierSellRate').value) || 70;
+
+  const rows = (result.items || []).map((item, idx) => {
+    const sellPrice = item.listPrice > 0
+      ? Math.round(item.listPrice * rate / 100)
+      : item.costPrice;
+    const rowAmt = sellPrice * (item.qty || 1);
+    return `<tr style="border-bottom:1px solid #f1f5f9;">
+      <td style="padding:5px 6px;text-align:center;">
+        <input type="checkbox" class="supplier-chk" data-idx="${idx}" checked>
+      </td>
+      <td style="padding:5px 6px;font-size:11px;color:#888;">${item.symbol || ''}</td>
+      <td style="padding:5px 6px;">
+        ${item.name}
+        <div style="font-size:10px;color:#999;">${item.partNo || ''}</div>
+      </td>
+      <td style="padding:5px 6px;font-size:11px;color:#666;">${item.maker || ''}</td>
+      <td style="padding:5px 6px;text-align:right;font-family:'JetBrains Mono';">${item.qty}</td>
+      <td style="padding:5px 6px;">${item.unit || '台'}</td>
+      <td style="padding:5px 6px;text-align:right;font-family:'JetBrains Mono';color:#888;">
+        ${item.listPrice > 0 ? '¥' + item.listPrice.toLocaleString() : '<span style="color:#bbb;">OP</span>'}
+      </td>
+      <td style="padding:5px 6px;text-align:right;font-family:'JetBrains Mono';color:#1e40af;font-weight:600;">
+        ¥${sellPrice.toLocaleString()}
+      </td>
+      <td style="padding:5px 6px;text-align:right;font-family:'JetBrains Mono';">
+        ${rowAmt > 0 ? '¥' + rowAmt.toLocaleString() : '—'}
+      </td>
+    </tr>`;
+  }).join('');
+
+  area.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:12px;">
+      <thead><tr style="border-bottom:2px solid #ddd;background:#f8fafc;">
+        <th style="padding:6px;width:28px;">
+          <input type="checkbox" checked onchange="document.querySelectorAll('.supplier-chk').forEach(c=>c.checked=this.checked)">
+        </th>
+        <th style="padding:6px;text-align:left;width:32px;">記号</th>
+        <th style="padding:6px;text-align:left;">品名 / 型番</th>
+        <th style="padding:6px;text-align:left;">メーカー</th>
+        <th style="padding:6px;text-align:right;">数量</th>
+        <th style="padding:6px;">単位</th>
+        <th style="padding:6px;text-align:right;">定価</th>
+        <th style="padding:6px;text-align:right;">見積単価</th>
+        <th style="padding:6px;text-align:right;">金額</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function recalcSupplierPreview() {
+  const result = document.getElementById('supplierImportModal')._result;
+  if (result) _renderSupplierPreview(result);
+}
+
+function applySupplierImport() {
+  const modal  = document.getElementById('supplierImportModal');
+  const result = modal._result;
+  if (!result || !result.items) { showToast('先にファイルを読み込んでください'); return; }
+
+  const catId = document.getElementById('supplierTargetCat').value;
+  if (!catId) { showToast('取り込み先の工種を選択してください'); return; }
+
+  const rate    = parseFloat(document.getElementById('supplierSellRate').value) || 70;
+  const checked = Array.from(document.querySelectorAll('.supplier-chk:checked'))
+    .map(el => parseInt(el.dataset.idx));
+  if (checked.length === 0) { showToast('取り込む品目にチェックを入れてください'); return; }
+
+  saveUndoState();
+  if (!items[catId]) items[catId] = [];
+
+  let added = 0;
+  checked.forEach(idx => {
+    const item = result.items[idx];
+    if (!item) return;
+
+    const sellPrice = item.listPrice > 0
+      ? Math.round(item.listPrice * rate / 100)
+      : item.costPrice;
+
+    const noteStr = item.listPrice > 0
+      ? `定価¥${item.listPrice.toLocaleString()}（仕入¥${item.costPrice.toLocaleString()}）`
+      : `仕入¥${item.costPrice.toLocaleString()}`;
+
+    items[catId].push({
+      id:       itemIdCounter++,
+      name:     (item.symbol ? `[${item.symbol}]` : '') + item.name,
+      spec:     item.partNo  || '',
+      qty:      item.qty     || 1,
+      unit:     item.unit    || '台',
+      price:    sellPrice,
+      amount:   sellPrice * (item.qty || 1),
+      bukariki: '',
+      note:     noteStr,
+    });
+    added++;
+  });
+
+  currentCat = catId;
+  modal.classList.remove('show');
+  renderCatTabs();
+  renderItems();
+  updateSummaryBar();
+  const catName = activeCategories.find(c => c.id === catId)?.name || '';
+  showToast(`${added}品目を「${catName}」に取り込みました`);
+}
+
 // ===== ④ AI単価・仕様調査（B-2/B-3） =====
 
 async function aiQueryItem(itemId) {
