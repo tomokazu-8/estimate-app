@@ -26,6 +26,26 @@
 #itemTable.hide-buk3 .col-buk3 { display: none; }
 /* 選択行ハイライト */
 #itemBody tr.row-selected { background: #eff6ff !important; outline: 1px solid #bfdbfe; }
+/* Tridgeマスタ panel: flexで表示 */
+#panel-tridge.active { display: flex !important; }
+/* Tridgeマスタ tab buttons */
+.tm-tab-btn { color: var(--text-sub) !important; }
+.tm-tab-btn.active { color: var(--accent) !important; border-bottom-color: var(--accent) !important; }
+.tm-tab-content { display: none !important; }
+.tm-tab-content.active { display: flex !important; flex-direction: column; }
+/* Tridgeマスタ table cells */
+.tm-cell-input { width:100%;padding:4px 6px;border:1px solid transparent;border-radius:4px;font-size:12px;font-family:inherit;background:transparent; }
+.tm-cell-input:focus { border-color:var(--accent);background:#fff;outline:none;box-shadow:0 0 0 2px var(--accent-light); }
+.tm-cell-input.num { text-align:right;font-family:'JetBrains Mono',monospace;font-size:11px; }
+.tm-cell-select { padding:4px 6px;border:1px solid transparent;border-radius:4px;font-size:12px;font-family:inherit;background:transparent;cursor:pointer; }
+.tm-cell-select:focus { border-color:var(--accent);background:#fff;outline:none; }
+/* Tridgeリストアイテム */
+.tm-db-item { display:flex;align-items:center;gap:6px;padding:8px;border-radius:6px;cursor:pointer;transition:background 0.15s;margin-bottom:2px; }
+.tm-db-item:hover { background:var(--accent-light); }
+.tm-db-item.selected { background:var(--accent-light);outline:1px solid var(--accent); }
+.tm-menu-btn { background:none;border:none;cursor:pointer;opacity:0;padding:2px 4px;border-radius:4px;font-size:12px;transition:opacity 0.15s; }
+.tm-db-item:hover .tm-menu-btn { opacity:0.6; }
+.tm-menu-btn:hover { opacity:1 !important;background:rgba(0,0,0,0.08); }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
@@ -34,23 +54,32 @@
 
   <!-- Tridge読み込みオーバーレイ -->
   <div id="dbOverlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;">
-    <div style="background:#fff;border-radius:16px;padding:40px;max-width:500px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-      <div style="font-size:48px;margin-bottom:16px;">🎮</div>
-      <h2 style="margin:0 0 8px;font-size:20px;">Tridge 読み込み</h2>
-      <p style="color:#666;margin:0 0 4px;font-size:13px;">使用するTridgeファイル（.xlsx）を読み込んでください</p>
-      <p style="color:#aaa;margin:0 0 20px;font-size:11px;">例：電気設備Tridge.xlsx / 空調設備Tridge.xlsx / 給排水Tridge.xlsx</p>
-      <div id="dbDropZone" style="border:3px dashed #3b82f6;border-radius:12px;padding:40px 20px;margin-bottom:16px;cursor:pointer;transition:all 0.2s;"
+    <div style="background:#fff;border-radius:16px;padding:36px 40px;max-width:540px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+      <div style="font-size:48px;margin-bottom:12px;">🎮</div>
+      <h2 style="margin:0 0 6px;font-size:20px;">Tridge 読み込み</h2>
+      <p style="color:#666;margin:0 0 4px;font-size:13px;">工種Tridgeまたは資材TridgeのExcelファイルを読み込んでください</p>
+      <div style="display:flex;gap:12px;margin:12px 0;font-size:11px;color:#888;text-align:left;">
+        <div style="flex:1;background:#f0f9ff;border-radius:8px;padding:10px 12px;">
+          <div style="font-weight:700;color:#2563eb;margin-bottom:4px;">⚙️ 工種Tridge</div>
+          <div>工種マスタ・労務単価マスタ・得意先マスタを含むファイル</div>
+        </div>
+        <div style="flex:1;background:#f0fdf4;border-radius:8px;padding:10px 12px;">
+          <div style="font-weight:700;color:#16a34a;margin-bottom:4px;">📦 資材Tridge</div>
+          <div>資材マスタ・カテゴリマスタを含むファイル（大量データ向け）</div>
+        </div>
+      </div>
+      <div id="dbDropZone" style="border:3px dashed #3b82f6;border-radius:12px;padding:32px 20px;margin-bottom:14px;cursor:pointer;transition:all 0.2s;"
            ondragover="event.preventDefault();this.style.background='#eff6ff';this.style.borderColor='#2563eb';"
            ondragleave="this.style.background='';this.style.borderColor='#3b82f6';"
            ondrop="event.preventDefault();this.style.background='';loadExcelDB(event.dataTransfer.files[0]);">
-        <div style="font-size:32px;margin-bottom:8px;">📁</div>
-        <div style="font-weight:600;color:#3b82f6;">ここにドロップ</div>
+        <div style="font-size:28px;margin-bottom:6px;">📁</div>
+        <div style="font-weight:600;color:#3b82f6;font-size:14px;">ここにドロップ（自動判別）</div>
         <input type="file" id="dbFileInput" accept=".xlsx,.xls" style="display:none;" onchange="loadExcelDB(this.files[0]);">
-        <button onclick="document.getElementById('dbFileInput').click();" style="margin-top:12px;padding:8px 20px;background:#3b82f6;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;">ファイル選択</button>
+        <button onclick="document.getElementById('dbFileInput').click();" style="margin-top:10px;padding:8px 20px;background:#3b82f6;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;">ファイル選択</button>
       </div>
-      <div id="dbLoadStatus" style="font-size:12px;color:#888;margin-bottom:12px;"></div>
+      <div id="dbLoadStatus" style="font-size:12px;color:#888;margin-bottom:12px;min-height:20px;"></div>
       <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
-        <button onclick="closeDbOverlay()" style="padding:8px 24px;background:#e5e7eb;border:none;border-radius:8px;cursor:pointer;font-size:13px;color:#888;">DBなしで続行（検索不可）</button>
+        <button onclick="closeDbOverlay()" style="padding:8px 24px;background:#e5e7eb;border:none;border-radius:8px;cursor:pointer;font-size:13px;color:#888;">閉じる</button>
       </div>
     </div>
   </div>
@@ -69,9 +98,15 @@
     <div class="sidebar-brand">
       <h1>Hachitomo</h1>
       <p>見積管理システム v3.3</p>
-      <div style="margin-top:6px;display:flex;align-items:center;gap:4px;">
-        <div id="dbBadge" style="padding:2px 8px;border-radius:6px;font-size:10px;background:#fef3c7;color:#92400e;cursor:pointer;display:inline-block;" onclick="showDbOverlay()">内蔵DB</div>
-        <button id="ejectBtn" onclick="ejectTridge()" title="トリッジを取り外す" style="display:none;padding:1px 6px;border-radius:5px;font-size:10px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;cursor:pointer;">⏏ 取り外し</button>
+      <div style="margin-top:6px;display:flex;flex-direction:column;gap:3px;">
+        <div style="display:flex;align-items:center;gap:4px;">
+          <div id="koshuBadge" style="padding:2px 8px;border-radius:6px;font-size:10px;background:#fef3c7;color:#92400e;cursor:pointer;flex:1;" onclick="showDbOverlay()">⚠ 工種Tridgeなし</div>
+          <button id="ejectKoshuBtn" onclick="ejectKoshuTridge()" title="工種Tridgeを取り外す" style="display:none;padding:1px 5px;border-radius:5px;font-size:10px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;cursor:pointer;">⏏</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <div id="zairyoBadge" style="padding:2px 8px;border-radius:6px;font-size:10px;background:#fef3c7;color:#92400e;cursor:pointer;flex:1;" onclick="showDbOverlay()">⚠ 資材Tridgeなし</div>
+          <button id="ejectZairyoBtn" onclick="ejectZairyoTridge()" title="資材Tridgeを取り外す" style="display:none;padding:1px 5px;border-radius:5px;font-size:10px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;cursor:pointer;">⏏</button>
+        </div>
       </div>
     </div>
 
@@ -110,6 +145,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
         <span>ナレッジDB</span>
         <span class="sidebar-badge" id="knowledgeBadge">0</span>
+      </div>
+      <div class="sidebar-item" onclick="navigate('tridge', this); tmInit();">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
+        <span>Tridgeマスタ</span>
       </div>
     </div>
 
@@ -188,7 +227,7 @@
               </div>
               <div class="form-group">
                 <label class="form-label">得意先（元請） *</label>
-                <input type="text" class="form-input" id="pj-client" placeholder="例：○○工務店" oninput="updateProject()" list="clientList" autocomplete="off">
+                <input type="text" class="form-input" id="pj-client" placeholder="例：○○工務店" oninput="updateProject(); updatePersonList()" list="clientList" autocomplete="off">
                 <datalist id="clientList"></datalist>
               </div>
               <div class="form-group">
@@ -243,17 +282,25 @@
               </div>
               <div class="form-group">
                 <label class="form-label">担当者</label>
-                <input type="text" class="form-input" id="pj-person" value="八木橋　友和" oninput="updateProject()">
+                <input type="text" class="form-input" id="pj-person" value="八木橋　友和" oninput="updateProject()" list="personList" autocomplete="off">
+                <datalist id="personList"></datalist>
               </div>
             </div>
-            <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-              <button id="aiDraftBtn" onclick="aiDraftEstimate()" style="font-size:14px;padding:10px 24px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:6px;">
-                ✨ AI提案作成
-              </button>
-              <button class="btn btn-secondary" onclick="autoCreateEstimate()" style="font-size:13px;padding:9px 18px;">
-                🗄️ 実績から自動作成
-              </button>
-              <span style="font-size:11px;color:var(--text-sub);flex:1;">構造・種別・面積を入力後にボタンを押してください。<br>「AIたたき台」はClaude APIで生成、「実績から自動作成」はナレッジDBを直接参照します。</span>
+            <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+              <div style="margin-bottom:10px;">
+                <label class="form-label" style="margin-bottom:4px;">工事概要・メモ（任意）</label>
+                <textarea id="pj-memo" rows="2" placeholder="例: 1階キッチン・風呂・トイレの改修工事。照明はLEDダウンライト中心。" oninput="updateProject()"
+                  style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--text-main);background:var(--bg-input);resize:vertical;font-family:inherit;line-height:1.5;"></textarea>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <button id="aiDraftBtn" onclick="aiDraftEstimate()" style="font-size:14px;padding:10px 24px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:6px;">
+                  ✨ AI提案作成
+                </button>
+                <button class="btn btn-secondary" onclick="autoCreateEstimate()" style="font-size:13px;padding:9px 18px;">
+                  🗄️ 実績から自動作成
+                </button>
+                <span style="font-size:11px;color:var(--text-sub);flex:1;">構造・種別・面積を入力後にボタンを押してください。<br>「AIたたき台」はClaude APIで生成、「実績から自動作成」はナレッジDBを直接参照します。</span>
+              </div>
             </div>
           </div>
         </div>
@@ -278,10 +325,6 @@
               <div class="form-group">
                 <label class="form-label">消費税率（%）</label>
                 <input type="number" class="form-input" id="pj-tax" value="10" step="1">
-              </div>
-              <div class="form-group">
-                <label class="form-label">銅建値（円/kg）参考</label>
-                <input type="number" class="form-input" id="pj-copper" placeholder="1400" step="10">
               </div>
             </div>
           </div>
@@ -535,6 +578,182 @@
         </div>
       </div>
 
+      <!-- ===== Panel: Tridgeマスタ ===== -->
+      <div class="panel" id="panel-tridge" style="margin:-20px -24px;height:calc(100vh - 44px);display:none;flex-direction:column;overflow:hidden;">
+
+        <!-- Toolbar -->
+        <div style="background:#fff;border-bottom:1px solid var(--border);padding:8px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;">
+          <button class="btn btn-primary btn-sm" onclick="tmShowCreateModal()">＋ 新規作成</button>
+          <span id="tm-currentDbName" style="font-weight:700;font-size:14px;color:var(--text);">トリッジを選択してください</span>
+          <span id="tm-rowCount" style="font-size:11px;color:var(--text-sub);"></span>
+          <div id="tm-toolbarRight" style="display:flex;gap:6px;align-items:center;margin-left:auto;">
+            <select id="tm-catFilter" onchange="tmApplyFilter()" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;">
+              <option value="">全カテゴリ</option>
+            </select>
+            <input id="tm-searchInput" type="text" placeholder="品名・規格で絞込..." oninput="tmApplyFilter()"
+              style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;width:180px;">
+            <button class="btn btn-secondary btn-sm" onclick="tmAddRow()">＋ 行追加</button>
+          </div>
+          <div style="display:flex;gap:6px;margin-left:auto;">
+            <button class="btn btn-secondary btn-sm" onclick="tmImportExcelAsNewDb()">📥 Excel取込</button>
+            <input type="file" id="tm-importFileInput" accept=".xlsx,.xls,.csv,.zip" style="display:none" onchange="tmHandleImportFile(event)">
+            <button class="btn btn-secondary btn-sm" id="tm-btnExport" disabled onclick="tmExportCurrentDb()">📤 Excelエクスポート</button>
+            <button class="btn btn-success btn-sm" id="tm-btnApply" disabled onclick="tmLoadToEstimate()" title="このTridgeを見積アプリに適用する">▶ Tridgeとして適用</button>
+          </div>
+        </div>
+
+        <!-- Tab Bar -->
+        <div style="background:#fff;border-bottom:1px solid var(--border);display:flex;gap:0;flex-shrink:0;">
+          <button class="tm-tab-btn active" data-tab="material" onclick="tmSwitchTab('material')" style="padding:8px 18px;font-size:12px;font-weight:500;color:var(--text-sub);cursor:pointer;border:none;border-bottom:2px solid transparent;background:transparent;">資材マスタ</button>
+          <button class="tm-tab-btn" data-tab="koshu" onclick="tmSwitchTab('koshu')" style="padding:8px 18px;font-size:12px;font-weight:500;color:var(--text-sub);cursor:pointer;border:none;border-bottom:2px solid transparent;background:transparent;">工種マスタ</button>
+          <button class="tm-tab-btn" data-tab="settings" onclick="tmSwitchTab('settings')" style="padding:8px 18px;font-size:12px;font-weight:500;color:var(--text-sub);cursor:pointer;border:none;border-bottom:2px solid transparent;background:transparent;">労務設定</button>
+          <button class="tm-tab-btn" data-tab="keywords" onclick="tmSwitchTab('keywords')" style="padding:8px 18px;font-size:12px;font-weight:500;color:var(--text-sub);cursor:pointer;border:none;border-bottom:2px solid transparent;background:transparent;">キーワードマスタ</button>
+          <button class="tm-tab-btn" data-tab="bunrui" onclick="tmSwitchTab('bunrui')" style="padding:8px 18px;font-size:12px;font-weight:500;color:var(--text-sub);cursor:pointer;border:none;border-bottom:2px solid transparent;background:transparent;">分類マスタ</button>
+          <div style="margin-left:auto;padding:4px 12px;display:flex;align-items:center;gap:8px;">
+            <span id="tm-unsavedBadge" style="display:none;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">未保存</span>
+            <span id="tm-statusMsg" style="font-size:11px;color:var(--text-sub);"></span>
+          </div>
+        </div>
+
+        <!-- Split: Left = List, Right = Content -->
+        <div style="display:flex;flex:1;overflow:hidden;">
+
+          <!-- Tridge List (左ペイン) -->
+          <div style="width:220px;border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;background:#fafafa;overflow:hidden;">
+            <div style="padding:8px;">
+              <button class="btn btn-secondary btn-sm" style="width:100%;" onclick="tmShowCreateModal()">＋ 新規トリッジ作成</button>
+            </div>
+            <div style="flex:1;overflow-y:auto;padding:0 8px 8px;" id="tm-dbList"></div>
+          </div>
+
+          <!-- Tab Content (右ペイン) -->
+          <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+
+            <!-- Tab: 資材マスタ -->
+            <div id="tm-tab-material" class="tm-tab-content active" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+              <div id="tm-tableWrap" style="flex:1;overflow:auto;">
+                <div id="tm-emptyState" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-sub);">
+                  <div style="font-size:36px;margin-bottom:8px;">📦</div>
+                  <div style="font-size:14px;font-weight:600;margin-bottom:4px;">トリッジを選択または作成してください</div>
+                  <div style="font-size:12px;">左の「＋ 新規トリッジ作成」から作成するか、「📥 Excel取込」で読み込んでください。</div>
+                </div>
+                <table id="tm-mainTable" style="display:none;width:100%;border-collapse:collapse;font-size:12px;">
+                  <thead>
+                    <tr>
+                      <th style="width:36px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1;"></th>
+                      <th style="width:220px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1;font-size:11px;font-weight:500;color:var(--text-sub);">品目名称</th>
+                      <th style="width:200px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1;font-size:11px;font-weight:500;color:var(--text-sub);">規格名称</th>
+                      <th style="width:50px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1;font-size:11px;font-weight:500;color:var(--text-sub);">単位</th>
+                      <th style="width:90px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1;font-size:11px;font-weight:500;color:var(--text-sub);">基準単価</th>
+                      <th style="width:90px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1;font-size:11px;font-weight:500;color:var(--text-sub);">原価単価</th>
+                      <th style="width:60px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1;font-size:11px;font-weight:500;color:var(--text-sub);">原価率%</th>
+                      <th style="width:65px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1;font-size:11px;font-weight:500;color:var(--text-sub);">歩掛1</th>
+                      <th style="width:120px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1;font-size:11px;font-weight:500;color:var(--text-sub);">カテゴリ</th>
+                      <th style="width:36px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1;"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="tm-tableBody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Tab: 工種マスタ -->
+            <div id="tm-tab-koshu" class="tm-tab-content" style="flex:1;overflow:hidden;display:none;flex-direction:column;">
+              <div style="padding:8px 16px;border-bottom:1px solid var(--border);background:#fff;flex-shrink:0;">
+                <button class="btn btn-secondary btn-sm" onclick="tmAddKoshuRow()">＋ 工種追加</button>
+              </div>
+              <div style="flex:1;overflow:auto;">
+                <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                  <thead>
+                    <tr>
+                      <th style="width:50px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">順序</th>
+                      <th style="width:110px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">工種ID</th>
+                      <th style="width:180px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">工種名</th>
+                      <th style="width:130px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">略称</th>
+                      <th style="width:75px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;text-align:center;">割合モード</th>
+                      <th style="width:75px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">雑材料率%</th>
+                      <th style="background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">自動計算行</th>
+                      <th style="width:36px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);position:sticky;top:0;"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="tm-koshuBody"></tbody>
+                </table>
+                <div id="tm-koshuEmpty" style="display:none;padding:32px;text-align:center;color:var(--text-sub);font-size:13px;">工種が登録されていません。「＋ 工種追加」から追加してください。</div>
+              </div>
+            </div>
+
+            <!-- Tab: 労務設定 -->
+            <div id="tm-tab-settings" class="tm-tab-content" style="display:none;padding:24px;">
+              <div style="max-width:400px;">
+                <p style="font-size:12px;color:var(--text-sub);margin-bottom:16px;">「Tridgeとして適用」時に見積アプリの労務単価に反映されます。</p>
+                <div style="display:flex;flex-direction:column;gap:12px;">
+                  <div>
+                    <label class="form-label">労務売単価（円/人工）</label>
+                    <input id="tm-settLaborSell" type="number" class="form-input" style="width:200px;" value="33000" onchange="tmOnSettingsChange()">
+                  </div>
+                  <div>
+                    <label class="form-label">労務原価単価（円/人工）</label>
+                    <input id="tm-settLaborCost" type="number" class="form-input" style="width:200px;" value="12000" onchange="tmOnSettingsChange()">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab: キーワードマスタ -->
+            <div id="tm-tab-keywords" class="tm-tab-content" style="flex:1;overflow:hidden;display:none;flex-direction:column;">
+              <div style="padding:8px 16px;border-bottom:1px solid var(--border);background:#fff;flex-shrink:0;">
+                <button class="btn btn-secondary btn-sm" onclick="tmAddKeywordRow()">＋ キーワード追加</button>
+              </div>
+              <div style="flex:1;overflow:auto;">
+                <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                  <thead>
+                    <tr>
+                      <th style="width:36px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;"></th>
+                      <th style="background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">キーワード</th>
+                      <th style="width:110px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">分類</th>
+                      <th style="width:70px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">歩掛</th>
+                      <th style="width:70px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;text-align:center;">銅連動</th>
+                      <th style="width:70px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;text-align:center;">天井開口</th>
+                      <th style="width:36px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);position:sticky;top:0;"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="tm-keywordBody"></tbody>
+                </table>
+                <div id="tm-keywordEmpty" style="display:none;padding:32px;text-align:center;color:var(--text-sub);font-size:13px;">キーワードが登録されていません。「＋ キーワード追加」から追加してください。</div>
+              </div>
+            </div>
+
+            <!-- Tab: 分類マスタ -->
+            <div id="tm-tab-bunrui" class="tm-tab-content" style="flex:1;overflow:hidden;display:none;flex-direction:column;">
+              <div style="padding:8px 16px;border-bottom:1px solid var(--border);background:#fff;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+                <span id="tm-bunruiSummary" style="font-size:12px;color:var(--text-sub);"></span>
+                <input id="tm-bunruiSearch" type="text" placeholder="中分類・小分類で絞込..."
+                  oninput="tmFilterBunrui()"
+                  style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;width:240px;">
+              </div>
+              <div style="flex:1;overflow:auto;">
+                <table id="tm-bunruiTable" style="display:none;width:100%;border-collapse:collapse;font-size:12px;">
+                  <thead>
+                    <tr>
+                      <th style="width:70px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">大分類ID</th>
+                      <th style="width:120px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">大分類名</th>
+                      <th style="width:70px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">中分類ID</th>
+                      <th style="width:180px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">中分類名</th>
+                      <th style="width:70px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">小分類ID</th>
+                      <th style="background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">小分類名</th>
+                      <th style="width:60px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;text-align:right;">品目数</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tm-bunruiBody"></tbody>
+                </table>
+                <div id="tm-bunruiEmpty" style="padding:32px;text-align:center;color:var(--text-sub);font-size:13px;">分類マスタが読み込まれていません。Excelインポート時に自動登録されます。</div>
+              </div>
+            </div>
+
+          </div><!-- /右ペイン -->
+        </div><!-- /split -->
+      </div><!-- /panel-tridge -->
+
     </div>
   </div>
 </div>
@@ -551,15 +770,6 @@
         <input type="text" class="form-input" id="searchQuery" placeholder="品名・規格で検索（例：VVF, コンセント, PF-S）" style="flex:1;font-size:13px;" oninput="searchMaterial()" autofocus>
         <select class="form-select" id="searchCatFilter" onchange="searchMaterial()" style="width:130px;">
           <option value="">全カテゴリ</option>
-          <option value="cable">電線・ケーブル</option>
-          <option value="conduit">電線管</option>
-          <option value="device">配線器具</option>
-          <option value="box">ボックス類</option>
-          <option value="panel">分電盤</option>
-          <option value="fixture">照明器具</option>
-          <option value="dimmer">調光器</option>
-          <option value="fire">火災報知器</option>
-          <option value="ground">接地工事</option>
         </select>
       </div>
       <div id="bunruiFilterRow" style="display:none;gap:8px;margin-bottom:8px;">
@@ -799,7 +1009,45 @@
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
+<!-- ===== Tridgeマスタ モーダル ===== -->
+<div id="tm-createModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:24px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+    <div style="font-size:14px;font-weight:700;margin-bottom:16px;">新規トリッジ作成</div>
+    <label class="form-label">トリッジ名称</label>
+    <input id="tm-newDbName" type="text" class="form-input" style="width:100%;margin-bottom:10px;" placeholder="例: 電気設備用トリッジ" maxlength="40">
+    <label class="form-label">メモ（任意）</label>
+    <input id="tm-newDbMemo" type="text" class="form-input" style="width:100%;margin-bottom:16px;" placeholder="工種・用途など">
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn btn-secondary btn-sm" onclick="tmCloseCreateModal()">キャンセル</button>
+      <button class="btn btn-primary btn-sm" onclick="tmConfirmCreateDb()">作成</button>
+    </div>
+  </div>
+</div>
 
+<div id="tm-renameModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:24px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+    <div style="font-size:14px;font-weight:700;margin-bottom:16px;">トリッジ名称を変更</div>
+    <label class="form-label">トリッジ名称</label>
+    <input id="tm-renameDbName" type="text" class="form-input" style="width:100%;margin-bottom:10px;" maxlength="40">
+    <label class="form-label">メモ（任意）</label>
+    <input id="tm-renameDbMemo" type="text" class="form-input" style="width:100%;margin-bottom:16px;">
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn btn-secondary btn-sm" onclick="tmCloseRenameModal()">キャンセル</button>
+      <button class="btn btn-primary btn-sm" onclick="tmConfirmRenameDb()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="tm-deleteModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:24px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+    <div style="font-size:14px;font-weight:700;color:#dc2626;margin-bottom:12px;">トリッジを削除しますか？</div>
+    <p id="tm-deleteModalMsg" style="font-size:13px;color:var(--text-sub);margin-bottom:16px;"></p>
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn btn-secondary btn-sm" onclick="tmCloseDeleteModal()">キャンセル</button>
+      <button class="btn btn-danger btn-sm" onclick="tmConfirmDeleteDb()">削除</button>
+    </div>
+  </div>
+</div>
 
 
 <!-- JS modules (読み込み順序が重要) -->
@@ -810,7 +1058,11 @@
 <script src="js/calc-engine.js"></script>
 <script src="js/excel-loader.js"></script>
 <script src="js/excel-template-export.js"></script>
+<script src="js/saved-estimates.js"></script>
+<script src="js/ai-features.js"></script>
 <script src="js/app.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="js/tridge-manager.js"></script>
 
 </body>
 </html>
