@@ -73,12 +73,17 @@
 - テンプレート方式Excel出力（excel-template-export.js）
 - ナレッジDB（knowledge-db.js）
 - 見積自動作成（ナレッジDBの類似物件から品目を面積比スケーリングで自動投入）
+- **Tridgeマスタ管理UI**（tridge-manager.js）— db-manager の全機能を Deck 内に統合
+- **AI機能**（ai-features.js）— たたき台作成・仕入れ見積インポート・単価調査・掛率チェック
+- **保存済み見積管理**（saved-estimates.js）— 見積番号採番・複数スロット保存/読み込み
 
 ### 重要なグローバル変数（data.js）
 - `TRIDGE_SETTINGS`: 設定マスタの値（copperEnabled/copperBase/copperFraction/laborSell/laborCost）
 - `TRIDGE_KEYWORDS`: キーワードマスタの配列（keyword/laborType/bukariki/copperLinked/ceilingOpening）
-- `tridgeLoaded`: Tridge装着フラグ
+- `koshuTridgeLoaded`: 工種Tridge装着フラグ
+- `zairyoTridgeLoaded`: 資材Tridge装着フラグ
 - `activeCategories`: 工種マスタから動的ロード（Tridge未装着時は[]）
+- `TRIDGE_CLIENTS`: 得意先マスタ（工種Tridgeから読み込み）
 
 ### 内蔵DB
 `data/material_db.json` と `data/bukariki_db.json` は空の`[]`。
@@ -190,21 +195,35 @@ estimate-app/
 ├── scripts/
 │   └── generate-template.js   ← テンプレート自動生成スクリプト（ExcelJS使用）
 └── js/
-    ├── app.js                     ← メインUIロジック（exportEstimate: ExcelJS優先→SheetJSフォールバック）
+    ├── data.js                    ← 定数・グローバル変数・共通ユーティリティ（norm/esc/genId）
+    ├── knowledge-db.js            ← ナレッジDB（IndexedDB CRUD + JSON/XLSX入出力 + 見積自動作成）
+    ├── labor.js                   ← 労務費計算（TRIDGE_KEYWORDS参照型）
+    ├── material-search.js         ← 材料検索モーダル
     ├── calc-engine.js             ← 見積計算エンジン（自動計算行の追加・雑材料費等）
-    ├── data.js                    ← 定数・グローバル変数
     ├── excel-loader.js            ← トリッジ読み込み（資材/工種/設定/キーワード4シート対応）
     ├── excel-template-export.js   ← テンプレート方式Excel出力（テンプレート読み込み→データ書き込み）
-    ├── knowledge-db.js            ← ナレッジDB（IndexedDB CRUD + JSON入出力 + 見積自動作成）
-    ├── labor.js                   ← 労務費計算（TRIDGE_KEYWORDS参照型）
-    └── material-search.js         ← 材料検索モーダル
+    ├── saved-estimates.js         ← 見積番号採番・複数スロット保存/読み込み/バックアップ
+    ├── ai-features.js             ← AI設定・Claude API・たたき台/仕入れインポート/単価調査/掛率チェック
+    ├── app.js                     ← メインUIロジック（exportEstimate: ExcelJS優先→SheetJSフォールバック）
+    └── tridge-manager.js          ← Tridgeマスタ管理UI（db-manager統合、tmプレフィックス）
+```
+
+### スクリプト読み込み順（index.html）
+```
+SheetJS CDN → ExcelJS CDN
+→ data.js → knowledge-db.js → labor.js → material-search.js → calc-engine.js
+→ excel-loader.js → excel-template-export.js
+→ saved-estimates.js → ai-features.js → app.js
+→ JSZip CDN → tridge-manager.js
 ```
 
 ## 重要な実装メモ
 
 - `norm(s)`: NFKC正規化で全角/半角統一 → data.jsで定義、全ファイルで使用
+- `esc(s)`: フルHTMLエスケープ（&/</>/") → data.jsで定義、全ファイルで使用
+- `genId()`: ユニークID生成 → data.jsで定義、全ファイルで使用
 - `cache: 'no-store'`: app.jsのfetch呼び出しに設定（ブラウザキャッシュ防止）
-- `getCol(row, ...names)`: excel-loader.jsの柔軟な列名検索
+- `getCol(row, ...names)`: excel-loader.jsの柔軟な列名検索（グローバル）
 - `activeCategories`: Tridge装着時に `applyTridgeCategories()` で上書き、localStorageに保存
 - 銅建値補正: `TRIDGE_SETTINGS.copperEnabled === true` の時のみ有効（Tridge設定マスタ連動）
 - `isCableItem()`: TRIDGE_KEYWORDS の copperLinked フラグで判定（ハードコードなし）
@@ -212,9 +231,12 @@ estimate-app/
 - `getCatTotal(catId)`: 品目金額の合計（items配列のamountを集計）
 - `getCatAmount(catId)`: 割合モード込みの金額（rateModeの場合は前工種合計×割合%で算出）
 - `exportEstimate()`: async関数、ExcelJS版を試行→失敗時SheetJSフォールバック→ナレッジDB自動登録
+- **tridge-manager.js の命名規則**: 状態変数・関数は `tm` プレフィックス、HTML要素IDは `tm-` プレフィックス
+- **tmLoadToEstimate()**: TridgeデータをDeckグローバル変数に直接書き込む（Excelエクスポート不要）
 
 ## 外部ライブラリ（CDN）
 
 - **SheetJS** (`xlsx@0.18.5`): トリッジ読み込み・フォールバック用Excel出力
 - **ExcelJS** (`exceljs@4.4.0`): テンプレート方式Excel出力（メイン）
+- **JSZip** (`jszip@3.10.1`): tridge-manager.js のXLSXエクスポートに使用
 - npm `exceljs`: テンプレート生成スクリプト用（`node_modules/`、.gitignore済み）
