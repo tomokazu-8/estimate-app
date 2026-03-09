@@ -80,3 +80,14 @@ let customCatCounter = parseInt(localStorage.getItem('customCatCounter') || '10'
 // ===== SHARED UTILITIES (used by app.js, tridge-manager.js, etc.) =====
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+function normItemKey(name, spec) {
+  const n = norm(name || '').trim();
+  const s = norm(spec || '').replace(/<.*/, '').trim();
+  return s ? `${n}|${s}` : n;
+}

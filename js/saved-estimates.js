@@ -186,11 +186,7 @@ function autoBackupEstimates(list) {
   const last  = localStorage.getItem('estimates_last_backup') || '';
   if (last.startsWith(today)) return;  // 今日はもう済んでいる
   const json = JSON.stringify(list, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = `estimates_backup_${today}.json`; a.click();
-  URL.revokeObjectURL(url);
+  downloadBlob(new Blob([json], { type: 'application/json' }), `estimates_backup_${today}.json`);
   localStorage.setItem('estimates_last_backup', new Date().toISOString());
 }
 
@@ -198,12 +194,8 @@ function exportSavedEstimates() {
   const list = getSavedEstimates();
   if (list.length === 0) { showToast('保存済み見積がありません'); return; }
   const json = JSON.stringify(list, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
   const date = new Date().toISOString().split('T')[0];
-  a.href = url; a.download = `estimates_backup_${date}.json`; a.click();
-  URL.revokeObjectURL(url);
+  downloadBlob(new Blob([json], { type: 'application/json' }), `estimates_backup_${date}.json`);
   showToast(`${list.length}件の見積をバックアップしました`);
 }
 

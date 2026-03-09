@@ -10,21 +10,23 @@ const TM_LS_SETTINGS = 'dbm_db_settings_';
 const TM_LS_KEYWORDS = 'dbm_db_keywords_';
 const TM_LS_BUNRUI   = 'dbm_db_bunrui_';
 
-function tmLoadDbList() { try { const s = localStorage.getItem(TM_LS_LIST); return s ? JSON.parse(s) : []; } catch { return []; } }
-function tmSaveDbList(list) { localStorage.setItem(TM_LS_LIST, JSON.stringify(list)); }
-function tmLoadDbData(id) { try { const s = localStorage.getItem(TM_LS_DATA + id); return s ? JSON.parse(s) : []; } catch { return []; } }
-function tmSaveDbData(id, rows) { localStorage.setItem(TM_LS_DATA + id, JSON.stringify(rows)); }
+// ===== LOCAL STORAGE HELPERS =====
+function tmLoadLocal(key, def) { try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : def; } catch { return def; } }
+function tmLoadDbList()            { return tmLoadLocal(TM_LS_LIST, []); }
+function tmSaveDbList(list)        { localStorage.setItem(TM_LS_LIST, JSON.stringify(list)); }
+function tmLoadDbData(id)          { return tmLoadLocal(TM_LS_DATA     + id, []); }
+function tmSaveDbData(id, rows)    { localStorage.setItem(TM_LS_DATA     + id, JSON.stringify(rows)); }
+function tmLoadKoshuData(id)       { return tmLoadLocal(TM_LS_KOSHU    + id, []); }
+function tmSaveKoshuData(id, rows) { localStorage.setItem(TM_LS_KOSHU    + id, JSON.stringify(rows)); }
+function tmLoadSettingsData(id)    { return tmLoadLocal(TM_LS_SETTINGS + id, null); }
+function tmSaveSettingsData(id, s) { localStorage.setItem(TM_LS_SETTINGS + id, JSON.stringify(s)); }
+function tmLoadKeywordsData(id)    { return tmLoadLocal(TM_LS_KEYWORDS + id, []); }
+function tmSaveKeywordsData(id, r) { localStorage.setItem(TM_LS_KEYWORDS + id, JSON.stringify(r)); }
+function tmLoadBunruiData(id)      { return tmLoadLocal(TM_LS_BUNRUI   + id, { rows: [], keywords: [] }); }
+function tmSaveBunruiData(id, d)   { localStorage.setItem(TM_LS_BUNRUI   + id, JSON.stringify(d)); }
 function tmDeleteDbData(id) {
   [TM_LS_DATA, TM_LS_KOSHU, TM_LS_SETTINGS, TM_LS_KEYWORDS, TM_LS_BUNRUI].forEach(k => localStorage.removeItem(k + id));
 }
-function tmLoadKoshuData(id) { try { const s = localStorage.getItem(TM_LS_KOSHU + id); return s ? JSON.parse(s) : []; } catch { return []; } }
-function tmSaveKoshuData(id, rows) { localStorage.setItem(TM_LS_KOSHU + id, JSON.stringify(rows)); }
-function tmLoadSettingsData(id) { try { const s = localStorage.getItem(TM_LS_SETTINGS + id); return s ? JSON.parse(s) : null; } catch { return null; } }
-function tmSaveSettingsData(id, s) { localStorage.setItem(TM_LS_SETTINGS + id, JSON.stringify(s)); }
-function tmLoadKeywordsData(id) { try { const s = localStorage.getItem(TM_LS_KEYWORDS + id); return s ? JSON.parse(s) : []; } catch { return []; } }
-function tmSaveKeywordsData(id, rows) { localStorage.setItem(TM_LS_KEYWORDS + id, JSON.stringify(rows)); }
-function tmLoadBunruiData(id) { try { const s = localStorage.getItem(TM_LS_BUNRUI + id); return s ? JSON.parse(s) : { rows: [], keywords: [] }; } catch { return { rows: [], keywords: [] }; } }
-function tmSaveBunruiData(id, data) { localStorage.setItem(TM_LS_BUNRUI + id, JSON.stringify(data)); }
 
 // ===== CONSTANTS =====
 const TM_DEFAULT_CATEGORIES = [
@@ -443,8 +445,6 @@ function tmDeleteKoshuRow(idx) {
 function tmOnKoshuChange(idx, field, value) {
   if (field === 'order' || field === 'miscRate') {
     tmCurrentKoshu[idx][field] = parseFloat(value) || 0;
-  } else if (field === 'rateMode') {
-    tmCurrentKoshu[idx][field] = value;
   } else {
     tmCurrentKoshu[idx][field] = value;
   }
@@ -793,10 +793,7 @@ function tmHandleImportFile(event) {
       const { rows, skipped } = tmParseZaihoSheet(data);
       if (rows.length === 0) { alert('取り込める品目がありませんでした。\n検出列: ' + Object.keys(data[0]).join(', ')); return; }
 
-      const sh = sn => wb.Sheets[sn] ? XLSX.utils.sheet_to_json(wb.Sheets[sn]) : null;
-      const koshu  = sh('工種マスタ')     ? tmParseKoshuSheet(sh('工種マスタ'))       : [];
-      const kw     = sh('キーワードマスタ') ? tmParseKeywordsSheet(sh('キーワードマスタ')) : { v2:[], v3:[] };
-      const bunrui = sh('分類マスタ')     ? tmParseBunruiSheet(sh('分類マスタ'))      : [];
+      const { koshu, kw, bunrui } = tmParseAllSheets(wb.Sheets);
 
       // 設定（労務単価マスタ）
       let settings = tmDefaultSettings();
@@ -836,10 +833,7 @@ async function tmHandleZipImport(file) {
     const { rows, skipped } = tmParseZaihoSheet(XLSX.utils.sheet_to_json(sheets['資材マスタ']));
     if (rows.length === 0) { alert('資材マスタに取り込める品目がありませんでした。'); return; }
 
-    const sh = sn => sheets[sn] ? XLSX.utils.sheet_to_json(sheets[sn]) : null;
-    const koshu  = sh('工種マスタ')     ? tmParseKoshuSheet(sh('工種マスタ'))       : [];
-    const kw     = sh('キーワードマスタ') ? tmParseKeywordsSheet(sh('キーワードマスタ')) : { v2:[], v3:[] };
-    const bunrui = sh('分類マスタ')     ? tmParseBunruiSheet(sh('分類マスタ'))      : [];
+    const { koshu, kw, bunrui } = tmParseAllSheets(sheets);
 
     const name = file.name.replace(/\.zip$/i,'');
     tmSaveImportedTridge(name, `ZIPインポート (${rows.length}品目)`, rows, skipped, koshu, kw, bunrui, tmDefaultSettings());
@@ -847,6 +841,16 @@ async function tmHandleZipImport(file) {
     alert('ZIPインポートエラー: ' + err.message);
     console.error(err);
   }
+}
+
+/** 工種・キーワード・分類マスタをシートオブジェクトから一括パース（2箇所の重複を統合） */
+function tmParseAllSheets(sheets) {
+  const sh = sn => sheets[sn] ? XLSX.utils.sheet_to_json(sheets[sn]) : null;
+  return {
+    koshu:  sh('工種マスタ')     ? tmParseKoshuSheet(sh('工種マスタ'))        : [],
+    kw:     sh('キーワードマスタ') ? tmParseKeywordsSheet(sh('キーワードマスタ')) : { v2:[], v3:[] },
+    bunrui: sh('分類マスタ')     ? tmParseBunruiSheet(sh('分類マスタ'))       : [],
+  };
 }
 
 function tmParseZaihoSheet(data) {

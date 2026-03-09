@@ -1,7 +1,27 @@
 // ===== MATERIAL SEARCH =====
+const CAT_LABELS = {cable:'電線',conduit:'管',device:'器具',box:'BOX',panel:'盤',fixture:'照明',dimmer:'調光',fire:'火報',ground:'接地',accessories:'付属'};
+
 let searchTargetItemId = null;
 let _searchResults = [];
 let _suggestMatches = [];
+
+// カテゴリフィルタを CATEGORY_MASTER から動的生成
+function initCatFilter() {
+  const sel = document.getElementById('searchCatFilter');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">全カテゴリ</option>';
+  if (CATEGORY_MASTER && CATEGORY_MASTER.length > 0) {
+    CATEGORY_MASTER.forEach(cat => {
+      const opt = document.createElement('option');
+      opt.value = cat.catId;
+      opt.textContent = cat.catName;
+      sel.appendChild(opt);
+    });
+  }
+  // 値を復元（あれば）
+  if (current) sel.value = current;
+}
 
 function openSearchModal(itemId) {
   searchTargetItemId = itemId;
@@ -73,6 +93,29 @@ function closeSearchModal() {
   searchTargetItemId = null;
 }
 
+// ===== 共通ヘルパー =====
+
+/** 複数キーワードAND検索 */
+function filterMaterialsByTerms(materials, query, limit = null) {
+  if (!query || query.length < 1) return limit ? materials.slice(0, limit) : materials;
+  const terms = norm(query).split(/\s+/);
+  const filtered = materials.filter(m => {
+    const text = norm(m.n + ' ' + m.s);
+    return terms.every(t => text.includes(t));
+  });
+  return limit ? filtered.slice(0, limit) : filtered;
+}
+
+/** 材料を品目に反映（selectMaterial / applySuggestion 共通） */
+function applyMaterialToItem(item, m) {
+  item.name     = m.n;
+  item.spec     = m.s;
+  item.unit     = m.u;
+  item.price    = m.ep;
+  item.bukariki = findBukariki(m.n, m.s || '').value;
+  if (item.qty) item.amount = (parseFloat(item.qty) || 0) * m.ep;
+}
+
 function searchMaterial() {
   const query = norm(document.getElementById('searchQuery').value).trim();
   const catFilter = document.getElementById('searchCatFilter').value;
@@ -82,33 +125,16 @@ function searchMaterial() {
 
   let results = MATERIAL_DB;
 
-  if (catFilter) {
-    results = results.filter(m => m.c === catFilter);
-  }
+  if (catFilter) results = results.filter(m => m.c === catFilter);
 
   // 分類フィルタ（小→中→大の順で優先）
-  if (shoId) {
-    results = results.filter(m => m.shoId === shoId);
-  } else if (chuId) {
-    results = results.filter(m => m.chuId === chuId);
-  } else if (daiId) {
-    results = results.filter(m => m.daiId === daiId);
-  }
+  if (shoId)      results = results.filter(m => m.shoId === shoId);
+  else if (chuId) results = results.filter(m => m.chuId === chuId);
+  else if (daiId) results = results.filter(m => m.daiId === daiId);
 
-  if (query.length >= 1) {
-    const terms = query.split(/\s+/);
-    results = results.filter(m => {
-      const text = norm(m.n + ' ' + m.s);
-      return terms.every(t => text.includes(t));
-    });
-  }
-  
-  results = results.slice(0, 50); // Limit display
-  
+  results = filterMaterialsByTerms(results, query, 50);
+
   document.getElementById('searchCount').textContent = `${results.length}件表示（全${MATERIAL_DB.length}品目）`;
-  
-  const CAT_LABELS = {cable:'電線',conduit:'管',device:'器具',box:'BOX',panel:'盤',fixture:'照明',dimmer:'調光',fire:'火報',ground:'接地',accessories:'付属'};
-  
   document.getElementById('searchBody').innerHTML = results.map((m, i) => `
     <tr>
       <td style="font-size:11px;"><span class="tag tag-blue" style="margin-right:4px;">${CAT_LABELS[m.c]||m.c}</span>${esc(m.n)}</td>
@@ -120,36 +146,21 @@ function searchMaterial() {
       <td><button class="btn btn-primary btn-sm" style="padding:3px 8px;font-size:10px;" onclick="selectMaterial(${i})">選択</button></td>
     </tr>
   `).join('');
-  
-  // Store filtered results for selection
   _searchResults = results;
 }
 
 function selectMaterial(resultIdx) {
   const m = _searchResults[resultIdx];
   if (!m) return;
-  
-  const buk = findBukariki(m.n, m.s || '');
 
   saveUndoState();
   if (searchTargetItemId !== null) {
-    // Update existing item
-    const list = items[currentCat];
-    const item = list.find(i => i.id === searchTargetItemId);
-    if (item) {
-      item.name = m.n;
-      item.spec = m.s;
-      item.unit = m.u;
-      item.price = m.ep;
-      item.bukariki = buk.value;
-      if (item.qty) item.amount = (parseFloat(item.qty) || 0) * m.ep;
-    }
+    const item = (items[currentCat] || []).find(i => i.id === searchTargetItemId);
+    if (item) applyMaterialToItem(item, m);
   } else {
-    // Add new item
-    const id = itemIdCounter++;
     items[currentCat].push({
-      id, name: m.n, spec: m.s, qty: '', unit: m.u,
-      price: m.ep, amount: 0, note: '', bukariki: buk.value
+      id: itemIdCounter++, name: m.n, spec: m.s, qty: '', unit: m.u,
+      price: m.ep, amount: 0, note: '', bukariki: findBukariki(m.n, m.s || '').value
     });
   }
 
@@ -160,28 +171,17 @@ function selectMaterial(resultIdx) {
 }
 
 // ===== INLINE SUGGESTION (on name input) =====
-let activeSuggestId = null;
 
 function showSuggestions(itemId, query) {
   const el = document.getElementById('suggest-' + itemId);
   if (!el) return;
-  
-  if (!query || query.length < 2) {
+
+  const matches = filterMaterialsByTerms(MATERIAL_DB, query, 8);
+  if (!query || query.length < 2 || matches.length === 0) {
     el.classList.remove('show');
     return;
   }
-  
-  const terms = norm(query).split(/\s+/);
-  const matches = MATERIAL_DB.filter(m => {
-    const text = norm(m.n + ' ' + m.s);
-    return terms.every(t => text.includes(t));
-  }).slice(0, 8);
-  
-  if (matches.length === 0) {
-    el.classList.remove('show');
-    return;
-  }
-  
+
   el.innerHTML = matches.map((m, i) => `
     <div class="suggest-item" onmousedown="applySuggestion(${itemId}, ${i})">
       <span><span class="s-name">${m.n}</span> <span class="s-spec">${m.s}</span></span>
@@ -190,7 +190,6 @@ function showSuggestions(itemId, query) {
   `).join('');
   el.classList.add('show');
   _suggestMatches = matches;
-  activeSuggestId = itemId;
 }
 
 function hideSuggestions(itemId) {
@@ -203,18 +202,10 @@ function hideSuggestions(itemId) {
 function applySuggestion(itemId, matchIdx) {
   const m = _suggestMatches[matchIdx];
   if (!m) return;
-  
+
   saveUndoState();
-  const list = items[currentCat];
-  const item = list.find(i => i.id === itemId);
-  if (item) {
-    item.name = m.n;
-    item.spec = m.s;
-    item.unit = m.u;
-    item.price = m.ep;
-    item.bukariki = findBukariki(m.n, m.s || '').value;
-    if (item.qty) item.amount = (parseFloat(item.qty) || 0) * m.ep;
-  }
+  const item = (items[currentCat] || []).find(i => i.id === itemId);
+  if (item) applyMaterialToItem(item, m);
   renderItems();
   renderCatTabs();
 }

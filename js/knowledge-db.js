@@ -219,11 +219,7 @@ const knowledgeDB = (() => {
   // --- XLSXダウンロードヘルパー ---
   function downloadXLSX(wb, filename) {
     const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), filename);
   }
 
   // --- XLSXデータ構築ヘルパー（export / autoBackup 共有）---
@@ -545,13 +541,6 @@ const knowledgeDB = (() => {
       .trim();
   }
 
-  // --- 品目キーの正規化（品名+規格、規格は<以降除去） ---
-  function _normItemKey(name, spec) {
-    const n = norm(name || '').trim();
-    const s = norm(spec || '').replace(/<.*/, '').trim();
-    return s ? `${n}|${s}` : n;
-  }
-
   // --- 得意先別品目単価履歴取得 ---
   // 戻り値: { normKey → [{price, projectName, date}] }
   async function getClientItemHistory(clientName) {
@@ -565,7 +554,7 @@ const knowledgeDB = (() => {
         (rec.categories || []).forEach(cat => {
           (cat.items || []).forEach(item => {
             if (!item.name || !(parseFloat(item.price) > 0)) return;
-            const key = _normItemKey(item.name, item.spec);
+            const key = normItemKey(item.name, item.spec);
             if (!history[key]) history[key] = [];
             history[key].push({
               price: parseFloat(item.price),

@@ -253,16 +253,9 @@ const ExcelTemplateExport = (() => {
   // ファイルダウンロード
   // ================================================================
   function downloadFile(buffer) {
-    const blob = new Blob([buffer], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    });
-    const url = URL.createObjectURL(blob);
-    const a   = document.createElement('a');
-    a.href    = url;
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const safeName = (project.name || '新規').replace(/[\/\\:*?"<>|]/g, '');
-    a.download = '見積書_' + safeName + '_' + (project.date || '') + '.xlsx';
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, '見積書_' + safeName + '_' + (project.date || '') + '.xlsx');
   }
 
   return { exportFormatted };

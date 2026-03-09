@@ -695,12 +695,9 @@ function updateItem(id, field, value) {
 
     // 雑材料消耗品・運搬費：価格変更時に有効％をnoteへ自動反映
     if (field === 'price' && (item.name === '雑材料消耗品' || item.name === '運搬費')) {
-      const matTotal = list
-        .filter(i => !AUTO_NAMES.includes(i.name))
-        .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-      if (matTotal > 0 && price > 0) {
-        item.note = (price / matTotal * 100).toFixed(1) + '%';
-      }
+      const matTotal = list.filter(i => !AUTO_NAMES.includes(i.name))
+                          .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+      if (matTotal > 0 && price > 0) item.note = (price / matTotal * 100).toFixed(1) + '%';
     }
   }
 
@@ -709,9 +706,8 @@ function updateItem(id, field, value) {
     const m = value.trim().match(/^(\d+\.?\d*)%?$/);
     if (m) {
       const pct = parseFloat(m[1]);
-      const matTotal = list
-        .filter(i => !AUTO_NAMES.includes(i.name))
-        .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+      const matTotal = list.filter(i => !AUTO_NAMES.includes(i.name))
+                          .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
       if (matTotal > 0 && pct > 0) {
         const rounded = Math.round(matTotal * pct / 100 / 1000) * 1000;
         item.price  = rounded;
@@ -1481,7 +1477,7 @@ async function autoCreateEstimate() {
   let html = '';
   if (memo) {
     html += `<div style="margin-bottom:12px;padding:8px 12px;background:var(--accent-light);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--text-main);">
-      <span style="font-weight:600;">メモ:</span> ${memo.replace(/</g,'&lt;')}
+      <span style="font-weight:600;">メモ:</span> ${esc(memo)}
     </div>`;
   }
   html += '<div style="margin-bottom:12px;font-size:12px;color:var(--text-sub);">類似物件の品目を面積比で調整して自動投入します。候補を選んでください。</div>';
