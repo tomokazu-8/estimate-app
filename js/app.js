@@ -106,13 +106,17 @@ function navigate(panel, el) {
 }
 
 // ===== UNDO / REDO =====
-function saveUndoState() {
-  _undoStack.push({
+function _captureState() {
+  return {
     items: JSON.parse(JSON.stringify(items)),
-    itemIdCounter: itemIdCounter,
+    itemIdCounter,
     activeCategories: JSON.parse(JSON.stringify(activeCategories)),
-    customCatCounter: customCatCounter,
-  });
+    customCatCounter,
+  };
+}
+
+function saveUndoState() {
+  _undoStack.push(_captureState());
   if (_undoStack.length > 50) _undoStack.shift();
   _redoStack = []; // 新しい操作でRedoスタックをクリア
   document.getElementById('backBtn').style.display = '';
@@ -121,12 +125,7 @@ function saveUndoState() {
 
 function undoAction() {
   if (_undoStack.length === 0) return;
-  _redoStack.push({
-    items: JSON.parse(JSON.stringify(items)),
-    itemIdCounter: itemIdCounter,
-    activeCategories: JSON.parse(JSON.stringify(activeCategories)),
-    customCatCounter: customCatCounter,
-  });
+  _redoStack.push(_captureState());
   const state = _undoStack.pop();
   Object.keys(state.items).forEach(k => items[k] = state.items[k]);
   itemIdCounter = state.itemIdCounter;
@@ -143,12 +142,7 @@ function undoAction() {
 
 function redoAction() {
   if (_redoStack.length === 0) return;
-  _undoStack.push({
-    items: JSON.parse(JSON.stringify(items)),
-    itemIdCounter: itemIdCounter,
-    activeCategories: JSON.parse(JSON.stringify(activeCategories)),
-    customCatCounter: customCatCounter,
-  });
+  _undoStack.push(_captureState());
   const state = _redoStack.pop();
   Object.keys(state.items).forEach(k => items[k] = state.items[k]);
   itemIdCounter = state.itemIdCounter;
@@ -342,6 +336,12 @@ function removeCustomCategory(catId) {
 }
 
 // ===== CATEGORY ORDER / RATE OPERATIONS =====
+function _refreshCatPanel() {
+  renderCategoryManager();
+  renderSummary();
+  updateSummaryBar();
+}
+
 function moveCat(catId, direction) {
   const idx = activeCategories.findIndex(c => c.id === catId);
   if (idx === -1) return;
@@ -349,10 +349,8 @@ function moveCat(catId, direction) {
   if (newIdx < 0 || newIdx >= activeCategories.length) return;
   [activeCategories[idx], activeCategories[newIdx]] = [activeCategories[newIdx], activeCategories[idx]];
   saveActiveCategories();
-  renderCategoryManager();
   renderCatTabs();
-  renderSummary();
-  updateSummaryBar();
+  _refreshCatPanel();
 }
 
 function updateRatePct(catId, value) {
@@ -361,9 +359,7 @@ function updateRatePct(catId, value) {
   cat.ratePct = parseFloat(value) || 0;
   cat.fixedAmount = null; // % 変更時は手動金額をクリアして%連動に戻す
   saveActiveCategories();
-  renderCategoryManager();
-  renderSummary();
-  updateSummaryBar();
+  _refreshCatPanel();
 }
 
 function updateRateFixedAmount(catId, value) {
@@ -372,9 +368,7 @@ function updateRateFixedAmount(catId, value) {
   const trimmed = String(value).trim();
   cat.fixedAmount = (trimmed === '' || isNaN(parseFloat(trimmed))) ? null : parseFloat(trimmed);
   saveActiveCategories();
-  renderCategoryManager();
-  renderSummary();
-  updateSummaryBar();
+  _refreshCatPanel();
 }
 
 function clearRateFixedAmount(catId) {
@@ -382,9 +376,7 @@ function clearRateFixedAmount(catId) {
   if (!cat) return;
   cat.fixedAmount = null;
   saveActiveCategories();
-  renderCategoryManager();
-  renderSummary();
-  updateSummaryBar();
+  _refreshCatPanel();
 }
 
 function updateRateIncludeLabor(catId, checked) {
@@ -392,9 +384,7 @@ function updateRateIncludeLabor(catId, checked) {
   if (!cat) return;
   cat.rateIncludeLabor = checked;
   saveActiveCategories();
-  renderCategoryManager();
-  renderSummary();
-  updateSummaryBar();
+  _refreshCatPanel();
 }
 
 function getCatTotal(catId) {

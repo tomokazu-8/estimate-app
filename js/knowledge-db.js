@@ -25,85 +25,69 @@ const knowledgeDB = (() => {
     });
   }
 
-  // --- 保存 ---
-  async function save(record) {
+  // --- DB操作共通ラッパー ---
+  async function _withStore(mode, fn) {
     const db = await open();
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const tx = db.transaction(STORE_NAME, mode);
       const store = tx.objectStore(STORE_NAME);
+      tx.oncomplete = () => db.close();
+      tx.onerror   = () => { db.close(); reject(tx.error); };
+      fn(store, resolve, reject);
+    });
+  }
+
+  // --- 保存 ---
+  function save(record) {
+    return _withStore('readwrite', (store, resolve, reject) => {
       const req = store.add(record);
       req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-      tx.oncomplete = () => db.close();
+      req.onerror   = () => reject(req.error);
     });
   }
 
   // --- 全件取得 ---
-  async function getAll() {
-    const db = await open();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
+  function getAll() {
+    return _withStore('readonly', (store, resolve) => {
       const req = store.getAll();
       req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-      tx.oncomplete = () => db.close();
     });
   }
 
   // --- 1件取得 ---
-  async function getById(id) {
-    const db = await open();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
+  function getById(id) {
+    return _withStore('readonly', (store, resolve) => {
       const req = store.get(id);
       req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-      tx.oncomplete = () => db.close();
     });
   }
 
   // --- 削除 ---
-  async function remove(id) {
-    const db = await open();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
+  function remove(id) {
+    return _withStore('readwrite', (store, resolve) => {
       const req = store.delete(id);
       req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
-      tx.oncomplete = () => db.close();
     });
   }
 
   // --- 除外フラグ更新 ---
-  async function setExcluded(id, bool) {
-    const db = await open();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
+  function setExcluded(id, bool) {
+    return _withStore('readwrite', (store, resolve) => {
       const req = store.get(id);
       req.onsuccess = () => {
         const rec = req.result;
         rec.excluded = bool;
         store.put(rec);
+        resolve();
       };
-      tx.oncomplete = () => { db.close(); resolve(); };
-      tx.onerror = () => { db.close(); reject(tx.error); };
     });
   }
 
   // --- 件数取得 ---
-  async function count() {
-    const db = await open();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
+  function count() {
+    return _withStore('readonly', (store, resolve) => {
       const req = store.count();
       req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-      tx.oncomplete = () => db.close();
     });
   }
 
