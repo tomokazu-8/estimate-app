@@ -84,7 +84,7 @@ function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 function normItemKey(name, spec) {
   const n = norm(name || '').trim();
