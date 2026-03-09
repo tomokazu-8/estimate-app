@@ -1084,17 +1084,18 @@ async function renderDBTable() {
   // テーブル描画
   const tbody = document.getElementById('dbBody');
   tbody.innerHTML = allRecords.map(rec => {
-    const p = rec.project;
+    const p = rec.project || {};
     const area = parseFloat(p.areaTsubo) || 0;
     const tp = area > 0 ? '¥'+formatNum(Math.round(rec.grandTotal / area)) : '—';
     const hasDetail = rec.categories && rec.categories.some(c => c.items && c.items.length > 0);
     const excluded = !!rec.excluded;
+    const dateLabel = rec.registeredAt || (rec.source ? `（${rec.source}）` : '—');
     return `<tr style="${excluded ? 'opacity:0.4;' : ''}">
-      <td style="font-size:11px;">${rec.registeredAt || '—'}</td>
-      <td>${p.name}</td>
-      <td>${p.struct}</td>
-      <td><span class="tag ${p.type==='新築'?'tag-blue':'tag-amber'}">${p.type}</span></td>
-      <td>${p.usage||''}</td>
+      <td style="font-size:11px;color:${rec.registeredAt ? '' : 'var(--text-sub)'};">${dateLabel}</td>
+      <td>${esc(p.name||'')}</td>
+      <td>${esc(p.struct||'')}</td>
+      <td><span class="tag ${p.type==='新築'?'tag-blue':'tag-amber'}">${esc(p.type||'')}</span></td>
+      <td>${esc(p.usage||'')}</td>
       <td class="td-right">¥${formatNum(rec.grandTotal)}</td>
       <td class="td-right">${rec.profitRate}%</td>
       <td class="td-right">${tp}</td>
@@ -1119,42 +1120,47 @@ async function toggleExclude(id, currentExcluded) {
 
 // ナレッジ詳細表示
 async function showKnowledgeDetail(id) {
-  const rec = await knowledgeDB.getById(id);
-  if (!rec) { showToast('レコードが見つかりません'); return; }
+  try {
+    const rec = await knowledgeDB.getById(id);
+    if (!rec) { showToast('レコードが見つかりません'); return; }
 
-  const p = rec.project;
-  let html = `<div style="margin-bottom:12px;">
-    <div style="font-weight:600;font-size:15px;margin-bottom:4px;">${p.name}</div>
-    <div style="font-size:11px;color:var(--text-sub);">${p.struct} / ${p.type} / ${p.usage || '—'} / ${p.areaTsubo ? p.areaTsubo+'坪' : '面積不明'}</div>
-    <div style="font-size:11px;color:var(--text-sub);">登録日: ${rec.registeredAt} / 合計: ¥${formatNum(rec.grandTotal)} / 利益率: ${rec.profitRate}%</div>
-  </div>`;
+    const p = rec.project || {};
+    const registeredAt = rec.registeredAt || '—';
+    let html = `<div style="margin-bottom:12px;">
+      <div style="font-weight:600;font-size:15px;margin-bottom:4px;">${esc(p.name || '（物件名なし）')}</div>
+      <div style="font-size:11px;color:var(--text-sub);">${esc(p.struct||'—')} / ${esc(p.type||'—')} / ${esc(p.usage||'—')} / ${p.areaTsubo ? p.areaTsubo+'坪' : '面積不明'}</div>
+      <div style="font-size:11px;color:var(--text-sub);">登録日: ${registeredAt} / 合計: ¥${formatNum(rec.grandTotal||0)} / 利益率: ${rec.profitRate||0}%</div>
+    </div>`;
 
-  if (rec.categories && rec.categories.length > 0) {
-    rec.categories.forEach(cat => {
-      if (!cat.items || cat.items.length === 0) return;
-      html += `<div style="margin-bottom:12px;">
-        <div style="font-weight:600;font-size:12px;background:var(--bg);padding:6px 10px;border-radius:4px;margin-bottom:4px;">
-          ${cat.name}（小計: ¥${formatNum(cat.subtotal)}）
-        </div>
-        <table style="font-size:11px;"><thead><tr>
-          <th>品名</th><th>規格</th><th style="text-align:right">数量</th><th>単位</th><th style="text-align:right">単価</th><th style="text-align:right">金額</th>
-        </tr></thead><tbody>`;
-      cat.items.forEach(i => {
-        html += `<tr>
-          <td>${i.name}</td><td>${i.spec||''}</td>
-          <td class="td-right">${i.qty||''}</td><td>${i.unit||''}</td>
-          <td class="td-right">${i.price ? '¥'+formatNum(i.price) : ''}</td>
-          <td class="td-right">${i.amount ? '¥'+formatNum(Math.round(i.amount)) : ''}</td>
-        </tr>`;
+    const cats = (rec.categories || []).filter(c => c.items && c.items.length > 0);
+    if (cats.length > 0) {
+      cats.forEach(cat => {
+        html += `<div style="margin-bottom:12px;">
+          <div style="font-weight:600;font-size:12px;background:var(--bg);padding:6px 10px;border-radius:4px;margin-bottom:4px;">
+            ${esc(cat.name||'')}（小計: ¥${formatNum(cat.subtotal||0)}）
+          </div>
+          <table style="font-size:11px;"><thead><tr>
+            <th>品名</th><th>規格</th><th style="text-align:right">数量</th><th>単位</th><th style="text-align:right">単価</th><th style="text-align:right">金額</th>
+          </tr></thead><tbody>`;
+        cat.items.forEach(i => {
+          html += `<tr>
+            <td>${esc(i.name||'')}</td><td>${esc(i.spec||'')}</td>
+            <td class="td-right">${i.qty||''}</td><td>${esc(i.unit||'')}</td>
+            <td class="td-right">${i.price ? '¥'+formatNum(i.price) : ''}</td>
+            <td class="td-right">${i.amount ? '¥'+formatNum(Math.round(i.amount)) : ''}</td>
+          </tr>`;
+        });
+        html += '</tbody></table></div>';
       });
-      html += '</tbody></table></div>';
-    });
-  } else {
-    html += '<p style="color:var(--text-sub);font-size:12px;">品目明細なし（レガシーデータ）</p>';
-  }
+    } else {
+      html += '<p style="color:var(--text-sub);font-size:12px;">品目明細なし（レガシーデータ）</p>';
+    }
 
-  document.getElementById('knowledgeDetailBody').innerHTML = html;
-  document.getElementById('knowledgeDetailModal').classList.add('show');
+    document.getElementById('knowledgeDetailBody').innerHTML = html;
+    document.getElementById('knowledgeDetailModal').classList.add('show');
+  } catch(e) {
+    showToast('詳細の表示に失敗しました: ' + e.message);
+  }
 }
 
 // ナレッジ削除
