@@ -53,10 +53,8 @@ function hmParseChecklist(wb) {
     const c1 = hmStr(r[1]);
     const c2 = hmStr(r[2]);
 
-    // ページ繰り返し検出（2ページ目以降はスキップ）
+    // ページヘッダー行はスキップ（複数ページにまたがるためbreakしない）
     if (c0.includes('見積明細チェックリスト') || c1 === '見積明細チェックリスト') {
-      headerCount++;
-      if (headerCount >= 2) break;
       continue;
     }
 
@@ -351,6 +349,7 @@ function hmShowPreview(records) {
   tbody.innerHTML = records.map((r, i) => {
     const p = r.project;
     const itemCount = r.categories.reduce((s, c) => s + c.items.length, 0);
+    const tsuboFactor = 3.30579;
     return `<tr>
       <td style="font-size:11px;">${esc(p.name || r.folderName)}</td>
       <td style="font-size:11px;">${esc(p.type||'—')}</td>
@@ -358,12 +357,15 @@ function hmShowPreview(records) {
       <td style="font-size:11px;">
         <input type="text" value="${esc(p.struct)}" placeholder="RC造"
           oninput="document.getElementById('hmPreviewArea')._records[${i}].project.struct=this.value"
-          style="width:60px;font-size:11px;padding:2px 4px;border:1px solid var(--border);border-radius:3px;">
+          style="width:55px;font-size:11px;padding:2px 4px;border:1px solid var(--border);border-radius:3px;">
       </td>
       <td style="font-size:11px;">
-        <input type="number" value="${p.areaTsubo}" placeholder="坪"
-          oninput="document.getElementById('hmPreviewArea')._records[${i}].project.areaTsubo=this.value"
-          style="width:55px;font-size:11px;padding:2px 4px;border:1px solid var(--border);border-radius:3px;">
+        <input type="number" id="hmTsubo${i}" value="${p.areaTsubo}" placeholder="坪"
+          oninput="(function(v){const r=document.getElementById('hmPreviewArea')._records[${i}];r.project.areaTsubo=v;const sqm=v?(+v*${tsuboFactor}).toFixed(1):'';r.project.areaSqm=sqm;document.getElementById('hmSqm${i}').value=sqm;})(this.value)"
+          style="width:50px;font-size:11px;padding:2px 4px;border:1px solid var(--border);border-radius:3px;">
+        <input type="number" id="hmSqm${i}" value="${p.areaSqm}" placeholder="㎡"
+          oninput="(function(v){const r=document.getElementById('hmPreviewArea')._records[${i}];r.project.areaSqm=v;const tsubo=v?(+v/${tsuboFactor}).toFixed(1):'';r.project.areaTsubo=tsubo;document.getElementById('hmTsubo${i}').value=tsubo;})(this.value)"
+          style="width:50px;font-size:11px;padding:2px 4px;border:1px solid var(--border);border-radius:3px;">
       </td>
       <td class="td-right" style="font-size:11px;">¥${formatNum(r.grandTotal)}</td>
       <td class="td-right" style="font-size:11px;">${r.profitRate}%</td>
