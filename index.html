@@ -547,6 +547,7 @@
               <button class="btn btn-secondary btn-sm" onclick="knowledgeExportXLSX()">📥 Excelエクスポート</button>
               <button class="btn btn-secondary btn-sm" onclick="document.getElementById('knowledgeImportFile').click()">📤 インポート</button>
               <input type="file" id="knowledgeImportFile" accept=".json,.xlsx" style="display:none;" onchange="knowledgeImportFile(this.files[0])">
+              <button class="btn btn-secondary btn-sm" onclick="honmaruOpenModal()">🏗️ 本丸インポート</button>
             </div>
           </div>
           <div class="card-body">
@@ -826,6 +827,62 @@
   </div>
 </div>
 
+<!-- 本丸インポート Modal -->
+<div class="modal-overlay" id="hmImportModal">
+  <div class="modal" style="max-width:860px;">
+    <div class="modal-header">
+      <span class="modal-title">🏗️ 本丸EXインポート</span>
+      <button class="modal-close" onclick="document.getElementById('hmImportModal').classList.remove('show')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:16px 20px;">
+      <p style="font-size:12px;color:var(--text-sub);margin-bottom:12px;">
+        物件フォルダ（または複数物件が入った親フォルダ）を選択してください。<br>
+        フォルダ内の「見積明細チェックリスト」「実行予算書(表紙)」「実行予算書(機器)」を自動で読み込みます。
+      </p>
+      <div style="margin-bottom:12px;">
+        <input type="file" id="hmFolderInput" webkitdirectory multiple style="display:none;"
+          onchange="honmaruHandleFiles(this.files)">
+        <button class="btn btn-primary" onclick="document.getElementById('hmFolderInput').click()">
+          📁 フォルダを選択
+        </button>
+      </div>
+
+      <!-- 処理中表示 -->
+      <div id="hmProgressArea" style="display:none;padding:12px;background:var(--bg);border-radius:6px;margin-bottom:12px;">
+        <span id="hmProgressText" style="font-size:13px;">処理中...</span>
+      </div>
+
+      <!-- プレビューテーブル -->
+      <div id="hmPreviewArea" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-size:13px;font-weight:600;"><span id="hmPreviewCount">0</span>件の物件が見つかりました</span>
+          <span style="font-size:11px;color:var(--text-sub);">構造・坪数は手入力で補完できます（類似物件検索の精度向上）</span>
+        </div>
+        <div style="overflow-x:auto;max-height:340px;overflow-y:auto;">
+          <table style="font-size:11px;width:100%;border-collapse:collapse;">
+            <thead>
+              <tr style="background:var(--bg);position:sticky;top:0;">
+                <th style="text-align:left;padding:4px 6px;">物件名</th>
+                <th style="padding:4px 6px;">種別</th>
+                <th style="padding:4px 6px;">用途</th>
+                <th style="padding:4px 6px;">構造</th>
+                <th style="padding:4px 6px;">坪数</th>
+                <th style="text-align:right;padding:4px 6px;">合計金額</th>
+                <th style="text-align:right;padding:4px 6px;">利益率</th>
+                <th style="text-align:right;padding:4px 6px;">品目数</th>
+              </tr>
+            </thead>
+            <tbody id="hmPreviewBody"></tbody>
+          </table>
+        </div>
+        <div style="margin-top:14px;text-align:right;">
+          <button class="btn btn-primary" onclick="honmaruImportConfirm()">ナレッジDBに登録</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Knowledge Detail Modal -->
 <div class="modal-overlay" id="knowledgeDetailModal">
   <div class="modal" style="max-width:780px;">
@@ -1053,6 +1110,7 @@
 <!-- JS modules (読み込み順序が重要) -->
 <script src="js/data.js"></script>
 <script src="js/knowledge-db.js"></script>
+<script src="js/honmaru-import.js"></script>
 <script src="js/labor.js"></script>
 <script src="js/material-search.js"></script>
 <script src="js/calc-engine.js"></script>
