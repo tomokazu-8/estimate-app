@@ -1581,12 +1581,10 @@ async function applyAutoCreate(knowledgeId, areaRatio) {
     });
   });
 
-  // 最初の工種を表示
+  // 最初の工種を表示して明細入力パネルへ遷移
   const firstCat = activeCategories.find(c => c.active && !c.rateMode && items[c.id] && items[c.id].length > 0);
   if (firstCat) currentCat = firstCat.id;
 
-  renderCatTabs();
-  renderItems();
-  updateSummaryBar();
+  navigate('items');
   showToast(`${addedItems}品目を自動投入しました（元: ${rec.project.name}）`);
 }

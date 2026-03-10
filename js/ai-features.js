@@ -279,9 +279,7 @@ function applyAiDraft() {
   );
   if (firstCat) currentCat = firstCat.id;
 
-  renderCatTabs();
-  renderItems();
-  updateSummaryBar();
+  navigate('items');
   showToast(`${addedItems}品目をAIたたき台として投入しました`);
 }
 
@@ -617,11 +615,6 @@ function applyItemQueryPrice(itemId, listPrice, mode) {
 }
 
 // ===== 掛率チェック =====
-function _normItemKey(name, spec) {
-  const n = norm(name || '').trim();
-  const s = norm(spec || '').replace(/<.*/, '').trim();
-  return s ? `${n}|${s}` : n;
-}
 
 async function checkSellRates() {
   if (!project.client) {
@@ -642,7 +635,7 @@ async function checkSellRates() {
     (items[cat.id] || []).forEach(item => {
       const price = parseFloat(item.price);
       if (!item.name || !(price > 0)) return;
-      const key  = _normItemKey(item.name, item.spec);
+      const key  = normItemKey(item.name, item.spec);
       const past = history[key];
       if (!past || past.length === 0) return;
 
