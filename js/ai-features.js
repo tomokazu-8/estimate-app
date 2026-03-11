@@ -175,11 +175,12 @@ ${catNames}
 }
 
 【注意事項】
-- 工種名は必ず上記「使用できる工種」の中から選ぶこと
+- 工種名は必ず上記「使用できる工種」の中から選ぶこと（完全一致で使うこと、略称や別名は不可）
 - qty・price は整数の数値型（文字列不可）
 - 雑材料費・労務費・諸経費・小計 等の自動計算行は含めない（システムが自動追加する）
 - 実際の電気工事に使用する材料・機器のみ列挙する
-- 過去データがある場合は面積比を考慮して数量を調整する`;
+- 過去データがある場合は面積比を考慮して数量を調整する
+- 工事概要・メモに記載された内容（工事の範囲・特記事項・使用機器の指定等）を最優先で反映すること`;
 }
 
 function _showAiDraftPreview(draft, similarCount) {
@@ -270,7 +271,8 @@ function applyAiDraft() {
         unit:     item.unit  || '',
         price,
         amount:   qty * price,
-        bukariki: '',
+        bukariki1: '', bukariki2: '', bukariki3: '',
+        listPrice: '', basePrice: '', costRate: '', sellRate: '',
         note:     '',
       });
       addedItems++;
@@ -291,10 +293,10 @@ function applyAiDraft() {
     c => c.active && !c.rateMode && items[c.id] && items[c.id].filter(i => i.name).length > 0
   );
   if (firstCat) currentCat = firstCat.id;
+  console.log('[AI Draft] Applied:', addedItems, 'items, currentCat:', currentCat, 'skipped:', skippedCats);
 
+  // navigate('items') 内部で renderCatTabs() + renderItems() が呼ばれる
   navigate('items');
-  renderCatTabs();
-  renderItems();
   updateSummaryBar();
   showToast(`${addedItems}品目をAIたたき台として投入しました${skippedCats.length > 0 ? `（未一致工種: ${skippedCats.join('、')}）` : ''}`);
 }
