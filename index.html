@@ -86,9 +86,9 @@
 
   <!-- ナレッジDB復元バナー -->
   <div id="knowledgeRestoreBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9998;background:linear-gradient(135deg,#fef3c7,#fde68a);border-bottom:2px solid #f59e0b;padding:12px 20px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.15);">
-    <span style="font-size:14px;color:#92400e;font-weight:600;">ナレッジDBが空です — バックアップファイルから復元できます</span>
+    <span style="font-size:14px;color:#92400e;font-weight:600;">ナレッジDBが空です — <code style="font-size:13px;background:#fef9c3;padding:1px 5px;border-radius:3px;">knowledge_db.xlsx</code> を読み込んで復元できます</span>
     <input type="file" id="knowledgeRestoreInput" accept=".json,.xlsx" style="display:none;" onchange="restoreKnowledgeFromBanner(this.files[0]);">
-    <button onclick="document.getElementById('knowledgeRestoreInput').click();" style="margin-left:12px;padding:6px 16px;background:#f59e0b;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">復元する</button>
+    <button onclick="document.getElementById('knowledgeRestoreInput').click();" style="margin-left:12px;padding:6px 16px;background:#f59e0b;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">📂 knowledge_db.xlsx を選択</button>
     <button onclick="dismissRestoreBanner();" style="margin-left:8px;padding:6px 16px;background:transparent;color:#92400e;border:1px solid #d97706;border-radius:6px;cursor:pointer;font-size:13px;">閉じる</button>
   </div>
 

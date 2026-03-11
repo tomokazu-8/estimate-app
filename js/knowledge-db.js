@@ -207,56 +207,60 @@ const knowledgeDB = (() => {
   }
 
   // --- XLSXデータ構築ヘルパー（export / autoBackup 共有）---
-  // 実績DB形式 5シート: 物件マスタ / 工種サマリ / 明細データ / 自動計算パラメータ / 分析
+  // 6シート: 物件マスタ / 工種サマリ / 明細データ / 機器明細 / 労務単価 / 分析
   function buildXLSX(all) {
     const wb = XLSX.utils.book_new();
 
-    // Sheet1: 物件マスタ
+    // ===== Sheet1: 物件マスタ（全フィールド対応） =====
     const rows1 = [[
-      '物件ID','物件名','見積番号','構造','用途','階数','新築/改修',
-      '得意先','担当者',
-      '延床面積㎡','延床面積坪',
-      '見積合計(円)','原価合計(円)','利益率(%)',
-      '㎡単価(円)','坪単価(円)',
-      '諸経費金額','諸経費率%','値引き金額','値引き率%',
-      'データソース','有効',
+      '物件ID','登録日','データソース','物件名','見積番号','管理番号',
+      '得意先','担当者','構造','用途','新築/改修','延床面積㎡','延床面積坪','階数','施工場所',
+      '工期_着工日','工期_竣工日','支払条件','有効期限','見積メモ','使用パターン',
+      '見積日付','更新日',
+      '見積合計','原価合計','利益率%','粗利額','工事費合計','諸経費','諸経費率%','値引金額','値引率%',
+      '総工数','法定福利費','㎡単価','坪単価','有効',
     ]];
     all.forEach(r => {
       const p = r.project || {};
-      const sqm = parseFloat(p.areaSqm) || 0;
+      const sqm   = parseFloat(p.areaSqm)   || 0;
       const tsubo = parseFloat(p.areaTsubo) || 0;
-      const gt = r.grandTotal || 0;
+      const gt    = r.grandTotal || 0;
       rows1.push([
-        r.id, p.name || '', p.number || '', p.struct || '', p.usage || '',
-        p.floors || '', p.type || '',
-        p.client || '', p.person || '',
-        sqm || '', tsubo || '',
-        gt, r.costTotal || '', r.profitRate || '',
-        sqm ? Math.round(gt / sqm) : '', tsubo ? Math.round(gt / tsubo) : '',
-        r.miscExpenseAmt || '', r.miscExpensePct || '',
-        r.discountAmt || '', r.discountPct || '',
-        r.source || '', r.excluded ? '×' : '○',
+        r.id, r.registeredAt || '', r.source || '',
+        p.name || '', p.number || '', p.managementNumber || '',
+        p.client || '', p.person || '', p.struct || '', p.usage || '', p.type || '',
+        sqm || '', tsubo || '', p.floors || '', p.location || '',
+        p.workStart || '', p.workEnd || '', p.paymentTerms || '', p.validUntil || '',
+        p.memo || '', p.usePattern || '',
+        p.date || '', p.updatedAt || '',
+        gt, r.costTotal || 0, r.profitRate || 0, r.profitTotal || 0,
+        r.workTotal || 0, r.miscExpenseAmt || 0, r.miscExpensePct || 0,
+        r.discountAmt || 0, r.discountPct || 0,
+        r.totalLaborHours || 0, r.legalWelfare || 0,
+        sqm   ? Math.round(gt / sqm)   : '',
+        tsubo ? Math.round(gt / tsubo) : '',
+        r.excluded ? '×' : '○',
       ]);
     });
     const ws1 = XLSX.utils.aoa_to_sheet(rows1);
     ws1['!cols'] = [
-      {wch:6},{wch:28},{wch:10},{wch:6},{wch:10},{wch:4},{wch:8},
-      {wch:18},{wch:10},
-      {wch:8},{wch:8},
-      {wch:12},{wch:12},{wch:8},{wch:10},{wch:10},
-      {wch:10},{wch:8},{wch:10},{wch:8},
-      {wch:10},{wch:4},
+      {wch:6},{wch:10},{wch:10},{wch:28},{wch:10},{wch:10},
+      {wch:18},{wch:10},{wch:6},{wch:10},{wch:8},{wch:8},{wch:8},{wch:4},{wch:20},
+      {wch:10},{wch:10},{wch:12},{wch:10},{wch:20},{wch:12},
+      {wch:10},{wch:10},
+      {wch:12},{wch:12},{wch:8},{wch:12},{wch:12},{wch:10},{wch:8},{wch:10},{wch:8},
+      {wch:6},{wch:10},{wch:10},{wch:10},{wch:4},
     ];
     XLSX.utils.book_append_sheet(wb, ws1, '物件マスタ');
 
-    // Sheet2: 工種サマリ
+    // ===== Sheet2: 工種サマリ（粗利額・数量・単位を追加） =====
     const rows2 = [[
       '物件ID','物件名','工種名',
-      '見積金額(円)','原価金額(円)','利益率(%)',
-      '見積構成比(%)','原価構成比(%)','工数',
+      '見積金額','原価金額','利益率%','粗利額','工数','数量','単位',
+      '見積構成比%','原価構成比%',
     ]];
     all.forEach(r => {
-      const cats = r.categories || [];
+      const cats      = r.categories || [];
       const totalSell = cats.reduce((s, c) => s + (c.total || 0), 0) || r.grandTotal || 0;
       const totalCost = cats.reduce((s, c) => s + (c.costTotal || 0), 0) || r.costTotal || 0;
       cats.forEach(c => {
@@ -265,23 +269,28 @@ const knowledgeDB = (() => {
         rows2.push([
           r.id, (r.project || {}).name || '', c.name,
           ct, cc,
-          ct ? Math.round((ct - cc) / ct * 1000) / 10 : 0,
-          totalSell ? Math.round(ct / totalSell * 1000) / 10 : 0,
-          totalCost ? Math.round(cc / totalCost * 1000) / 10 : 0,
-          c.laborHours || '',
+          c.profitRate || (ct ? Math.round((ct - cc) / ct * 1000) / 10 : 0),
+          c.profitAmt  || Math.round(ct - cc),
+          c.laborHours || '', c.qty || '', c.unit || '',
+          totalSell ? Math.round(ct / totalSell * 1000) / 10 : '',
+          totalCost ? Math.round(cc / totalCost * 1000) / 10 : '',
         ]);
       });
     });
     const ws2 = XLSX.utils.aoa_to_sheet(rows2);
-    ws2['!cols'] = [{wch:6},{wch:28},{wch:20},{wch:12},{wch:12},{wch:8},{wch:10},{wch:10},{wch:6}];
+    ws2['!cols'] = [
+      {wch:6},{wch:28},{wch:20},
+      {wch:12},{wch:12},{wch:8},{wch:12},{wch:6},{wch:6},{wch:4},
+      {wch:10},{wch:10},
+    ];
     XLSX.utils.book_append_sheet(wb, ws2, '工種サマリ');
 
-    // Sheet3: 明細データ
+    // ===== Sheet3: 明細データ（集計コード・原価数量・利益率・備考を追加） =====
     const rows3 = [[
-      '物件ID','工種名','品名','規格','単位',
+      '物件ID','工種名','集計コード','品名','規格','単位',
       '見積数量','見積単価','見積金額',
-      '原価単価','原価金額',
-      '歩掛','工数',
+      '原価数量','原価単価','原価金額','利益率%',
+      '歩掛','工数','備考',
       '定価','見積掛率%','原価掛率%',
     ]];
     all.forEach(r => {
@@ -289,10 +298,10 @@ const knowledgeDB = (() => {
         (c.items || []).forEach(i => {
           rows3.push([
             r.id, c.name,
-            i.name, i.spec || '', i.unit,
-            i.qty, i.price, i.amount,
-            i.costPrice || '', i.costAmount || '',
-            i.bukariki || '', i.laborHours || '',
+            i.code || '', i.name || '', i.spec || '', i.unit || '',
+            i.qty || 0, i.price || 0, i.amount || 0,
+            i.costQty || '', i.costPrice || '', i.costAmount || '', i.profitRate || '',
+            i.bukariki || '', i.laborHours || '', i.note || '',
             i.listPrice || '', i.sellRate || '', i.costRate || '',
           ]);
         });
@@ -300,38 +309,70 @@ const knowledgeDB = (() => {
     });
     const ws3 = XLSX.utils.aoa_to_sheet(rows3);
     ws3['!cols'] = [
-      {wch:6},{wch:20},{wch:30},{wch:20},{wch:6},
+      {wch:6},{wch:20},{wch:8},{wch:30},{wch:20},{wch:6},
       {wch:8},{wch:10},{wch:12},
-      {wch:10},{wch:12},
-      {wch:6},{wch:6},
+      {wch:8},{wch:10},{wch:12},{wch:8},
+      {wch:6},{wch:6},{wch:20},
       {wch:10},{wch:8},{wch:8},
     ];
     XLSX.utils.book_append_sheet(wb, ws3, '明細データ');
 
-    // Sheet4: 自動計算パラメータ（ヘッダーのみ）
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-      ['物件ID','工種名','項目名','計算ルール','備考'],
-    ]), '自動計算パラメータ');
+    // ===== Sheet4: 機器明細（新規） =====
+    const rows4 = [[
+      '物件ID','品名','規格','単位','数量','基準単価','定価',
+      '見積掛率%','見積単価','見積金額',
+      '原価掛率%','原価単価','原価金額','目標原価',
+    ]];
+    all.forEach(r => {
+      (r.kikiList || []).forEach(k => {
+        rows4.push([
+          r.id, k.name || '', k.spec || '', k.unit || '',
+          k.qty || 0, k.basePrice || 0, k.listPrice || 0,
+          k.sellRate || 0, k.sellPrice || 0, k.sellAmount || 0,
+          k.costRate || 0, k.costPrice || 0, k.costAmount || 0, k.targetCost || 0,
+        ]);
+      });
+    });
+    const ws4 = XLSX.utils.aoa_to_sheet(rows4);
+    ws4['!cols'] = [
+      {wch:6},{wch:30},{wch:20},{wch:6},{wch:6},{wch:10},{wch:10},
+      {wch:8},{wch:10},{wch:12},
+      {wch:8},{wch:10},{wch:12},{wch:10},
+    ];
+    XLSX.utils.book_append_sheet(wb, ws4, '機器明細');
 
-    // Sheet5: 分析
-    const rows5 = [[
+    // ===== Sheet5: 労務単価（新規） =====
+    const rows5 = [['物件ID','職種名','見積単価','原価単価']];
+    all.forEach(r => {
+      const lr = (r.project || {}).laborRates || {};
+      Object.entries(lr).forEach(([type, rates]) => {
+        rows5.push([r.id, type, rates.sell || 0, rates.cost || 0]);
+      });
+    });
+    const ws5 = XLSX.utils.aoa_to_sheet(rows5);
+    ws5['!cols'] = [{wch:6},{wch:10},{wch:10},{wch:10}];
+    XLSX.utils.book_append_sheet(wb, ws5, '労務単価');
+
+    // ===== Sheet6: 分析（読み取り専用サマリー） =====
+    const rows6 = [[
       '物件名','構造','用途','新築/改修',
-      '見積合計','原価合計','利益率(%)',
+      '見積合計','原価合計','利益率%',
       '延床㎡','延床坪','㎡単価','坪単価',
     ]];
     all.forEach(r => {
-      const p = r.project || {};
-      const sqm = parseFloat(p.areaSqm) || 0;
-      const tsubo = parseFloat(p.areaTsubo) || 0;
-      const gt = r.grandTotal || 0;
-      rows5.push([
+      const p    = r.project || {};
+      const sqm  = parseFloat(p.areaSqm)   || 0;
+      const tsubo= parseFloat(p.areaTsubo) || 0;
+      const gt   = r.grandTotal || 0;
+      rows6.push([
         p.name || '', p.struct || '', p.usage || '', p.type || '',
         gt, r.costTotal || '', r.profitRate || '',
         sqm || '', tsubo || '',
-        sqm ? Math.round(gt / sqm) : '', tsubo ? Math.round(gt / tsubo) : '',
+        sqm   ? Math.round(gt / sqm)   : '',
+        tsubo ? Math.round(gt / tsubo) : '',
       ]);
     });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows5), '分析');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows6), '分析');
 
     return wb;
   }
@@ -342,11 +383,12 @@ const knowledgeDB = (() => {
     downloadXLSX(buildXLSX(all), '実績データベース_' + new Date().toISOString().split('T')[0] + '.xlsx');
   }
 
-  // --- 自動バックアップ（Excel出力時に呼ばれる）→ XLSX形式 ---
+  // --- 自動バックアップ（Excel出力時に呼ばれる）→ 固定名 knowledge_db.xlsx ---
+  // OneDriveフォルダに保存すればそのままクラウドバックアップ＆複数PC共有が可能
   async function autoBackup() {
     const all = await getAll();
     if (all.length === 0) return;
-    downloadXLSX(buildXLSX(all), '実績データベース_backup_' + new Date().toISOString().split('T')[0] + '.xlsx');
+    downloadXLSX(buildXLSX(all), 'knowledge_db.xlsx');
     localStorage.setItem('knowledge_last_backup', new Date().toISOString());
   }
 
@@ -373,132 +415,181 @@ const knowledgeDB = (() => {
     });
   }
 
-  // --- XLSXインポート（実績DB形式5シート or 旧2シート 自動判別） ---
+  // --- XLSXインポート（6シート新形式 / 5シート旧形式 / 2シート旧旧形式 自動判別） ---
   async function importXLSX(file) {
     const buf = await file.arrayBuffer();
-    const wb = XLSX.read(buf, { type: 'array' });
+    const wb  = XLSX.read(buf, { type: 'array' });
 
-    // フォーマット検出: 物件マスタシートがあれば新形式（5シート）
-    const isNewFmt = !!wb.Sheets['物件マスタ'];
-    const projSheet = isNewFmt ? '物件マスタ' : 'プロジェクト一覧';
+    // フォーマット検出
+    const hasKiki  = !!wb.Sheets['機器明細'];  // 新形式（6シート）
+    const isNewFmt = !!wb.Sheets['物件マスタ']; // 新/旧形式共通
+    const projSheet   = isNewFmt ? '物件マスタ' : 'プロジェクト一覧';
     const detailSheet = isNewFmt ? '明細データ' : '明細';
 
     const ws1 = wb.Sheets[projSheet];
     if (!ws1) throw new Error('「' + projSheet + '」シートが見つかりません');
     const projects = XLSX.utils.sheet_to_json(ws1);
 
-    const ws2 = wb.Sheets[detailSheet];
-    const details = ws2 ? XLSX.utils.sheet_to_json(ws2) : [];
-
-    // 工種サマリシートがあれば工数情報を取得
-    const koshuMap = {}; // pid → catName → { laborHours }
+    // ===== 工種サマリ =====
+    const koshuMap = {}; // pid → catName → { total, costTotal, profitRate, profitAmt, laborHours, qty, unit }
     if (wb.Sheets['工種サマリ']) {
-      const ksRows = XLSX.utils.sheet_to_json(wb.Sheets['工種サマリ']);
-      ksRows.forEach(row => {
+      XLSX.utils.sheet_to_json(wb.Sheets['工種サマリ']).forEach(row => {
         const pid = row['物件ID'];
         if (!pid) return;
         if (!koshuMap[pid]) koshuMap[pid] = {};
         koshuMap[pid][String(row['工種名'] || '')] = {
-          total: parseFloat(row['見積金額(円)']) || 0,
-          costTotal: parseFloat(row['原価金額(円)']) || 0,
-          laborHours: parseFloat(row['工数']) || 0,
+          total:      parseFloat(row['見積金額'])     || parseFloat(row['見積金額(円)']) || 0,
+          costTotal:  parseFloat(row['原価金額'])     || parseFloat(row['原価金額(円)']) || 0,
+          profitRate: parseFloat(row['利益率%'])      || 0,
+          profitAmt:  parseFloat(row['粗利額'])       || 0,
+          laborHours: parseFloat(row['工数'])         || 0,
+          qty:        parseFloat(row['数量'])         || 0,
+          unit:       String(row['単位'] || ''),
         };
       });
     }
 
-    // project_id → 工種名 → { catInfo, items[] }
-    const detailMap = {};
-    details.forEach(row => {
-      const pid = isNewFmt ? row['物件ID'] : row['project_id'];
-      if (!detailMap[pid]) detailMap[pid] = {};
-      const catName = String(row['工種名'] || '');
-      if (!detailMap[pid][catName]) {
-        detailMap[pid][catName] = {
-          total:      0,
-          costTotal:  0,
-          laborHours: 0,
-          items: [],
-        };
-      }
-      const sellAmt = parseFloat(isNewFmt ? row['見積金額'] : (row['見積金額'] || row['金額'])) || 0;
-      const costAmt = parseFloat(row['原価金額']) || 0;
-      detailMap[pid][catName].total += sellAmt;
-      detailMap[pid][catName].costTotal += costAmt;
-      detailMap[pid][catName].items.push({
-        name:       String(isNewFmt ? (row['品名'] || '') : (row['品目名'] || '')),
-        spec:       String(row['規格']     || ''),
-        qty:        parseFloat(isNewFmt ? row['見積数量'] : row['数量']) || 0,
-        unit:       String(row['単位']     || ''),
-        listPrice:  parseFloat(row['定価'])      || 0,
-        price:      parseFloat(row['見積単価'])  || parseFloat(row['単価']) || 0,
-        sellRate:   parseFloat(row['見積掛率%']) || 0,
-        costPrice:  parseFloat(row['原価単価'])  || 0,
-        costRate:   parseFloat(row['原価掛率%']) || 0,
-        amount:     sellAmt,
-        costAmount: costAmt,
-        bukariki:   parseFloat(row['歩掛'])      || 0,
-        laborHours: parseFloat(row['工数'])      || 0,
+    // ===== 機器明細 =====
+    const kikiMap = {}; // pid → kiki[]
+    if (hasKiki) {
+      XLSX.utils.sheet_to_json(wb.Sheets['機器明細']).forEach(row => {
+        const pid = row['物件ID'];
+        if (!pid) return;
+        if (!kikiMap[pid]) kikiMap[pid] = [];
+        kikiMap[pid].push({
+          name:       String(row['品名']    || ''),
+          spec:       String(row['規格']    || ''),
+          unit:       String(row['単位']    || ''),
+          qty:        parseFloat(row['数量'])      || 0,
+          basePrice:  parseFloat(row['基準単価'])  || 0,
+          listPrice:  parseFloat(row['定価'])      || 0,
+          sellRate:   parseFloat(row['見積掛率%']) || 0,
+          sellPrice:  parseFloat(row['見積単価'])  || 0,
+          sellAmount: parseFloat(row['見積金額'])  || 0,
+          costRate:   parseFloat(row['原価掛率%']) || 0,
+          costPrice:  parseFloat(row['原価単価'])  || 0,
+          costAmount: parseFloat(row['原価金額'])  || 0,
+          targetCost: parseFloat(row['目標原価'])  || 0,
+        });
       });
-    });
+    }
 
-    const db = await open();
-    const tx = db.transaction(STORE_NAME, 'readwrite');
+    // ===== 労務単価 =====
+    const laborMap = {}; // pid → { 職種名: { sell, cost } }
+    if (wb.Sheets['労務単価']) {
+      XLSX.utils.sheet_to_json(wb.Sheets['労務単価']).forEach(row => {
+        const pid  = row['物件ID'];
+        const type = String(row['職種名'] || '');
+        if (!pid || !type) return;
+        if (!laborMap[pid]) laborMap[pid] = {};
+        laborMap[pid][type] = {
+          sell: parseFloat(row['見積単価']) || 0,
+          cost: parseFloat(row['原価単価']) || 0,
+        };
+      });
+    }
+
+    // ===== 明細データ =====
+    const ws3 = wb.Sheets[detailSheet];
+    const detailMap = {}; // pid → catName → { items[] }
+    if (ws3) {
+      XLSX.utils.sheet_to_json(ws3).forEach(row => {
+        const pid     = isNewFmt ? row['物件ID'] : row['project_id'];
+        if (!detailMap[pid]) detailMap[pid] = {};
+        const catName = String(row['工種名'] || '');
+        if (!detailMap[pid][catName]) detailMap[pid][catName] = { items: [] };
+        const sellAmt = parseFloat(row['見積金額']) || 0;
+        const costAmt = parseFloat(row['原価金額']) || 0;
+        detailMap[pid][catName].items.push({
+          code:       String(row['集計コード'] || ''),
+          name:       String(isNewFmt ? (row['品名'] || '') : (row['品目名'] || '')),
+          spec:       String(row['規格']       || ''),
+          qty:        parseFloat(isNewFmt ? row['見積数量'] : row['数量']) || 0,
+          unit:       String(row['単位']       || ''),
+          price:      parseFloat(row['見積単価'])  || parseFloat(row['単価']) || 0,
+          amount:     sellAmt,
+          costQty:    parseFloat(row['原価数量'])   || 0,
+          costPrice:  parseFloat(row['原価単価'])   || 0,
+          costAmount: costAmt,
+          profitRate: parseFloat(row['利益率%'])    || 0,
+          bukariki:   parseFloat(row['歩掛'])       || 0,
+          laborHours: parseFloat(row['工数'])       || 0,
+          note:       String(row['備考']        || ''),
+          listPrice:  parseFloat(row['定価'])       || 0,
+          sellRate:   parseFloat(row['見積掛率%'])  || 0,
+          costRate:   parseFloat(row['原価掛率%'])  || 0,
+        });
+      });
+    }
+
+    const db    = await open();
+    const tx    = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
 
     let cnt = 0;
     for (const row of projects) {
-      const pid = isNewFmt ? row['物件ID'] : row['id'];
-      const catMap = detailMap[pid] || {};
-      // 工種サマリの工数情報で補完
-      const ksData = koshuMap[pid] || {};
-      const categories = Object.entries(catMap).map(([name, data]) => {
-        const ks = ksData[name] || {};
+      const pid    = isNewFmt ? row['物件ID'] : row['id'];
+      const ksData = koshuMap[pid]  || {};
+      const dMap   = detailMap[pid] || {};
+
+      // 工種一覧: 工種サマリ優先、明細データで補完
+      const catNames = new Set([...Object.keys(ksData), ...Object.keys(dMap)]);
+      const categories = [...catNames].map(name => {
+        const ks   = ksData[name] || {};
+        const data = dMap[name]   || { items: [] };
         return {
           name,
-          total:      ks.total || data.total,
-          costTotal:  ks.costTotal || data.costTotal,
-          laborHours: ks.laborHours || data.laborHours,
+          total:      ks.total      || 0,
+          costTotal:  ks.costTotal  || 0,
+          profitRate: ks.profitRate || 0,
+          profitAmt:  ks.profitAmt  || 0,
+          laborHours: ks.laborHours || 0,
+          qty:        ks.qty        || 0,
+          unit:       ks.unit       || '',
           items:      data.items,
         };
       });
 
       const record = {
-        registeredAt: String(row['登録日'] || ''),
+        registeredAt: String(row['登録日']      || ''),
         source:       String(row['データソース'] || ''),
-        project: isNewFmt ? {
-          number:    String(row['見積番号'] || ''),
-          name:      String(row['物件名']   || ''),
-          client:    String(row['得意先']   || ''),
-          person:    String(row['担当者']   || ''),
-          struct:    String(row['構造']     || ''),
-          type:      String(row['新築/改修'] || ''),
-          usage:     String(row['用途']     || ''),
-          areaTsubo: String(row['延床面積坪'] || ''),
-          areaSqm:   String(row['延床面積㎡'] || ''),
-          floors:    String(row['階数']     || ''),
-          date: '', location: '',
-        } : {
-          number:    String(row['見積番号'] || ''),
-          name:      String(row['物件名']   || ''),
-          client:    String(row['得意先']   || ''),
-          person:    String(row['担当者']   || ''),
-          struct:    String(row['構造']     || ''),
-          type:      String(row['種別'] || row['新築/改修'] || ''),
-          usage:     String(row['用途']     || ''),
-          areaTsubo: String(row['坪数'] || row['延床面積坪'] || ''),
-          areaSqm:   String(row['㎡数'] || row['延床面積㎡'] || ''),
-          date: '', floors: '', location: '',
+        excluded:     row['有効'] === '×',
+        project: {
+          number:          String(row['見積番号']    || ''),
+          managementNumber:String(row['管理番号']    || ''),
+          name:            String(row['物件名']      || ''),
+          date:            String(row['見積日付']    || ''),
+          updatedAt:       String(row['更新日']      || ''),
+          client:          String(row['得意先']      || ''),
+          person:          String(row['担当者']      || ''),
+          struct:          String(row['構造']        || ''),
+          type:            String(row['新築/改修'] || row['種別'] || ''),
+          usage:           String(row['用途']        || ''),
+          areaTsubo:       String(row['延床面積坪'] || row['坪数'] || ''),
+          areaSqm:         String(row['延床面積㎡'] || row['㎡数'] || ''),
+          floors:          String(row['階数']        || ''),
+          location:        String(row['施工場所']    || ''),
+          workStart:       String(row['工期_着工日'] || ''),
+          workEnd:         String(row['工期_竣工日'] || ''),
+          paymentTerms:    String(row['支払条件']    || ''),
+          validUntil:      String(row['有効期限']    || ''),
+          memo:            String(row['見積メモ']    || ''),
+          usePattern:      String(row['使用パターン'] || ''),
+          laborRates:      laborMap[pid] || {},
         },
-        workTotal:      parseFloat(row['工事費合計']) || parseFloat(row['見積合計(円)']) || 0,
-        miscExpenseAmt: parseFloat(row['諸経費金額'])  || 0,
+        grandTotal:     parseFloat(row['見積合計'])    || parseFloat(row['見積合計(円)']) || 0,
+        costTotal:      parseFloat(row['原価合計'])    || parseFloat(row['原価合計(円)']) || 0,
+        profitRate:     parseFloat(row['利益率%'])     || parseFloat(row['利益率(%)'])    || 0,
+        profitTotal:    parseFloat(row['粗利額'])      || 0,
+        workTotal:      parseFloat(row['工事費合計'])  || 0,
+        miscExpenseAmt: parseFloat(row['諸経費'])      || parseFloat(row['諸経費金額'])   || 0,
         miscExpensePct: parseFloat(row['諸経費率%'])   || 0,
-        discountAmt:    parseFloat(row['値引き金額'])  || 0,
-        discountPct:    parseFloat(row['値引き率%'])   || 0,
-        grandTotal:     parseFloat(row['見積合計(円)'] || row['税抜合計'] || row['合計金額']) || 0,
-        costTotal:      parseFloat(row['原価合計(円)'] || row['原価合計']) || 0,
-        profitRate:     parseFloat(row['利益率(%)'] || row['利益率%'] || row['利益率']) || 0,
+        discountAmt:    parseFloat(row['値引金額'])    || parseFloat(row['値引き金額'])   || 0,
+        discountPct:    parseFloat(row['値引率%'])     || parseFloat(row['値引き率%'])    || 0,
+        totalLaborHours:parseFloat(row['総工数'])      || 0,
+        legalWelfare:   parseFloat(row['法定福利費'])  || 0,
         categories,
-        excluded: row['有効'] === '×',
+        kikiList: kikiMap[pid] || [],
       };
       store.add(record);
       cnt++;
@@ -506,7 +597,7 @@ const knowledgeDB = (() => {
 
     return new Promise((resolve, reject) => {
       tx.oncomplete = () => { db.close(); resolve(cnt); };
-      tx.onerror = () => { db.close(); reject(tx.error); };
+      tx.onerror    = () => { db.close(); reject(tx.error); };
     });
   }
 

@@ -91,20 +91,37 @@
 
 ## ナレッジDB（knowledge-db.js）
 
-- IndexedDB `estimate-knowledge` に見積実績を蓄積
+- IndexedDB `estimate-knowledge` に見積実績を蓄積（キャッシュ層）
 - Excel出力時に自動登録（プロジェクト情報 + 全工種の全品目明細）
-- JSONエクスポート/インポートで端末間共有可能
 - `knowledgeDB.searchSimilar()`: 構造/種別/用途/面積で類似物件検索（スコア3以上を返却）
 - `knowledgeDB.buildRecord()`: 現在の見積データからナレッジレコードを構築
 - 見積自動作成: 類似物件の品目を面積比でスケーリングして自動投入（AUTO_NAMES行は除外）
+- `knowledgeDB.setExcluded(id, bool)`: 自動見積りから除外するフラグ管理
 
-### 自動バックアップ
+### 永続化アーキテクチャ（移行中）
+**現状の問題**: IndexedDBはブラウザのキャッシュクリアで消失するため、データの安全な蓄積には不十分。
+
+**目標: Excel（knowledge_db.xlsx）を唯一の正データとする2層構造**
+```
+[登録時] IndexedDB に保存 + knowledge_db.xlsx を更新ダウンロード
+[起動時] knowledge_db.xlsx を読み込んで IndexedDB に復元
+[OneDrive保存] → 自動クラウドバックアップ + 複数PC共有
+```
+- 詳細は `ARCHITECTURE.md` セクション5・6を参照
+
+### 本丸EXインポート（honmaru-import.js）
+過去物件の3ファイルセット（見積明細チェックリスト / 実行予算書(表紙総括表) / 実行予算書(機器)）を
+ブラウザ上で解析し、ナレッジDBに直接インポートする機能。
+- フォルダ選択UIで1物件または複数物件の親フォルダを指定
+- 構造・坪数・㎡数のみ手入力が必要（ファイルから取得不可）
+- 解析元フォルダ: `OneDrive/見積りソフト作成プロジェクト/過去物件明細/`
+- 関数プレフィックス: `hm`（`hmParseChecklist` / `hmParseSummary` / `hmParseKiki`）
+
+### 自動バックアップ（実装済み）
 - **タイミング**: Excel出力のたびに `knowledgeDB.autoBackup()` が自動実行
-- **出力**: `knowledge_backup_YYYY-MM-DD.json` がダウンロードされる
-- **最終バックアップ記録**: `localStorage['knowledge_last_backup']` に日時を保存
-- **起動時復元チェック**: DB件数が0件かつ最終バックアップ記録がある場合、復元バナーを表示
-- **復元バナー**: 画面上部に表示、バックアップJSONファイルを選択して `restoreFromBackup()` で復元
-- **リスク対策**: IndexedDBはブラウザのキャッシュクリアで消失するため、バックアップファイルが唯一の永続的データ保存先
+- **出力**: `knowledge_db.xlsx`（固定名・6シート構成）がダウンロードされる
+- **OneDrive保存**: ユーザーがOneDriveフォルダに保存 → クラウドバックアップ＆複数PC共有
+- **起動時復元チェック**: DB件数0件 + 最終バックアップ記録がある場合に復元バナーを表示
 
 ## テンプレート方式Excel出力
 
@@ -163,6 +180,10 @@
 ### フォールバック
 ExcelJS CDN読み込み失敗またはテンプレート読み込み失敗時は、SheetJS簡易版で出力。
 
+## 全体アーキテクチャ
+
+詳細は **`ARCHITECTURE.md`** を参照（全体コンセプト・データフロー・ナレッジDB設計・実装予定）。
+
 ## 汎用化フェーズ計画
 
 ### Phase 1 ✅ 完了：Tridge主導アーキテクチャへの移行
@@ -196,7 +217,8 @@ estimate-app/
 │   └── generate-template.js   ← テンプレート自動生成スクリプト（ExcelJS使用）
 └── js/
     ├── data.js                    ← 定数・グローバル変数・共通ユーティリティ（norm/esc/genId）
-    ├── knowledge-db.js            ← ナレッジDB（IndexedDB CRUD + JSON/XLSX入出力 + 見積自動作成）
+    ├── knowledge-db.js            ← ナレッジDB（IndexedDB CRUD + Excel/JSON入出力 + 見積自動作成）
+    ├── honmaru-import.js          ← 本丸EXインポート（3ファイル解析→ナレッジDB登録）
     ├── labor.js                   ← 労務費計算（TRIDGE_KEYWORDS参照型）
     ├── material-search.js         ← 材料検索モーダル
     ├── calc-engine.js             ← 見積計算エンジン（自動計算行の追加・雑材料費等）
@@ -211,7 +233,7 @@ estimate-app/
 ### スクリプト読み込み順（index.html）
 ```
 SheetJS CDN → ExcelJS CDN
-→ data.js → knowledge-db.js → labor.js → material-search.js → calc-engine.js
+→ data.js → knowledge-db.js → honmaru-import.js → labor.js → material-search.js → calc-engine.js
 → excel-loader.js → excel-template-export.js
 → saved-estimates.js → ai-features.js → app.js
 → JSZip CDN → tridge-manager.js

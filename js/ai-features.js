@@ -150,12 +150,14 @@ function _buildAiDraftPrompt(similar, targetArea) {
   return `あなたは電気工事会社の熟練見積担当者です。以下の物件情報と過去実績をもとに、見積のたたき台をJSON形式で作成してください。
 
 【新規物件情報】
+- 工事名: ${project.name || '未入力'}
+- 得意先: ${project.client || '未入力'}
 - 構造: ${project.struct || '未入力'}
 - 種別: ${project.type || '未入力'}
 - 用途: ${project.usage || '未入力'}
 - 延床面積: ${areaNote}
 - 施工場所: ${project.location || '未入力'}
-${pastSection}
+${project.memo ? '- 工事概要・メモ: ' + project.memo + '\n' : ''}${pastSection}
 【使用できる工種】（必ずこの一覧から選ぶこと）
 ${catNames}
 
@@ -240,12 +242,15 @@ function applyAiDraft() {
   saveUndoState();
   let addedItems = 0;
 
+  let skippedCats = [];
   (draft.categories || []).forEach(cat => {
-    // 工種名で照合（前方一致・部分一致も許容）
+    // 工種名で照合（完全一致→部分一致→正規化部分一致の順）
     const targetCat = activeCategories.find(c =>
       c.active && (c.name === cat.name || c.name.includes(cat.name) || cat.name.includes(c.name))
+    ) || activeCategories.find(c =>
+      c.active && (norm(c.name).includes(norm(cat.name)) || norm(cat.name).includes(norm(c.name)))
     );
-    if (!targetCat) return;
+    if (!targetCat) { skippedCats.push(cat.name); return; }
 
     if (!items[targetCat.id]) items[targetCat.id] = [];
     const existing = items[targetCat.id].filter(i => i.name);
@@ -274,13 +279,24 @@ function applyAiDraft() {
 
   document.getElementById('aiDraftModal').classList.remove('show');
 
+  if (addedItems === 0) {
+    const msg = skippedCats.length > 0
+      ? `工種名が一致しませんでした: ${skippedCats.join('、')}\n装着中のトリッジの工種名を確認してください。`
+      : 'AIの提案に品目がありませんでした。';
+    showToast(msg);
+    return;
+  }
+
   const firstCat = activeCategories.find(
     c => c.active && !c.rateMode && items[c.id] && items[c.id].filter(i => i.name).length > 0
   );
   if (firstCat) currentCat = firstCat.id;
 
   navigate('items');
-  showToast(`${addedItems}品目をAIたたき台として投入しました`);
+  renderCatTabs();
+  renderItems();
+  updateSummaryBar();
+  showToast(`${addedItems}品目をAIたたき台として投入しました${skippedCats.length > 0 ? `（未一致工種: ${skippedCats.join('、')}）` : ''}`);
 }
 
 // ===== 仕入れ見積インポート =====
