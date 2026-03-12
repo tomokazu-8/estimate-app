@@ -421,10 +421,14 @@ const knowledgeDB = (() => {
     const wb  = XLSX.read(buf, { type: 'array' });
 
     // フォーマット検出
-    const hasKiki  = !!wb.Sheets['機器明細'];  // 新形式（6シート）
-    const isNewFmt = !!wb.Sheets['物件マスタ']; // 新/旧形式共通
-    const projSheet   = isNewFmt ? '物件マスタ' : 'プロジェクト一覧';
-    const detailSheet = isNewFmt ? '明細データ' : '明細';
+    const isKatsuyo = !!wb.Sheets['物件ヘッダー']; // 集約ファイル形式（見積番号キー）
+    const hasKiki   = !!wb.Sheets['機器明細'];
+    const isNewFmt  = !!wb.Sheets['物件マスタ'];    // knowledge_db.xlsx形式
+    const projSheet   = isKatsuyo ? '物件ヘッダー' : isNewFmt ? '物件マスタ' : 'プロジェクト一覧';
+    const detailSheet = isKatsuyo ? '明細行'        : isNewFmt ? '明細データ' : '明細';
+    const koshuSheet  = isKatsuyo ? '工種サマリー'  : '工種サマリ';
+    // 集約形式は見積番号をキーとして使う
+    const pidKey      = isKatsuyo ? '見積番号'      : isNewFmt ? '物件ID' : 'id';
 
     const ws1 = wb.Sheets[projSheet];
     if (!ws1) throw new Error('「' + projSheet + '」シートが見つかりません');
@@ -432,18 +436,18 @@ const knowledgeDB = (() => {
 
     // ===== 工種サマリ =====
     const koshuMap = {}; // pid → catName → { total, costTotal, profitRate, profitAmt, laborHours, qty, unit }
-    if (wb.Sheets['工種サマリ']) {
-      XLSX.utils.sheet_to_json(wb.Sheets['工種サマリ']).forEach(row => {
-        const pid = row['物件ID'];
+    if (wb.Sheets[koshuSheet]) {
+      XLSX.utils.sheet_to_json(wb.Sheets[koshuSheet]).forEach(row => {
+        const pid = row[pidKey];
         if (!pid) return;
         if (!koshuMap[pid]) koshuMap[pid] = {};
         koshuMap[pid][String(row['工種名'] || '')] = {
-          total:      parseFloat(row['見積金額'])     || parseFloat(row['見積金額(円)']) || 0,
-          costTotal:  parseFloat(row['原価金額'])     || parseFloat(row['原価金額(円)']) || 0,
-          profitRate: parseFloat(row['利益率%'])      || 0,
-          profitAmt:  parseFloat(row['粗利額'])       || 0,
-          laborHours: parseFloat(row['工数'])         || 0,
-          qty:        parseFloat(row['数量'])         || 0,
+          total:      parseFloat(row['見積金額'])  || parseFloat(row['見積金額(円)']) || 0,
+          costTotal:  parseFloat(row['実行金額'])  || parseFloat(row['原価金額'])     || parseFloat(row['原価金額(円)']) || 0,
+          profitRate: parseFloat(row['粗利率'])    || parseFloat(row['利益率%'])      || 0,
+          profitAmt:  parseFloat(row['粗利'])      || parseFloat(row['粗利額'])       || 0,
+          laborHours: parseFloat(row['工数'])      || 0,
+          qty:        parseFloat(row['数量'])      || 0,
           unit:       String(row['単位'] || ''),
         };
       });
@@ -453,7 +457,7 @@ const knowledgeDB = (() => {
     const kikiMap = {}; // pid → kiki[]
     if (hasKiki) {
       XLSX.utils.sheet_to_json(wb.Sheets['機器明細']).forEach(row => {
-        const pid = row['物件ID'];
+        const pid = row[pidKey];
         if (!pid) return;
         if (!kikiMap[pid]) kikiMap[pid] = [];
         kikiMap[pid].push({
@@ -463,10 +467,10 @@ const knowledgeDB = (() => {
           qty:        parseFloat(row['数量'])      || 0,
           basePrice:  parseFloat(row['基準単価'])  || 0,
           listPrice:  parseFloat(row['定価'])      || 0,
-          sellRate:   parseFloat(row['見積掛率%']) || 0,
+          sellRate:   parseFloat(row['見積掛率%']) || parseFloat(row['見積掛率']) || 0,
           sellPrice:  parseFloat(row['見積単価'])  || 0,
           sellAmount: parseFloat(row['見積金額'])  || 0,
-          costRate:   parseFloat(row['原価掛率%']) || 0,
+          costRate:   parseFloat(row['原価掛率%']) || parseFloat(row['原価掛率']) || 0,
           costPrice:  parseFloat(row['原価単価'])  || 0,
           costAmount: parseFloat(row['原価金額'])  || 0,
           targetCost: parseFloat(row['目標原価'])  || 0,
@@ -494,7 +498,8 @@ const knowledgeDB = (() => {
     const detailMap = {}; // pid → catName → { items[] }
     if (ws3) {
       XLSX.utils.sheet_to_json(ws3).forEach(row => {
-        const pid     = isNewFmt ? row['物件ID'] : row['project_id'];
+        const pid     = row[pidKey] || (isNewFmt ? row['物件ID'] : row['project_id']);
+        if (!pid) return;
         if (!detailMap[pid]) detailMap[pid] = {};
         const catName = String(row['工種名'] || '');
         if (!detailMap[pid][catName]) detailMap[pid][catName] = { items: [] };
@@ -502,22 +507,22 @@ const knowledgeDB = (() => {
         const costAmt = parseFloat(row['原価金額']) || 0;
         detailMap[pid][catName].items.push({
           code:       String(row['集計コード'] || ''),
-          name:       String(isNewFmt ? (row['品名'] || '') : (row['品目名'] || '')),
+          name:       String(row['品名'] || row['品目名'] || ''),
           spec:       String(row['規格']       || ''),
-          qty:        parseFloat(isNewFmt ? row['見積数量'] : row['数量']) || 0,
+          qty:        parseFloat(row['見積数量'] || row['数量']) || 0,
           unit:       String(row['単位']       || ''),
           price:      parseFloat(row['見積単価'])  || parseFloat(row['単価']) || 0,
           amount:     sellAmt,
           costQty:    parseFloat(row['原価数量'])   || 0,
           costPrice:  parseFloat(row['原価単価'])   || 0,
           costAmount: costAmt,
-          profitRate: parseFloat(row['利益率%'])    || 0,
+          profitRate: parseFloat(row['利益率%'])    || parseFloat(row['利益率']) || 0,
           bukariki:   parseFloat(row['歩掛'])       || 0,
           laborHours: parseFloat(row['工数'])       || 0,
           note:       String(row['備考']        || ''),
           listPrice:  parseFloat(row['定価'])       || 0,
-          sellRate:   parseFloat(row['見積掛率%'])  || 0,
-          costRate:   parseFloat(row['原価掛率%'])  || 0,
+          sellRate:   parseFloat(row['見積掛率%'])  || parseFloat(row['見積掛率']) || 0,
+          costRate:   parseFloat(row['原価掛率%'])  || parseFloat(row['原価掛率']) || 0,
         });
       });
     }
@@ -528,7 +533,8 @@ const knowledgeDB = (() => {
 
     let cnt = 0;
     for (const row of projects) {
-      const pid    = isNewFmt ? row['物件ID'] : row['id'];
+      const pid    = row[pidKey];
+      if (!pid) continue;
       const ksData = koshuMap[pid]  || {};
       const dMap   = detailMap[pid] || {};
 
@@ -557,7 +563,7 @@ const knowledgeDB = (() => {
         project: {
           number:          String(row['見積番号']    || ''),
           managementNumber:String(row['管理番号']    || ''),
-          name:            String(row['物件名']      || ''),
+          name:            String(row['物件名'] || row['工事名'] || ''),
           date:            String(row['見積日付']    || ''),
           updatedAt:       String(row['更新日']      || ''),
           client:          String(row['得意先']      || ''),
@@ -578,9 +584,9 @@ const knowledgeDB = (() => {
           laborRates:      laborMap[pid] || {},
         },
         grandTotal:     parseFloat(row['見積合計'])    || parseFloat(row['見積合計(円)']) || 0,
-        costTotal:      parseFloat(row['原価合計'])    || parseFloat(row['原価合計(円)']) || 0,
-        profitRate:     parseFloat(row['利益率%'])     || parseFloat(row['利益率(%)'])    || 0,
-        profitTotal:    parseFloat(row['粗利額'])      || 0,
+        costTotal:      parseFloat(row['原価合計'])    || parseFloat(row['実行合計'])     || parseFloat(row['原価合計(円)']) || 0,
+        profitRate:     parseFloat(row['利益率%'])     || parseFloat(row['粗利率'])       || parseFloat(row['利益率(%)'])    || 0,
+        profitTotal:    parseFloat(row['粗利額'])      || parseFloat(row['粗利合計'])     || 0,
         workTotal:      parseFloat(row['工事費合計'])  || 0,
         miscExpenseAmt: parseFloat(row['諸経費'])      || parseFloat(row['諸経費金額'])   || 0,
         miscExpensePct: parseFloat(row['諸経費率%'])   || 0,

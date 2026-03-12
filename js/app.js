@@ -1093,9 +1093,11 @@ async function renderDBTable() {
     return `<tr style="${excluded ? 'opacity:0.4;' : ''}">
       <td style="font-size:11px;color:${rec.registeredAt ? '' : 'var(--text-sub)'};">${dateLabel}</td>
       <td>${esc(p.name||'')}</td>
+      <td style="font-size:11px;color:var(--text-sub);">${esc(p.client||'')}</td>
       <td>${esc(p.struct||'')}</td>
       <td><span class="tag ${p.type==='新築'?'tag-blue':'tag-amber'}">${esc(p.type||'')}</span></td>
       <td>${esc(p.usage||'')}</td>
+      <td class="td-right" style="font-size:11px;">${area > 0 ? area+'坪' : '—'}</td>
       <td class="td-right">¥${formatNum(rec.grandTotal)}</td>
       <td class="td-right">${rec.profitRate}%</td>
       <td class="td-right">${tp}</td>
@@ -1126,21 +1128,38 @@ async function showKnowledgeDetail(id) {
 
     const p = rec.project || {};
     const registeredAt = rec.registeredAt || '—';
-    let html = `<div style="margin-bottom:12px;">
-      <div style="font-weight:600;font-size:15px;margin-bottom:4px;">${esc(p.name || '（物件名なし）')}</div>
-      <div style="font-size:11px;color:var(--text-sub);">${esc(p.struct||'—')} / ${esc(p.type||'—')} / ${esc(p.usage||'—')} / ${p.areaTsubo ? p.areaTsubo+'坪' : '面積不明'}</div>
-      <div style="font-size:11px;color:var(--text-sub);">登録日: ${registeredAt} / 合計: ¥${formatNum(rec.grandTotal||0)} / 利益率: ${rec.profitRate||0}%</div>
+    const areaTsubo = parseFloat(p.areaTsubo) || 0;
+    const areaSqm   = parseFloat(p.areaSqm)   || 0;
+    const areaStr   = areaTsubo > 0 ? `${areaTsubo}坪` + (areaSqm > 0 ? ` / ${areaSqm}㎡` : '') : '面積不明';
+    const profitStr = rec.profitRate ? `${rec.profitRate}%` : '—';
+    const costStr   = rec.costTotal  ? `¥${formatNum(rec.costTotal)}` : '—';
+    let html = `<div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border);">
+      <div style="font-weight:700;font-size:15px;margin-bottom:6px;">${esc(p.name || '（物件名なし）')}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;font-size:12px;color:var(--text-sub);">
+        <div>得意先: <strong style="color:var(--text-main);">${esc(p.client||'—')}</strong></div>
+        <div>施工場所: ${esc(p.location||'—')}</div>
+        <div>構造/種別: ${esc(p.struct||'—')} / <span class="tag ${p.type==='新築'?'tag-blue':'tag-amber'}" style="font-size:10px;">${esc(p.type||'—')}</span></div>
+        <div>用途: ${esc(p.usage||'—')}</div>
+        <div>面積: ${areaStr}</div>
+        <div>登録日: ${registeredAt}</div>
+        <div>見積合計: <strong style="color:var(--accent);">¥${formatNum(rec.grandTotal||0)}</strong></div>
+        <div>原価合計: ${costStr} / 利益率: ${profitStr}</div>
+        ${p.memo ? `<div style="grid-column:1/-1;margin-top:4px;">メモ: ${esc(p.memo)}</div>` : ''}
+      </div>
     </div>`;
 
     const cats = (rec.categories || []).filter(c => c.items && c.items.length > 0);
     if (cats.length > 0) {
       cats.forEach(cat => {
+        const catTotal = cat.total || cat.subtotal || 0;
+        const catCost  = cat.costTotal || 0;
         html += `<div style="margin-bottom:12px;">
-          <div style="font-weight:600;font-size:12px;background:var(--bg);padding:6px 10px;border-radius:4px;margin-bottom:4px;">
-            ${esc(cat.name||'')}（小計: ¥${formatNum(cat.subtotal||0)}）
+          <div style="font-weight:600;font-size:12px;background:var(--bg);padding:6px 10px;border-radius:4px;margin-bottom:4px;display:flex;justify-content:space-between;">
+            <span>${esc(cat.name||'')}</span>
+            <span style="color:var(--accent);">¥${formatNum(catTotal)}${catCost > 0 ? ` <span style="font-size:10px;color:var(--text-sub);">（原価¥${formatNum(catCost)}）</span>` : ''}</span>
           </div>
           <table style="font-size:11px;"><thead><tr>
-            <th>品名</th><th>規格</th><th style="text-align:right">数量</th><th>単位</th><th style="text-align:right">単価</th><th style="text-align:right">金額</th>
+            <th>品名</th><th>規格</th><th style="text-align:right">数量</th><th>単位</th><th style="text-align:right">単価</th><th style="text-align:right">金額</th><th style="text-align:right">原価</th>
           </tr></thead><tbody>`;
         cat.items.forEach(i => {
           html += `<tr>
@@ -1148,6 +1167,7 @@ async function showKnowledgeDetail(id) {
             <td class="td-right">${i.qty||''}</td><td>${esc(i.unit||'')}</td>
             <td class="td-right">${i.price ? '¥'+formatNum(i.price) : ''}</td>
             <td class="td-right">${i.amount ? '¥'+formatNum(Math.round(i.amount)) : ''}</td>
+            <td class="td-right" style="color:var(--text-sub);">${i.costPrice ? '¥'+formatNum(i.costPrice) : ''}</td>
           </tr>`;
         });
         html += '</tbody></table></div>';
