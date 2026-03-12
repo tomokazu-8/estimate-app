@@ -70,6 +70,20 @@ const knowledgeDB = (() => {
     });
   }
 
+  // --- 全件削除 ---
+  function clearAll() {
+    return _withStore('readwrite', (store, resolve) => {
+      const req = store.clear();
+      req.onsuccess = () => resolve();
+    });
+  }
+
+  // --- 全件削除してからインポート（置き換え） ---
+  async function replaceFromFile(file) {
+    await clearAll();
+    return importFile(file);
+  }
+
   // --- 除外フラグ更新 ---
   function setExcluded(id, bool) {
     return _withStore('readwrite', (store, resolve) => {
@@ -663,6 +677,8 @@ const knowledgeDB = (() => {
     importFile,
     autoBackup,
     restoreFromBackup: importFile,
+    clearAll,
+    replaceFromFile,
     getClientItemHistory,
   };
 })();

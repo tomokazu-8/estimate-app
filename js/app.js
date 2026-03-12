@@ -1212,6 +1212,22 @@ async function knowledgeImportFile(file) {
   document.getElementById('knowledgeImportFile').value = '';
 }
 
+// 既存DBを全件削除してからインポート（置き換え）
+async function knowledgeReplaceFile(file) {
+  if (!file) return;
+  const currentCount = await knowledgeDB.count();
+  if (currentCount > 0 && !confirm(`既存の ${currentCount} 件を全て削除して新しいデータに置き換えます。\nよろしいですか？`)) {
+    document.getElementById('knowledgeReplaceFile').value = '';
+    return;
+  }
+  try {
+    const count = await knowledgeDB.replaceFromFile(file);
+    showToast(count + '件に置き換えました');
+    renderDBTable();
+  } catch(e) { showToast('置き換えに失敗しました: ' + e.message); }
+  document.getElementById('knowledgeReplaceFile').value = '';
+}
+
 // ===== PERSISTENCE =====
 function saveToLocalStorage() {
   const data = { project, items, itemIdCounter };

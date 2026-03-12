@@ -545,8 +545,10 @@
             <span class="card-title">ナレッジDB</span>
             <div style="display:flex;gap:6px;">
               <button class="btn btn-secondary btn-sm" onclick="knowledgeExportXLSX()">📥 Excelエクスポート</button>
-              <button class="btn btn-secondary btn-sm" onclick="document.getElementById('knowledgeImportFile').click()">📤 インポート</button>
+              <button class="btn btn-secondary btn-sm" onclick="document.getElementById('knowledgeImportFile').click()">📤 追加インポート</button>
               <input type="file" id="knowledgeImportFile" accept=".json,.xlsx" style="display:none;" onchange="knowledgeImportFile(this.files[0])">
+              <button class="btn btn-sm" style="background:#c0392b;color:#fff;" onclick="document.getElementById('knowledgeReplaceFile').click()">🔄 置き換えインポート</button>
+              <input type="file" id="knowledgeReplaceFile" accept=".json,.xlsx" style="display:none;" onchange="knowledgeReplaceFile(this.files[0])">
               <button class="btn btn-secondary btn-sm" onclick="honmaruOpenModal()">🏗️ 本丸インポート</button>
             </div>
           </div>
