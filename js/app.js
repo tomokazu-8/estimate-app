@@ -1103,7 +1103,7 @@ async function renderDBTable() {
       <td>${esc(p.usage||'')}</td>
       <td class="td-right" style="font-size:11px;">${areaStr}</td>
       <td class="td-right">¥${formatNum(rec.grandTotal)}</td>
-      <td class="td-right">${rec.profitRate}%</td>
+      <td class="td-right">${parseFloat(rec.profitRate).toFixed(1)}%</td>
       <td class="td-right">${sqmPrice}</td>
       <td class="td-right" style="font-size:11px;">${laborStr}</td>
       <td style="text-align:center;">${hasDetail
@@ -1138,7 +1138,7 @@ async function showKnowledgeDetail(id) {
     const areaStr   = areaSqm > 0
       ? `${areaSqm}㎡` + (areaTsubo > 0 ? ` / ${areaTsubo}坪` : '')
       : areaTsubo > 0 ? `${areaTsubo}坪` : '—';
-    const profitStr  = rec.profitRate     ? `${rec.profitRate}%` : '—';
+    const profitStr  = rec.profitRate     ? `${parseFloat(rec.profitRate).toFixed(1)}%` : '—';
     const profitAmt  = rec.profitTotal    ? `¥${formatNum(rec.profitTotal)}` : '—';
     const costStr    = rec.costTotal      ? `¥${formatNum(rec.costTotal)}` : '—';
     const laborStr   = rec.totalLaborHours? `${rec.totalLaborHours}人工` : '—';
