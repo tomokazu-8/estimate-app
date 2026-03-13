@@ -1085,8 +1085,13 @@ async function renderDBTable() {
   const tbody = document.getElementById('dbBody');
   tbody.innerHTML = allRecords.map(rec => {
     const p = rec.project || {};
-    const area = parseFloat(p.areaTsubo) || 0;
-    const tp = area > 0 ? '¥'+formatNum(Math.round(rec.grandTotal / area)) : '—';
+    const areaSqm   = parseFloat(p.areaSqm)   || 0;
+    const areaTsubo = parseFloat(p.areaTsubo)  || 0;
+    const areaForCalc = areaSqm > 0 ? areaSqm : areaTsubo * 3.30579; // 坪→㎡換算
+    const sqmPrice = areaForCalc > 0 ? '¥'+formatNum(Math.round(rec.grandTotal / areaForCalc)) : '—';
+    const areaStr  = areaSqm > 0 ? areaSqm+'㎡' : areaTsubo > 0 ? (areaTsubo*3.30579).toFixed(1)+'㎡' : '—';
+    const laborStr = rec.totalLaborHours ? rec.totalLaborHours+'人工' : '—';
+    const structType = [p.struct, p.type].filter(Boolean).join('/');
     const hasDetail = rec.categories && rec.categories.some(c => c.items && c.items.length > 0);
     const excluded = !!rec.excluded;
     const dateLabel = rec.registeredAt || (rec.source ? `（${rec.source}）` : '—');
@@ -1094,13 +1099,13 @@ async function renderDBTable() {
       <td style="font-size:11px;color:${rec.registeredAt ? '' : 'var(--text-sub)'};">${dateLabel}</td>
       <td>${esc(p.name||'')}</td>
       <td style="font-size:11px;color:var(--text-sub);">${esc(p.client||'')}</td>
-      <td>${esc(p.struct||'')}</td>
-      <td><span class="tag ${p.type==='新築'?'tag-blue':'tag-amber'}">${esc(p.type||'')}</span></td>
+      <td style="font-size:11px;">${esc(structType)}</td>
       <td>${esc(p.usage||'')}</td>
-      <td class="td-right" style="font-size:11px;">${area > 0 ? area+'坪' : '—'}</td>
+      <td class="td-right" style="font-size:11px;">${areaStr}</td>
       <td class="td-right">¥${formatNum(rec.grandTotal)}</td>
       <td class="td-right">${rec.profitRate}%</td>
-      <td class="td-right">${tp}</td>
+      <td class="td-right">${sqmPrice}</td>
+      <td class="td-right" style="font-size:11px;">${laborStr}</td>
       <td style="text-align:center;">${hasDetail
         ? `<button class="btn btn-secondary btn-sm" style="font-size:10px;padding:2px 6px;" onclick="showKnowledgeDetail(${rec.id})">詳細</button>`
         : '<span style="font-size:10px;color:var(--text-dim);">なし</span>'}</td>
