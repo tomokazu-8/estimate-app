@@ -571,8 +571,8 @@ const knowledgeDB = (() => {
       });
 
       const record = {
-        registeredAt: String(row['登録日']      || ''),
-        source:       String(row['データソース'] || ''),
+        registeredAt: String(row['登録日'] || row['更新日'] || row['見積日付'] || ''),
+        source:       String(row['データソース'] || (isKatsuyo ? 'katsuyo' : '')),
         excluded:     row['有効'] === '×',
         project: {
           number:          String(row['見積番号']    || ''),
