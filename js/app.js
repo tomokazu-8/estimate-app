@@ -1130,21 +1130,33 @@ async function showKnowledgeDetail(id) {
     const registeredAt = rec.registeredAt || '—';
     const areaTsubo = parseFloat(p.areaTsubo) || 0;
     const areaSqm   = parseFloat(p.areaSqm)   || 0;
-    const areaStr   = areaTsubo > 0 ? `${areaTsubo}坪` + (areaSqm > 0 ? ` / ${areaSqm}㎡` : '') : '面積不明';
-    const profitStr = rec.profitRate ? `${rec.profitRate}%` : '—';
-    const costStr   = rec.costTotal  ? `¥${formatNum(rec.costTotal)}` : '—';
+    const areaStr   = areaSqm > 0
+      ? `${areaSqm}㎡` + (areaTsubo > 0 ? ` / ${areaTsubo}坪` : '')
+      : areaTsubo > 0 ? `${areaTsubo}坪` : '—';
+    const profitStr  = rec.profitRate     ? `${rec.profitRate}%` : '—';
+    const profitAmt  = rec.profitTotal    ? `¥${formatNum(rec.profitTotal)}` : '—';
+    const costStr    = rec.costTotal      ? `¥${formatNum(rec.costTotal)}` : '—';
+    const laborStr   = rec.totalLaborHours? `${rec.totalLaborHours}人工` : '—';
+    const discStr    = rec.discountAmt    ? `¥${formatNum(rec.discountAmt)}` : '—';
+    const welfareStr = rec.legalWelfare   ? `¥${formatNum(rec.legalWelfare)}` : '—';
     let html = `<div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border);">
+      <div style="font-size:11px;color:var(--text-sub);margin-bottom:4px;">見積番号: ${esc(p.number||'—')}</div>
       <div style="font-weight:700;font-size:15px;margin-bottom:6px;">${esc(p.name || '（物件名なし）')}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;font-size:12px;color:var(--text-sub);">
         <div>得意先: <strong style="color:var(--text-main);">${esc(p.client||'—')}</strong></div>
+        <div>担当者: ${esc(p.person||'—')}</div>
         <div>施工場所: ${esc(p.location||'—')}</div>
         <div>構造/種別: ${esc(p.struct||'—')} / <span class="tag ${p.type==='新築'?'tag-blue':'tag-amber'}" style="font-size:10px;">${esc(p.type||'—')}</span></div>
-        <div>用途: ${esc(p.usage||'—')}</div>
+        <div>用途: ${esc(p.usage||'—')}${p.floors ? ` / ${p.floors}階` : ''}</div>
         <div>面積: ${areaStr}</div>
-        <div>登録日: ${registeredAt}</div>
         <div>見積合計: <strong style="color:var(--accent);">¥${formatNum(rec.grandTotal||0)}</strong></div>
-        <div>原価合計: ${costStr} / 利益率: ${profitStr}</div>
-        ${p.memo ? `<div style="grid-column:1/-1;margin-top:4px;">メモ: ${esc(p.memo)}</div>` : ''}
+        <div>原価合計: ${costStr}</div>
+        <div>粗利: ${profitAmt} / ${profitStr}</div>
+        <div>工数: ${laborStr}</div>
+        ${rec.discountAmt ? `<div>値引き: ${discStr}</div>` : ''}
+        ${rec.legalWelfare ? `<div>法定福利費: ${welfareStr}</div>` : ''}
+        <div>登録日: ${registeredAt}</div>
+        ${p.memo ? `<div style="grid-column:1/-1;margin-top:4px;color:var(--text-main);">📝 ${esc(p.memo)}</div>` : ''}
       </div>
     </div>`;
 
