@@ -210,6 +210,7 @@ const knowledgeDB = (() => {
       grandTotal:     Math.round(grandTotal),
       costTotal:      Math.round(costTotalAll),
       profitRate,
+      isFinal:        typeof _currentIsFinal !== 'undefined' ? _currentIsFinal : false,
       categories: cats,
     };
   }

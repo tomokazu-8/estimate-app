@@ -155,9 +155,13 @@
     <div class="sidebar-section">
       <div class="sidebar-section-title">操作</div>
       <div style="display:flex;flex-direction:column;gap:2px;padding:0 4px;">
-        <button onclick="saveEstimateToList()" class="sidebar-action-btn" title="現在の見積を保存">
+        <button onclick="saveEstimate()" class="sidebar-action-btn" title="現在の見積を上書き保存">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
           保存
+        </button>
+        <button onclick="saveAsNewBranch()" class="sidebar-action-btn" title="版を上げて保存（枝番+1）">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M16 3h5v5"/><path d="M21 3l-7 7"/><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/></svg>
+          版上げ保存
         </button>
         <button onclick="openSavedEstimatesModal()" class="sidebar-action-btn" title="保存済み見積の読み込み・修正・流用">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
@@ -190,6 +194,7 @@
     <div class="topbar">
       <span class="topbar-title" id="topbarTitle">物件情報</span>
       <span class="topbar-breadcrumb" id="topbarBread">新規見積作成</span>
+      <span id="finalBadge" style="display:none;align-items:center;gap:3px;padding:2px 8px;background:#fffbeb;border:1px solid #fbbf24;border-radius:12px;font-size:11px;font-weight:600;color:#92400e;cursor:pointer;white-space:nowrap;" onclick="toggleCurrentFinal()" title="クリックで本見積を解除">★ 本見積</span>
       <div class="topbar-actions">
         <button id="backBtn" class="btn btn-secondary btn-sm" onclick="undoAction()" style="display:none;" title="元に戻す (Ctrl+Z)">↩ 元に戻す</button>
         <button id="redoBtn" class="btn btn-secondary btn-sm" onclick="redoAction()" style="display:none;" title="やり直し (Ctrl+Y)">↪ やり直し</button>
@@ -898,17 +903,33 @@
 
 <!-- Saved Estimates Modal -->
 <div class="modal-overlay" id="savedEstimatesModal">
-  <div class="modal" style="max-width:800px;">
+  <div class="modal" style="max-width:900px;">
     <div class="modal-header">
       <span class="modal-title">📂 保存済み見積一覧</span>
       <button class="modal-close" onclick="closeSavedEstimatesModal()">✕</button>
     </div>
-    <div class="modal-body" id="savedEstimatesBody" style="padding:16px 20px;max-height:60vh;overflow-y:auto;"></div>
-    <div style="padding:12px 20px;border-top:1px solid #eee;display:flex;justify-content:space-between;align-items:center;gap:8px;">
-      <span style="font-size:12px;color:#888;">「修正」: 枝番+1 ／ 「流用」: 新規採番（別物件）</span>
+    <!-- ツールバー: 検索・表示切替・フィルタ -->
+    <div style="padding:10px 20px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:180px;position:relative;">
+        <input type="text" id="estListSearch" placeholder="検索: 得意先・物件名・見積番号" oninput="onEstListSearch(this.value)"
+          style="width:100%;padding:6px 10px 6px 30px;font-size:12px;border:1px solid #d1d5db;border-radius:6px;outline:none;">
+        <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:14px;color:#94a3b8;">🔍</span>
+      </div>
+      <select id="estListMode" onchange="onEstListModeChange(this.value)" style="padding:6px 10px;font-size:12px;border:1px solid #d1d5db;border-radius:6px;">
+        <option value="date">更新日順</option>
+        <option value="client">得意先別</option>
+      </select>
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#475569;cursor:pointer;white-space:nowrap;">
+        <input type="checkbox" id="estListFinal" onchange="onEstListFinalToggle(this.checked)">
+        本見積のみ
+      </label>
+    </div>
+    <div class="modal-body" id="savedEstimatesBody" style="padding:12px 16px;max-height:55vh;overflow-y:auto;"></div>
+    <div style="padding:10px 20px;border-top:1px solid #eee;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <span style="font-size:11px;color:#94a3b8;">「開く」: そのまま編集 ／ 「流用」: 別物件として新規作成 ／ ★: 本見積に設定</span>
       <div style="display:flex;gap:8px;align-items:center;">
-        <button onclick="exportSavedEstimates()" style="padding:5px 12px;font-size:12px;cursor:pointer;" title="全件をJSONファイルにバックアップ">📥 バックアップ</button>
-        <label style="padding:5px 12px;font-size:12px;cursor:pointer;border:1px solid #ccc;border-radius:4px;background:#fff;" title="JSONファイルから復元">
+        <button onclick="exportSavedEstimates()" style="padding:5px 12px;font-size:12px;cursor:pointer;border:1px solid #d1d5db;border-radius:4px;background:#fff;" title="全件をJSONファイルにバックアップ">📥 バックアップ</button>
+        <label style="padding:5px 12px;font-size:12px;cursor:pointer;border:1px solid #d1d5db;border-radius:4px;background:#fff;" title="JSONファイルから復元">
           📤 復元
           <input type="file" accept=".json" onchange="importSavedEstimates(this.files[0])" style="display:none;">
         </label>

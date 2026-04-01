@@ -1,7 +1,20 @@
-// ===== 見積番号自動採番 =====
+// ===== 見積バージョン管理・保存・読み込み =====
 const ESTIMATE_NO_KEY    = 'estimateNoCounter';
 const SAVED_ESTIMATES_KEY = 'hachitomo_estimates';
-const MAX_SAVED_ESTIMATES = 50;
+const MAX_SAVED_ESTIMATES = 200;
+
+// 現在編集中の見積メタ情報（上書き保存で使用）
+let _currentEstimateId = null;   // 保存済みリスト内のID
+let _currentBaseNo     = '';     // 基番号
+let _currentBranch     = 0;     // 枝番
+let _currentIsFinal    = false; // 本見積フラグ
+
+// 一覧UIの状態
+let _estListMode   = 'date';    // 'date' | 'client'
+let _estListQuery  = '';
+let _estListFinalOnly = false;
+
+// ===== 見積番号解析・採番 =====
 
 /** NNNN-EE → { base:'NNNN', branch:EE } */
 function parseEstimateNo(no) {
@@ -10,14 +23,7 @@ function parseEstimateNo(no) {
   return { base: m[1], branch: parseInt(m[2], 10) };
 }
 
-/** 同物件修正: 枝番+1 → 1111-01 → 1111-02 */
-function incrementBranch(no) {
-  const { base, branch } = parseEstimateNo(no);
-  if (!base) return no;
-  return base.padStart(4, '0') + '-' + String(branch + 1).padStart(2, '0');
-}
-
-/** 新規採番（流用・自動発番共通）: counter+1 → NNNN-01 */
+/** 新規採番: counter+1 → NNNN-01 */
 function _allocateNewNo() {
   const counter = parseInt(localStorage.getItem(ESTIMATE_NO_KEY) || '0', 10) + 1;
   localStorage.setItem(ESTIMATE_NO_KEY, String(counter));
@@ -35,8 +41,14 @@ function generateEstimateNo() {
     localStorage.setItem(ESTIMATE_NO_KEY, String(counter));
   }
   const no = _allocateNewNo();
+  const parsed = parseEstimateNo(no);
+  _currentBaseNo  = parsed.base;
+  _currentBranch  = parsed.branch;
+  _currentIsFinal = false;
+  _currentEstimateId = null;
   document.getElementById('pj-number').value = no;
   updateProject();
+  _updateEstimateHeader();
 }
 
 function setEstimateNoCounter() {
@@ -53,37 +65,206 @@ function setEstimateNoCounter() {
   }
 }
 
-// ===== 複数見積スロット保存・読み込み =====
-function getSavedEstimates() {
-  try { return JSON.parse(localStorage.getItem(SAVED_ESTIMATES_KEY) || '[]'); }
-  catch { return []; }
+// ===== マイグレーション（既存データ互換） =====
+
+function migrateEstimate(est) {
+  if (!est.baseNo) {
+    const m = (est.project?.number || '').match(/^(\d+)-(\d+)$/);
+    if (m) {
+      est.baseNo = m[1];
+      est.branch = parseInt(m[2], 10);
+    } else {
+      est.baseNo = est.project?.number || est.id;
+      est.branch = 1;
+    }
+  }
+  if (est.isFinal === undefined) est.isFinal = false;
+  // grandTotal が未計算なら品目から算出
+  if (est.grandTotal === undefined) {
+    let total = 0;
+    if (est.items) {
+      Object.values(est.items).forEach(list => {
+        (list || []).forEach(i => { total += parseFloat(i.amount) || 0; });
+      });
+    }
+    est.grandTotal = Math.round(total);
+  }
+  return est;
 }
 
-function saveEstimateToList() {
-  const list = getSavedEstimates();
-  const record = {
-    id: Date.now().toString(),
-    savedAt: new Date().toISOString(),
-    project: { ...project },
-    items: JSON.parse(JSON.stringify(items)),
+// ===== 保存済み見積の取得・永続化 =====
+
+function getSavedEstimates() {
+  try {
+    return JSON.parse(localStorage.getItem(SAVED_ESTIMATES_KEY) || '[]').map(migrateEstimate);
+  } catch { return []; }
+}
+
+function _persistEstimates(list) {
+  localStorage.setItem(SAVED_ESTIMATES_KEY, JSON.stringify(list));
+  // auto-restore 用スロットも更新
+  localStorage.setItem('hachitomo_estimate', JSON.stringify({ project, items, itemIdCounter }));
+}
+
+// ===== 現在の見積の金額合計を算出 =====
+function _calcCurrentGrandTotal() {
+  let total = 0;
+  if (typeof activeCategories !== 'undefined') {
+    activeCategories.forEach(cat => {
+      if (typeof getCatAmount === 'function') {
+        total += getCatAmount(cat.id);
+      }
+    });
+  }
+  return Math.round(total);
+}
+
+// ===== 保存レコード生成 =====
+function _buildSaveRecord() {
+  return {
+    id:             _currentEstimateId || Date.now().toString(),
+    baseNo:         _currentBaseNo,
+    branch:         _currentBranch,
+    isFinal:        _currentIsFinal,
+    savedAt:        new Date().toISOString(),
+    grandTotal:     _calcCurrentGrandTotal(),
+    project:        { ...project },
+    items:          JSON.parse(JSON.stringify(items)),
     itemIdCounter,
   };
-  // 同じ見積番号があれば上書き（番号なしは常に新規追加）
-  const idx = project.number
-    ? list.findIndex(e => e.project.number === project.number)
-    : -1;
+}
+
+// ===== 上書き保存 =====
+function saveEstimate() {
+  // 見積番号未設定なら自動採番
+  if (!project.number) {
+    generateEstimateNo();
+    if (!project.number) return; // キャンセルされた
+  }
+
+  // 初回保存（まだメタ情報なし）
+  if (!_currentBaseNo) {
+    const parsed = parseEstimateNo(project.number);
+    _currentBaseNo = parsed.base;
+    _currentBranch = parsed.branch || 1;
+  }
+
+  const list   = getSavedEstimates();
+  const record = _buildSaveRecord();
+
+  // 同じIDがあれば上書き、なければ先頭に追加
+  const idx = list.findIndex(e => e.id === record.id);
   if (idx >= 0) {
     list[idx] = record;
   } else {
+    _currentEstimateId = record.id;
     list.unshift(record);
     if (list.length > MAX_SAVED_ESTIMATES) list.splice(MAX_SAVED_ESTIMATES);
   }
-  localStorage.setItem(SAVED_ESTIMATES_KEY, JSON.stringify(list));
-  // auto-restore用スロットも更新
-  localStorage.setItem('hachitomo_estimate', JSON.stringify({ project, items, itemIdCounter }));
+
+  _persistEstimates(list);
   autoBackupEstimates(list);
-  showToast('見積を保存しました');
+  _updateEstimateHeader();
+  showToast(`見積を保存しました（${project.number}）`);
 }
+
+// ===== 版を上げて保存 =====
+function saveAsNewBranch() {
+  if (!project.number) {
+    saveEstimate(); // まだ一度も保存していない場合は通常保存
+    return;
+  }
+
+  // 同一基番号の最大枝番を取得
+  const list = getSavedEstimates();
+  const maxBranch = list
+    .filter(e => e.baseNo === _currentBaseNo)
+    .reduce((max, e) => Math.max(max, e.branch || 0), 0);
+
+  _currentBranch = maxBranch + 1;
+  _currentEstimateId = Date.now().toString(); // 新しいID
+  _currentIsFinal = false;
+
+  // 見積番号を更新
+  project.number = _currentBaseNo.padStart(4, '0') + '-' + String(_currentBranch).padStart(2, '0');
+  document.getElementById('pj-number').value = project.number;
+
+  const record = _buildSaveRecord();
+  list.unshift(record);
+  if (list.length > MAX_SAVED_ESTIMATES) list.splice(MAX_SAVED_ESTIMATES);
+
+  _persistEstimates(list);
+  autoBackupEstimates(list);
+  _updateEstimateHeader();
+  showToast(`版を上げて保存しました（${project.number}）`);
+}
+
+// ===== 本見積フラグ =====
+function setFinal(id) {
+  const list = getSavedEstimates();
+  const target = list.find(e => e.id === id);
+  if (!target) return;
+
+  // 同一基番号の全版を false に
+  list.forEach(e => {
+    if (e.baseNo === target.baseNo) e.isFinal = false;
+  });
+  target.isFinal = true;
+
+  _persistEstimates(list);
+
+  // 現在編集中の見積が対象なら反映
+  if (_currentEstimateId === id) {
+    _currentIsFinal = true;
+    _updateEstimateHeader();
+  }
+  // 現在編集中が同一基番号の別版なら解除
+  if (_currentBaseNo === target.baseNo && _currentEstimateId !== id) {
+    _currentIsFinal = false;
+    _updateEstimateHeader();
+  }
+
+  renderSavedEstimatesList();
+  showToast(`${target.project.number || target.baseNo} を本見積に設定しました`);
+}
+
+function toggleCurrentFinal() {
+  if (!_currentEstimateId) {
+    showToast('先に保存してください');
+    return;
+  }
+  if (_currentIsFinal) {
+    // 解除
+    const list = getSavedEstimates();
+    const target = list.find(e => e.id === _currentEstimateId);
+    if (target) {
+      target.isFinal = false;
+      _persistEstimates(list);
+    }
+    _currentIsFinal = false;
+    _updateEstimateHeader();
+    showToast('本見積を解除しました');
+  } else {
+    setFinal(_currentEstimateId);
+  }
+}
+
+// ===== トップバーのヘッダー表示更新 =====
+function _updateEstimateHeader() {
+  const badge = document.getElementById('finalBadge');
+  if (badge) {
+    badge.style.display = _currentIsFinal ? 'inline-flex' : 'none';
+  }
+  // トップバーのパンくず更新
+  const bread = document.getElementById('topbarBread');
+  if (bread) {
+    const no = project.number || '';
+    const name = project.name || '新規見積作成';
+    bread.textContent = no ? `${no}　${name}` : name;
+  }
+}
+
+// ===== 一覧モーダル =====
 
 function openSavedEstimatesModal() {
   renderSavedEstimatesList();
@@ -94,58 +275,208 @@ function closeSavedEstimatesModal() {
   document.getElementById('savedEstimatesModal').classList.remove('show');
 }
 
+// ===== 一覧レンダリング =====
+
 function renderSavedEstimatesList() {
-  const list = getSavedEstimates();
-  const body = document.getElementById('savedEstimatesBody');
-  if (list.length === 0) {
-    body.innerHTML = '<p style="color:#666;text-align:center;padding:32px;">保存済みの見積がありません<br><small>「保存」ボタンで現在の見積を保存できます</small></p>';
+  const allList = getSavedEstimates();
+  const body    = document.getElementById('savedEstimatesBody');
+
+  if (allList.length === 0) {
+    body.innerHTML = '<p style="color:#666;text-align:center;padding:32px;">保存済みの見積がありません<br><small>「💾 保存」ボタンで現在の見積を保存できます</small></p>';
     return;
   }
-  const rows = list.map(e => {
-    const date = e.savedAt ? new Date(e.savedAt).toLocaleDateString('ja-JP') : '';
-    const no   = e.project.number || '—';
-    const name = e.project.name   || '（物件名なし）';
-    return `<tr style="border-bottom:1px solid #eee;">
-      <td style="padding:8px 10px;white-space:nowrap;font-weight:bold;">${no}</td>
-      <td style="padding:8px 10px;">${name}</td>
-      <td style="padding:8px 10px;white-space:nowrap;color:#888;font-size:12px;">${date}</td>
-      <td style="padding:8px 10px;white-space:nowrap;">
-        <button onclick="loadSavedEstimate('${e.id}','revise')" style="margin-right:4px;padding:4px 10px;font-size:12px;cursor:pointer;" title="同物件の修正版として読み込む（枝番+1）">修正</button>
-        <button onclick="loadSavedEstimate('${e.id}','copy')" style="margin-right:4px;padding:4px 10px;font-size:12px;cursor:pointer;" title="別物件として流用（新規採番）">流用</button>
-        <button onclick="deleteSavedEstimate('${e.id}')" style="padding:4px 10px;font-size:12px;cursor:pointer;color:#c00;">削除</button>
-      </td>
-    </tr>`;
-  }).join('');
-  body.innerHTML = `<table style="width:100%;border-collapse:collapse;">
-    <thead><tr style="border-bottom:2px solid #ddd;background:#f5f5f5;">
-      <th style="padding:8px 10px;text-align:left;">見積番号</th>
-      <th style="padding:8px 10px;text-align:left;">物件名</th>
-      <th style="padding:8px 10px;text-align:left;">保存日</th>
-      <th style="padding:8px 10px;text-align:left;">操作</th>
-    </tr></thead>
-    <tbody>${rows}</tbody>
-  </table>`;
+
+  // 検索フィルタ
+  const q = norm(_estListQuery);
+  let filtered = allList;
+  if (q) {
+    filtered = allList.filter(e => {
+      const text = norm((e.project.number || '') + ' ' + (e.project.name || '') + ' ' + (e.project.client || ''));
+      return q.split(/\s+/).every(t => text.includes(t));
+    });
+  }
+
+  // 本見積のみフィルタ
+  if (_estListFinalOnly) {
+    const finalBaseNos = new Set(filtered.filter(e => e.isFinal).map(e => e.baseNo));
+    filtered = filtered.filter(e => finalBaseNos.has(e.baseNo));
+  }
+
+  // 基番号でグループ化
+  const groups = new Map();
+  filtered.forEach(e => {
+    if (!groups.has(e.baseNo)) groups.set(e.baseNo, []);
+    groups.get(e.baseNo).push(e);
+  });
+
+  // グループ内は枝番降順
+  groups.forEach(list => list.sort((a, b) => (b.branch || 0) - (a.branch || 0)));
+
+  // グループの並び順
+  let sortedGroups;
+  if (_estListMode === 'client') {
+    // 得意先別 → 得意先名50音順、同一得意先内は更新日降順
+    const clientMap = new Map();
+    groups.forEach((list, baseNo) => {
+      const client = list[0]?.project?.client || '（得意先なし）';
+      if (!clientMap.has(client)) clientMap.set(client, []);
+      clientMap.get(client).push({ baseNo, list, latestDate: list[0]?.savedAt || '' });
+    });
+    // 得意先名順
+    const sortedClients = [...clientMap.entries()].sort((a, b) => a[0].localeCompare(b[0], 'ja'));
+
+    let html = '';
+    sortedClients.forEach(([client, items]) => {
+      items.sort((a, b) => b.latestDate.localeCompare(a.latestDate));
+      html += `<div style="margin-bottom:16px;">
+        <div style="padding:6px 10px;background:#f1f5f9;border-radius:6px;font-weight:600;font-size:13px;color:#475569;margin-bottom:6px;">
+          ${esc(client)}（${items.length}物件）
+        </div>`;
+      items.forEach(({ baseNo, list }) => {
+        html += _renderGroup(baseNo, list);
+      });
+      html += '</div>';
+    });
+    body.innerHTML = html || '<p style="color:#666;text-align:center;padding:16px;">該当する見積がありません</p>';
+    return;
+  }
+
+  // 更新日順（デフォルト）: グループの最新更新日降順
+  sortedGroups = [...groups.entries()].sort((a, b) => {
+    const dateA = a[1][0]?.savedAt || '';
+    const dateB = b[1][0]?.savedAt || '';
+    return dateB.localeCompare(dateA);
+  });
+
+  let html = '';
+  sortedGroups.forEach(([baseNo, list]) => {
+    html += _renderGroup(baseNo, list);
+  });
+  body.innerHTML = html || '<p style="color:#666;text-align:center;padding:16px;">該当する見積がありません</p>';
 }
 
-function loadSavedEstimate(id, mode) {
+function _renderGroup(baseNo, list) {
+  const latest    = list[0];
+  const name      = latest.project.name || '（物件名なし）';
+  const client    = latest.project.client || '';
+  const hasFinal  = list.some(e => e.isFinal);
+  const count     = list.length;
+  const latestDate = latest.savedAt ? new Date(latest.savedAt).toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit' }) : '';
+
+  // 現在編集中をハイライト
+  const isCurrentGroup = _currentBaseNo === baseNo;
+
+  let html = `<div style="margin-bottom:10px;border:1px solid ${isCurrentGroup ? '#3b82f6' : '#e2e8f0'};border-radius:8px;overflow:hidden;">`;
+
+  // グループヘッダー
+  html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:${isCurrentGroup ? '#eff6ff' : '#f8fafc'};cursor:pointer;" onclick="this.parentElement.querySelector('.est-group-body').classList.toggle('est-collapsed')">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="font-weight:700;font-size:13px;color:#1e293b;">${esc(baseNo)}</span>
+      <span style="font-size:13px;color:#334155;">${esc(name)}</span>
+      ${client ? `<span style="font-size:11px;color:#64748b;">${esc(client)}</span>` : ''}
+      ${hasFinal ? '<span style="color:#f59e0b;font-size:12px;" title="本見積あり">★</span>' : ''}
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#94a3b8;">
+      <span>${latestDate}</span>
+      <span>${count}版</span>
+      <span style="font-size:10px;">▼</span>
+    </div>
+  </div>`;
+
+  // 版リスト
+  html += '<div class="est-group-body">';
+  list.forEach(e => {
+    const no   = e.project.number || `${e.baseNo}-${String(e.branch).padStart(2, '0')}`;
+    const date = e.savedAt ? new Date(e.savedAt).toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit' }) : '';
+    const total = e.grandTotal ? '¥' + e.grandTotal.toLocaleString() : '';
+    const isCurrent = _currentEstimateId === e.id;
+
+    html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px 6px 24px;border-top:1px solid #f1f5f9;${isCurrent ? 'background:#fffbeb;' : ''}">
+      <div style="display:flex;align-items:center;gap:8px;">
+        ${e.isFinal ? '<span style="color:#f59e0b;font-weight:bold;font-size:12px;" title="本見積">★</span>' : '<span style="width:14px;display:inline-block;"></span>'}
+        <span style="font-weight:600;font-size:12px;font-family:monospace;">${esc(no)}</span>
+        ${e.isFinal ? '<span style="font-size:10px;color:#f59e0b;font-weight:600;">本見積</span>' : ''}
+        ${isCurrent ? '<span style="font-size:10px;color:#3b82f6;font-weight:600;">編集中</span>' : ''}
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:11px;color:#94a3b8;">${date}</span>
+        <span style="font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:500;min-width:90px;text-align:right;">${total}</span>
+        <div style="display:flex;gap:4px;">
+          <button onclick="loadSavedEstimate('${e.id}')" style="padding:3px 10px;font-size:11px;cursor:pointer;border:1px solid #d1d5db;border-radius:4px;background:#fff;">開く</button>
+          ${!e.isFinal ? `<button onclick="setFinal('${e.id}')" style="padding:3px 8px;font-size:11px;cursor:pointer;border:1px solid #fbbf24;border-radius:4px;background:#fffbeb;color:#92400e;" title="本見積に設定">★</button>` : ''}
+          <button onclick="copyEstimate('${e.id}')" style="padding:3px 8px;font-size:11px;cursor:pointer;border:1px solid #d1d5db;border-radius:4px;background:#fff;" title="別物件として流用">流用</button>
+          <button onclick="deleteSavedEstimate('${e.id}')" style="padding:3px 6px;font-size:11px;cursor:pointer;border:1px solid #fca5a5;border-radius:4px;background:#fff;color:#dc2626;" title="この版を削除">✕</button>
+        </div>
+      </div>
+    </div>`;
+  });
+  html += '</div></div>';
+
+  return html;
+}
+
+// ===== 見積読み込み =====
+
+function loadSavedEstimate(id) {
   const list = getSavedEstimates();
   const rec  = list.find(e => e.id === id);
   if (!rec) return;
 
+  // メタ情報をセット
+  _currentEstimateId = rec.id;
+  _currentBaseNo     = rec.baseNo;
+  _currentBranch     = rec.branch;
+  _currentIsFinal    = rec.isFinal;
+
+  // データを復元
   project       = { ...rec.project };
   items         = JSON.parse(JSON.stringify(rec.items));
   itemIdCounter = rec.itemIdCounter || 1;
 
-  if (mode === 'revise') {
-    // 同物件修正: 枝番+1
-    project.number = incrementBranch(project.number);
-  } else {
-    // 流用: 新規採番（別物件扱い）
-    project.number = _allocateNewNo();
-    project.name   = project.name ? project.name + '（流用）' : '';
-  }
+  // フォームに反映
+  _restoreProjectForm();
+  activeCategories.forEach(c => { if (!items[c.id]) items[c.id] = []; });
+  recalcAll();
+  renderCatTabs();
+  closeSavedEstimatesModal();
+  _updateEstimateHeader();
+
+  showToast(`見積を読み込みました（${project.number}）`);
+}
+
+// 流用（別物件として新規作成）
+function copyEstimate(id) {
+  const list = getSavedEstimates();
+  const rec  = list.find(e => e.id === id);
+  if (!rec) return;
+
+  // データを復元
+  project       = { ...rec.project };
+  items         = JSON.parse(JSON.stringify(rec.items));
+  itemIdCounter = rec.itemIdCounter || 1;
+
+  // 新規採番
+  project.number = _allocateNewNo();
+  project.name   = project.name ? project.name + '（流用）' : '';
+  const parsed = parseEstimateNo(project.number);
+  _currentBaseNo     = parsed.base;
+  _currentBranch     = parsed.branch;
+  _currentIsFinal    = false;
+  _currentEstimateId = null; // まだ保存していない
 
   // フォームに反映
+  _restoreProjectForm();
+  activeCategories.forEach(c => { if (!items[c.id]) items[c.id] = []; });
+  recalcAll();
+  renderCatTabs();
+  closeSavedEstimatesModal();
+  _updateEstimateHeader();
+
+  showToast(`流用しました → ${project.number}（保存はまだされていません）`);
+}
+
+// フォーム復元の共通処理
+function _restoreProjectForm() {
   document.getElementById('pj-name').value       = project.name || '';
   document.getElementById('pj-number').value     = project.number || '';
   document.getElementById('pj-date').value       = project.date || '';
@@ -161,30 +492,47 @@ function loadSavedEstimate(id, mode) {
   document.getElementById('pj-labor-rate').value = project.laborRate || 72;
   document.getElementById('pj-labor-sell').value = project.laborSell || '';
   document.getElementById('pj-tax').value        = project.tax || 10;
-
-  activeCategories.forEach(c => { if (!items[c.id]) items[c.id] = []; });
-  recalcAll();
-  renderCatTabs();
-  closeSavedEstimatesModal();
-
-  const label = mode === 'revise' ? `修正版 → ${project.number}` : `流用 → ${project.number}`;
-  showToast(`見積を読み込みました（${label}）`);
 }
 
+// ===== 削除 =====
+
 function deleteSavedEstimate(id) {
-  if (!confirm('この保存済み見積を削除しますか？')) return;
+  if (!confirm('この版を削除しますか？')) return;
   const list = getSavedEstimates().filter(e => e.id !== id);
-  localStorage.setItem(SAVED_ESTIMATES_KEY, JSON.stringify(list));
+  _persistEstimates(list);
+  if (_currentEstimateId === id) {
+    _currentEstimateId = null;
+    _updateEstimateHeader();
+  }
   renderSavedEstimatesList();
   showToast('削除しました');
 }
 
-/** 1日1回自動バックアップ（saveEstimateToList から呼ばれる） */
+// ===== 検索・表示切替 =====
+
+function onEstListSearch(value) {
+  _estListQuery = value;
+  renderSavedEstimatesList();
+}
+
+function onEstListModeChange(value) {
+  _estListMode = value;
+  renderSavedEstimatesList();
+}
+
+function onEstListFinalToggle(checked) {
+  _estListFinalOnly = checked;
+  renderSavedEstimatesList();
+}
+
+// ===== バックアップ =====
+
+/** 1日1回自動バックアップ（saveEstimate から呼ばれる） */
 function autoBackupEstimates(list) {
   if (!list || list.length === 0) return;
   const today = new Date().toISOString().split('T')[0];
   const last  = localStorage.getItem('estimates_last_backup') || '';
-  if (last.startsWith(today)) return;  // 今日はもう済んでいる
+  if (last.startsWith(today)) return;
   const json = JSON.stringify(list, null, 2);
   downloadBlob(new Blob([json], { type: 'application/json' }), `estimates_backup_${today}.json`);
   localStorage.setItem('estimates_last_backup', new Date().toISOString());
@@ -207,11 +555,9 @@ function importSavedEstimates(file) {
       const incoming = JSON.parse(e.target.result);
       if (!Array.isArray(incoming)) throw new Error('フォーマットが正しくありません');
       const existing = getSavedEstimates();
-      // 既存にないIDのみ追加（重複スキップ）、最新を先頭に
       const existingIds = new Set(existing.map(r => r.id));
-      const newEntries  = incoming.filter(r => r.id && !existingIds.has(r.id));
-      const merged = [...newEntries, ...existing]
-        .slice(0, MAX_SAVED_ESTIMATES);
+      const newEntries  = incoming.map(migrateEstimate).filter(r => r.id && !existingIds.has(r.id));
+      const merged = [...newEntries, ...existing].slice(0, MAX_SAVED_ESTIMATES);
       localStorage.setItem(SAVED_ESTIMATES_KEY, JSON.stringify(merged));
       renderSavedEstimatesList();
       showToast(`${newEntries.length}件を復元しました（既存: ${existing.length}件）`);
@@ -222,12 +568,11 @@ function importSavedEstimates(file) {
   reader.readAsText(file);
 }
 
-// ===== 保存済み見積 起動時チェック =====
+// ===== 起動時チェック =====
 function checkEstimatesRestore() {
   const list       = getSavedEstimates();
   const lastBackup = localStorage.getItem('estimates_last_backup');
   if (list.length === 0 && lastBackup) {
-    // localStorageが消えたが、バックアップ記録が残っている → 復元を促す
     setTimeout(() => {
       showToast('保存済み見積が見つかりません。「📂 保存済み」→「📤 復元」でバックアップから復元できます');
     }, 2000);
