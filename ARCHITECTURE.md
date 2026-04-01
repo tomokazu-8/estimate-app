@@ -1,6 +1,6 @@
 # estimate-app 全体アーキテクチャ
 
-> 最終更新: 2026-03-14
+> 最終更新: 2026-04-02
 
 ---
 
@@ -93,7 +93,7 @@ tridge-manager.js — Tridgeマスタ管理UI（db-manager統合）
 | `calc-engine.js` | 自動計算行追加・運搬費算出 | `addAutoCalcRows()` `calcAutoRows()` `calcTransport()` |
 | `excel-loader.js` | Tridge（Excel）の読み込み・適用 | `loadExcelDB(file)` `getCol(row, ...names)` `showDbOverlay()` `updateDbStatus()` |
 | `excel-template-export.js` | テンプレートへのデータ書き込み (IIFE) | `ExcelTemplateExport.exportFormatted()` |
-| `saved-estimates.js` | 見積の保存・読み込み・採番 | `generateEstimateNo()` `saveEstimateToList()` `loadSavedEstimate(id, mode)` `openSavedEstimatesModal()` |
+| `saved-estimates.js` | 見積のバージョン管理・保存・読み込み・採番 | `generateEstimateNo()` `saveEstimate()` `saveAsNewBranch()` `loadSavedEstimate(id)` `setFinal(id)` `openSavedEstimatesModal()` |
 | `ai-features.js` | Claude API呼び出し・AI機能 | `callClaude()` `aiDraftEstimate()` `aiQueryItem()` `checkSellRates()` `openSupplierImportModal()` |
 | `app.js` | メインUI・イベント処理・工種合計計算 | `navigate()` `renderItems()` `exportEstimate()` `getCatTotal()` `getCatAmount()` `applyTridgeCategories()` `recalcAll()` `showToast()` `formatNum()` |
 | `tridge-manager.js` | Tridgeマスタ管理・Deckへの適用 | `tmInit()` `tmLoadToEstimate()` |
@@ -120,6 +120,33 @@ Excel出力（app.js: exportEstimate）
   → ExcelTemplateExport.exportFormatted() でテンプレート書き込み
   → knowledgeDB.buildRecord() + save() でナレッジDBに自動登録
   → knowledgeDB.autoBackup() で knowledge_db.xlsx をダウンロード
+```
+
+### 見積保存・修正・流用フロー
+
+```
+新規作成
+  → generateEstimateNo() → 1111-01（新規基番号-枝番01）
+  → 入力・編集
+  ├── 💾 上書き保存（saveEstimate）
+  │     → 同じ 1111-01 の中身を更新（savedAt のみ更新）
+  │     → 用途: 作業中断→再開、誤入力の修正
+  │
+  ├── 📝 版を上げて保存（saveAsNewBranch）
+  │     → 1111-02 として新規保存（1111-01 はそのまま残る）
+  │     → 用途: 得意先への再提出、仕様変更対応
+  │
+  ├── ★ 本見積にする（setFinal）
+  │     → 1111-02 に isFinal=true をセット
+  │     → 同一基番号(1111)の他版は isFinal=false に自動変更
+  │     → 用途: この版が正式見積であることを明示
+  │
+  └── 📋 流用して新規作成（loadSavedEstimate + copy mode）
+        → 2222-01 として新規基番号で保存
+        → 用途: 類似物件の見積を別物件として作成
+
+Excel出力（exportEstimate）
+  → ナレッジDB自動登録（isFinal フラグも伝播）
 ```
 
 ### 本丸EXインポートフロー
@@ -287,7 +314,124 @@ honmaruImportConfirm() → knowledgeDB.save() でナレッジDBに登録
 
 ---
 
-## 6. データ永続化の設計
+## 6. 見積バージョン管理の設計
+
+### コンセプト
+
+```
+1つの物件に対して複数の版（バージョン）を管理し、
+どの版が本見積（正式版）かを一目で判別できるようにする。
+```
+
+### 見積番号の構造
+
+```
+  1111 - 02
+  ├──┘   └── 枝番（branch）: 同一物件の版番号
+  └──────── 基番号（baseNo）: 物件を識別するグループキー
+```
+
+- **基番号**: 新規物件ごとに採番。流用時も新規基番号。
+- **枝番**: 同一物件の修正回数。01 → 02 → 03 と増える。
+- **本見積フラグ（isFinal）**: 同一基番号の中で1つだけ true。
+
+### 保存済み見積のデータ構造
+
+```javascript
+{
+  id:       "1712345678901",    // 一意ID（Date.now()）
+  baseNo:   "1111",             // 基番号（グループキー）
+  branch:   2,                  // 枝番
+  isFinal:  true,               // ★本見積フラグ
+  savedAt:  "2026-04-02T...",   // 保存日時
+  project:  {                   // 物件情報
+    number: "1111-02",          // 見積番号（= baseNo + '-' + branch）
+    name: "山田邸 電気設備工事",
+    client: "○○建設", ...
+  },
+  items:    { cat001: [...], ... },  // 工種別品目明細
+  itemIdCounter: 123
+}
+```
+
+### 既存データとの後方互換
+
+baseNo / branch / isFinal を持たない既存保存データは、
+読み込み時に `project.number` から自動補完する。
+
+```javascript
+function migrateEstimate(est) {
+  if (!est.baseNo) {
+    const m = (est.project?.number || '').match(/^(\d+)-(\d+)$/);
+    if (m) {
+      est.baseNo = m[1];
+      est.branch = parseInt(m[2]);
+    } else {
+      est.baseNo = est.project?.number || est.id;
+      est.branch = 1;
+    }
+  }
+  if (est.isFinal === undefined) est.isFinal = false;
+  return est;
+}
+```
+
+### 操作と動作
+
+| 操作 | 基番号 | 枝番 | 本見積 | 説明 |
+|------|--------|------|--------|------|
+| 新規作成 | 新規採番 | 01 | false | 作成中はまだ本見積ではない |
+| 上書き保存 | 変更なし | 変更なし | 変更なし | 同じ版の内容を更新 |
+| 版を上げて保存 | 同じ | +1 | false | 旧版はそのまま残る |
+| 本見積にする | — | — | true | 同一基番号の他版は自動で false |
+| 流用して新規作成 | 新規採番 | 01 | false | 別物件として新規扱い |
+
+### 保存済み見積一覧のUI
+
+基番号でグループ化し、折りたたみ表示する。
+
+```
+保存済み見積一覧
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+▼ 1111  山田邸 電気設備工事              3版
+  ★ 1111-03  本見積  04/02  ¥2,450,000  [開く] [Excel出力]
+     1111-02          03/28  ¥2,380,000  [開く]
+     1111-01          03/20  ¥2,100,000  [開く]
+
+▼ 2222  田中ビル 照明改修工事            1版
+     2222-01          04/01  ¥850,000   [開く] [★本見積にする]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+### 見積編集中のヘッダーUI
+
+```
+┌─────────────────────────────────────────────┐
+│  見積番号: 1111-02          ★本見積         │
+│  山田邸 電気設備工事                         │
+│                                              │
+│  [💾 上書き保存] [📝 版上げ保存] [★ 本見積]  │
+└─────────────────────────────────────────────┘
+```
+
+### ナレッジDBとの連携
+
+Excel出力時にナレッジDBへ自動登録する際、isFinal フラグを伝播する。
+
+```
+Excel出力
+  → knowledgeDB.buildRecord()
+    → record.isFinal = 現在の見積の isFinal 値
+  → knowledgeDB.save(record)
+```
+
+ナレッジDBの類似物件検索（searchSimilar）では、
+isFinal=true のレコードを優先的にスコアリングする（将来拡張）。
+
+---
+
+## 7. データ永続化の設計
 
 | データ | 保存場所 | 消失リスク | 復元方法 |
 |--------|---------|-----------|----------|
@@ -307,7 +451,7 @@ honmaruImportConfirm() → knowledgeDB.save() でナレッジDBに登録
 
 ---
 
-## 7. 外部依存
+## 8. 外部依存
 
 | ライブラリ | バージョン | 用途 |
 |-----------|----------|------|
@@ -318,7 +462,7 @@ honmaruImportConfirm() → knowledgeDB.save() でナレッジDBに登録
 
 ---
 
-## 8. 重要な設計ルール
+## 9. 重要な設計ルール
 
 - **Deckに業種固有知識を持たせない** → 全てTridgeに委ねる
 - **コネクタ仕様（Tridgeシート構成）を安易に変えない** → 既存Tridgeが全て使えなくなる
@@ -335,11 +479,18 @@ honmaruImportConfirm() → knowledgeDB.save() でナレッジDBに登録
 
 ---
 
-## 9. 今後の実装予定
+## 10. 今後の実装予定
 
 | 優先度 | 内容 | 対象ファイル | ステータス |
 |--------|------|-------------|-----------|
+| **高** | **見積バージョン管理** | saved-estimates.js / app.js | 🚧 設計完了・実装中 |
+|  | ├ 基番号+枝番によるグループ管理 | saved-estimates.js | 未着手 |
+|  | ├ 上書き保存 / 版上げ保存の2操作 | saved-estimates.js / app.js | 未着手 |
+|  | ├ 本見積（isFinal）フラグ管理 | saved-estimates.js | 未着手 |
+|  | ├ 一覧のグループ表示UI | saved-estimates.js | 未着手 |
+|  | ├ 編集中ヘッダーUI（保存・版上げ・本見積ボタン） | app.js | 未着手 |
+|  | └ ナレッジDB連携（isFinal伝播） | knowledge-db.js | 未着手 |
 | 高 | ナレッジDB永続化 案B: File System Access API | knowledge-db.js / app.js | 未着手 |
-| 中 | ナレッジDB詳細画面の全項目表示 | app.js | ✅ 実装済み（`showKnowledgeDetail()`拡充済み） |
+| 中 | ナレッジDB詳細画面の全項目表示 | app.js | ✅ 実装済み |
 | 低 | Tridgeイジェクトボタン | excel-loader.js / app.js | 未着手 |
 | 低 | 大中小フィルタ非表示化 | material-search.js / app.js | 未着手 |
