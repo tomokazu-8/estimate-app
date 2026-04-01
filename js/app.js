@@ -542,8 +542,8 @@ function renderItems() {
   const tbody = document.getElementById('itemBody');
   const list = items[currentCat] || [];
 
-  // 歩掛列の動的表示判定
-  const showBuk1 = list.some(i => { const v = i.bukariki1 !== undefined ? i.bukariki1 : i.bukariki; return parseFloat(v) > 0; });
+  // 歩掛列の表示判定：歩掛1は資材入力行があれば常時表示、歩掛2/3は値がある場合のみ
+  const showBuk1 = list.some(i => !AUTO_NAMES.includes(i.name));
   const showBuk2 = list.some(i => parseFloat(i.bukariki2) > 0);
   const showBuk3 = list.some(i => parseFloat(i.bukariki3) > 0);
   const tbl = document.getElementById('itemTable');
@@ -556,7 +556,9 @@ function renderItems() {
     const isLaborLocked = LABOR_LOCKED_NAMES.includes(item.name);
 
     // 歩掛1: bukariki1 優先、旧bukarikiに後方互換フォールバック
-    const buk1Val = item.bukariki1 !== undefined ? item.bukariki1 : (item.bukariki ?? '');
+    const buk1Raw = item.bukariki1 !== undefined ? item.bukariki1 : (item.bukariki ?? '');
+    const buk1Resolved = !isAuto ? resolveBukariki(item.name, item.spec, buk1Raw) : null;
+    const buk1IsAuto = buk1Resolved && buk1Resolved.source !== '手入力';
 
     // 原価・見積 計算（表示用、保存しない）
     const listP  = parseFloat(item.listPrice)  || 0;
@@ -590,7 +592,11 @@ function renderItems() {
       <td><input class="num" value="${item.sellRate||''}" onchange="updateItem(${item.id},'sellRate',this.value)" type="number" step="0.01" placeholder="掛率" ${disabledAuto}></td>
       <td class="td-right" ${dimCell}>${costPr !== null ? formatNum(costPr) : ''}</td>
       <td class="td-right" ${dimCell}>${costAm !== null ? '¥'+formatNum(costAm) : ''}</td>
-      <td class="col-buk1"><input class="num" value="${buk1Val !== '' ? buk1Val : ''}" onchange="updateItem(${item.id},'bukariki1',this.value)" type="number" step="0.001" placeholder="自動" ${disabledAuto}></td>
+      <td class="col-buk1"><input class="num" value="${buk1Raw !== '' ? buk1Raw : ''}" onchange="updateItem(${item.id},'bukariki1',this.value)" type="number" step="0.001"
+        placeholder="${buk1IsAuto ? (buk1Resolved.value > 0 ? buk1Resolved.value.toFixed(3) : '―') : ''}"
+        title="${buk1Resolved ? (buk1IsAuto ? (buk1Resolved.value > 0 ? 'DB自動検出（'+buk1Resolved.source+'）: '+buk1Resolved.value.toFixed(3)+'人工/単位' : 'DB未登録') : '手入力値') : ''}"
+        style="${buk1IsAuto && buk1Resolved.value === 0 && item.name ? 'border-color:#f59e0b;' : ''}"
+        ${disabledAuto}></td>
       <td class="col-buk2"><input class="num" value="${item.bukariki2||''}" onchange="updateItem(${item.id},'bukariki2',this.value)" type="number" step="0.001" placeholder="" ${disabledAuto}></td>
       <td class="col-buk3"><input class="num" value="${item.bukariki3||''}" onchange="updateItem(${item.id},'bukariki3',this.value)" type="number" step="0.001" placeholder="" ${disabledAuto}></td>
       <td><input class="num" value="${item.price||''}" onchange="updateItem(${item.id},'price',this.value)" type="number" step="any" ${isLaborLocked ? 'disabled style="background:var(--bg-alt);color:var(--text-sub);"' : ''}></td>
@@ -631,10 +637,9 @@ function addItem() {
   if (!currentCat) { showToast('工種タブを選択してください'); return; }
   try {
     saveUndoState();
-    const id = itemIdCounter++;
     if (!items[currentCat]) items[currentCat] = [];
-    items[currentCat].push({ id, name:'', spec:'', qty:'', unit:'式', price:'', amount:0, note:'',
-      bukariki1:'', bukariki2:'', bukariki3:'', listPrice:'', basePrice:'', costRate:'', sellRate:'' });
+    const newItem = createBlankItem();
+    items[currentCat].push(newItem);
     renderItems();
     setTimeout(() => {
       const rows = document.querySelectorAll('#itemBody tr');
@@ -659,6 +664,17 @@ function updateItem(id, field, value) {
   if (!item) return;
   saveUndoState();
   item[field] = value;
+
+  // 品名変更時：歩掛をDBから再検索してセット
+  if (field === 'name') {
+    const buk = resolveBukariki(item.name, item.spec, '');
+    item.bukariki1 = buk.value > 0 ? buk.value : '';
+  }
+  // 規格変更時：歩掛が未設定の場合のみDB再検索
+  if (field === 'spec' && !item.bukariki1) {
+    const buk = resolveBukariki(item.name, item.spec, '');
+    if (buk.value > 0) item.bukariki1 = buk.value;
+  }
 
   // 定価・基準価格・掛率 → 見積単価を自動計算
   if (['listPrice', 'basePrice', 'costRate', 'sellRate'].includes(field)) {
@@ -725,11 +741,7 @@ function insertItemAfter(id) {
   saveUndoState();
   const list = items[currentCat] || [];
   const idx  = list.findIndex(i => i.id === id);
-  const newId = itemIdCounter++;
-  list.splice(idx + 1, 0, {
-    id: newId, name:'', spec:'', qty:'', unit:'式', price:'', amount:0, note:'',
-    bukariki1:'', bukariki2:'', bukariki3:'', listPrice:'', basePrice:'', costRate:'', sellRate:'',
-  });
+  list.splice(idx + 1, 0, createBlankItem());
   renderItems();
   setTimeout(() => {
     const rows = document.querySelectorAll('#itemBody tr');
@@ -1619,17 +1631,14 @@ async function applyAutoCreate(knowledgeId, areaRatio) {
       const price = srcItem.price || 0;
       const amount = qty * price;
 
-      items[targetCat.id].push({
-        id: itemIdCounter++,
-        name: srcItem.name,
-        spec: srcItem.spec || '',
-        qty: qty,
-        unit: srcItem.unit || '',
-        price: price,
-        amount: amount,
-        bukariki: srcItem.bukariki || '',
+      const bukVal = srcItem.bukariki1 || srcItem.bukariki || '';
+      const buk = resolveBukariki(srcItem.name, srcItem.spec, bukVal);
+      items[targetCat.id].push(createBlankItem({
+        name: srcItem.name, spec: srcItem.spec || '',
+        qty, unit: srcItem.unit || '', price, amount,
+        bukariki1: buk.value > 0 ? buk.value : '',
         note: srcItem.note || '',
-      });
+      }));
       addedItems++;
     });
   });

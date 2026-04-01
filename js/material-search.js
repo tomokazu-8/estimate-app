@@ -112,7 +112,7 @@ function applyMaterialToItem(item, m) {
   item.spec     = m.s;
   item.unit     = m.u;
   item.price    = m.ep;
-  item.bukariki = findBukariki(m.n, m.s || '').value;
+  item.bukariki1 = findBukariki(m.n, m.s || '').value;
   if (item.qty) item.amount = (parseFloat(item.qty) || 0) * m.ep;
 }
 
@@ -158,10 +158,10 @@ function selectMaterial(resultIdx) {
     const item = (items[currentCat] || []).find(i => i.id === searchTargetItemId);
     if (item) applyMaterialToItem(item, m);
   } else {
-    items[currentCat].push({
-      id: itemIdCounter++, name: m.n, spec: m.s, qty: '', unit: m.u,
-      price: m.ep, amount: 0, note: '', bukariki: findBukariki(m.n, m.s || '').value
-    });
+    items[currentCat].push(createBlankItem({
+      name: m.n, spec: m.s, unit: m.u, price: m.ep,
+      bukariki1: findBukariki(m.n, m.s || '').value,
+    }));
   }
 
   closeSearchModal();

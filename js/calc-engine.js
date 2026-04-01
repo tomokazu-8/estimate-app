@@ -40,9 +40,7 @@ function addAutoCalcRows() {
   toAdd.forEach(({ name, price, note, locked }) => {
     const exists = list.find(i => i.name === name);
     if (!exists) {
-      const id = itemIdCounter++;
-      list.push({ id, name, spec: '', qty: 1, unit: '式', price, amount: price, note,
-        bukariki1: '', bukariki2: '', bukariki3: '' });
+      list.push(createBlankItem({ name, qty: 1, price, amount: price, note }));
     } else if (locked) {
       // 労務費行は既存でも常に更新
       exists.price  = price;

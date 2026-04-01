@@ -19,6 +19,15 @@ function findBukariki(name, spec) {
   return { value: 0, source: 'なし' };
 }
 
+// 歩掛を解決する（明示値 → DB検索 の優先順位）
+// explicitValue: bukariki1 フィールド値（'' = 未設定 → DB検索、数値 = 手入力を尊重）
+function resolveBukariki(name, spec, explicitValue) {
+  if (explicitValue !== '' && explicitValue !== undefined && explicitValue !== null) {
+    return { value: parseFloat(explicitValue) || 0, source: '手入力' };
+  }
+  return findBukariki(name, spec || '');
+}
+
 // 労務費内訳を計算する
 // 歩掛1 → 電工労務費（totalKosu）
 // 歩掛2 → 既設器具撤去処分費（撤去Kosu）
@@ -34,11 +43,9 @@ function calcLaborBreakdown(catId) {
     const qty = parseFloat(item.qty) || 0;
     if (qty <= 0) continue;
 
-    // 歩掛1: 電工労務費
+    // 歩掛1: bukariki1 優先、旧 bukariki に後方互換フォールバック
     const buk1Raw = item.bukariki1 !== undefined ? item.bukariki1 : item.bukariki;
-    const buk = (buk1Raw !== '' && buk1Raw !== undefined)
-      ? { value: parseFloat(buk1Raw) || 0, source: '手入力' }
-      : findBukariki(item.name, item.spec || '');
+    const buk = resolveBukariki(item.name, item.spec, buk1Raw);
     const kosu = qty * buk.value;
     totalKosu += kosu;
 

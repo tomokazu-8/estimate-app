@@ -78,6 +78,16 @@ let activeCategories = (function() {
 let customCatCounter = parseInt(localStorage.getItem('customCatCounter') || '10', 10);
 
 // ===== SHARED UTILITIES (used by app.js, tridge-manager.js, etc.) =====
+// 品目オブジェクトの雛型を生成（全フィールドのデフォルト値を一元管理）
+function createBlankItem(overrides) {
+  return Object.assign({
+    id: itemIdCounter++,
+    name: '', spec: '', qty: '', unit: '式', price: '', amount: 0, note: '',
+    bukariki1: '', bukariki2: '', bukariki3: '',
+    listPrice: '', basePrice: '', costRate: '', sellRate: '',
+  }, overrides);
+}
+
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function downloadBlob(blob, filename) {

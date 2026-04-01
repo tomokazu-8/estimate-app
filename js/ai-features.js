@@ -147,6 +147,11 @@ function _buildAiDraftPrompt(similar, targetArea) {
 
   const areaNote = targetArea > 0 ? `${targetArea}坪` : '未入力';
 
+  // BUKARIKI_DBから代表的な歩掛をサンプルとしてプロンプトに渡す
+  const bukSamples = BUKARIKI_DB.length > 0
+    ? BUKARIKI_DB.slice(0, 30).map(b => `  ${b.n}${b.s ? ' ' + b.s : ''}: ${b.b}`).join('\n')
+    : '  ケーブル類（m）: 0.04〜0.08\n  電線管（m）: 0.03〜0.05\n  コンセント・スイッチ（個）: 0.12〜0.15\n  照明器具（台）: 0.25〜0.40\n  分電盤（面）: 1.5〜2.0';
+
   return `あなたは電気工事会社の熟練見積担当者です。以下の物件情報と過去実績をもとに、見積のたたき台をJSON形式で作成してください。
 
 【新規物件情報】
@@ -161,6 +166,13 @@ ${project.memo ? '- 工事概要・メモ: ' + project.memo + '\n' : ''}${pastSe
 【使用できる工種】（必ずこの一覧から選ぶこと）
 ${catNames}
 
+【労務単価】
+- 電工 見積単価: ¥${LABOR_RATES.sell.toLocaleString()}/人工
+- 電工 原価単価: ¥${LABOR_RATES.cost.toLocaleString()}/人工
+
+【歩掛の参考値（1単位あたりの取付人工数）】
+${bukSamples}
+
 【出力形式】JSONのみで回答してください（前後の説明文は不要）:
 {
   "comment": "見積作成の根拠と注意点を1〜2文で",
@@ -168,7 +180,7 @@ ${catNames}
     {
       "name": "工種名（上記一覧から選ぶ）",
       "items": [
-        {"name": "品目名", "spec": "規格・型番", "qty": 数値, "unit": "単位", "price": 単価数値}
+        {"name": "品目名", "spec": "規格・型番", "qty": 数値, "unit": "単位", "price": 単価数値, "bukariki": 歩掛数値}
       ]
     }
   ]
@@ -176,8 +188,9 @@ ${catNames}
 
 【注意事項】
 - 工種名は必ず上記「使用できる工種」の中から選ぶこと（完全一致で使うこと、略称や別名は不可）
-- qty・price は整数の数値型（文字列不可）
-- 雑材料費・労務費・諸経費・小計 等の自動計算行は含めない（システムが自動追加する）
+- qty・price・bukariki は数値型（文字列不可）
+- bukariki は1単位あたりの取付人工数（電工労務費の算出根拠）。不明な品目は 0
+- 雑材料費・電工労務費・運搬費・諸経費・小計 等の自動計算行は含めない（システムが自動追加する）
 - 実際の電気工事に使用する材料・機器のみ列挙する（電線・ケーブル・幹線・配管・プルボックス・分電盤・照明器具・コンセント・スイッチ・電気機器等を適切に含めること）
 - ケーブル・電線類（IV線・CV線・VVF・幹線ケーブル等）は電気工事に不可欠なため、必ず該当する工種の品目に含めること
 - 過去データがある場合は面積比を考慮して数量を調整する
@@ -196,13 +209,25 @@ function _showAiDraftPreview(draft, similarCount) {
   </div>`;
 
   let totalAmount = 0;
+  let totalKosu = 0;
   (draft.categories || []).forEach(cat => {
     const catTotal = (cat.items || []).reduce((s, i) => s + ((i.qty || 0) * (i.price || 0)), 0);
+    // 歩掛合計（AI提案値→DBフォールバック）
+    const catKosu = (cat.items || []).reduce((s, i) => {
+      const qty = parseFloat(i.qty) || 0;
+      const bukE = (parseFloat(i.bukariki) || 0) > 0 ? i.bukariki : '';
+      return s + qty * resolveBukariki(i.name, i.spec, bukE).value;
+    }, 0);
     totalAmount += catTotal;
+    totalKosu += catKosu;
+    const laborSell = Math.round(catKosu * LABOR_RATES.sell);
     html += `<div style="margin-bottom:14px;">
-      <div style="display:flex;justify-content:space-between;font-weight:600;font-size:13px;padding:6px 10px;background:#f0f4ff;border-radius:6px 6px 0 0;border:1px solid #dbeafe;border-bottom:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:13px;padding:6px 10px;background:#f0f4ff;border-radius:6px 6px 0 0;border:1px solid #dbeafe;border-bottom:none;">
         <span>${cat.name}</span>
-        <span style="font-family:'JetBrains Mono';">¥${catTotal.toLocaleString()}</span>
+        <span style="display:flex;gap:16px;align-items:center;">
+          ${catKosu > 0 ? `<span style="font-size:11px;font-weight:400;color:#6366f1;">電工 ${catKosu.toFixed(2)}人工 → ¥${laborSell.toLocaleString()}</span>` : ''}
+          <span style="font-family:'JetBrains Mono';">¥${catTotal.toLocaleString()}</span>
+        </span>
       </div>
       <table style="width:100%;border-collapse:collapse;border:1px solid #dbeafe;font-size:12px;">
         <thead><tr style="background:#f8fafc;color:#64748b;">
@@ -212,24 +237,36 @@ function _showAiDraftPreview(draft, similarCount) {
           <th style="padding:5px 8px;text-align:left;font-weight:500;border-bottom:1px solid #e2e8f0;">単位</th>
           <th style="padding:5px 8px;text-align:right;font-weight:500;border-bottom:1px solid #e2e8f0;">単価</th>
           <th style="padding:5px 8px;text-align:right;font-weight:500;border-bottom:1px solid #e2e8f0;">金額</th>
+          <th style="padding:5px 8px;text-align:right;font-weight:500;border-bottom:1px solid #e2e8f0;">歩掛</th>
+          <th style="padding:5px 8px;text-align:right;font-weight:500;border-bottom:1px solid #e2e8f0;">人工数</th>
         </tr></thead>
         <tbody>`;
     (cat.items || []).forEach(item => {
-      const amount = (item.qty || 0) * (item.price || 0);
+      const qty    = parseFloat(item.qty)   || 0;
+      const price  = parseFloat(item.price) || 0;
+      const amount = qty * price;
+      const bukE   = (parseFloat(item.bukariki) || 0) > 0 ? item.bukariki : '';
+      const buk    = resolveBukariki(item.name, item.spec, bukE);
+      const kosu   = qty * buk.value;
+      const bukSource = buk.source !== '手入力' && buk.value > 0 ? ' style="color:#6366f1;" title="DB補完"' : '';
       html += `<tr style="border-bottom:1px solid #f1f5f9;">
-        <td style="padding:4px 8px;">${item.name}</td>
-        <td style="padding:4px 8px;color:#666;">${item.spec || ''}</td>
-        <td style="padding:4px 8px;text-align:right;font-family:'JetBrains Mono';">${item.qty}</td>
-        <td style="padding:4px 8px;">${item.unit || ''}</td>
-        <td style="padding:4px 8px;text-align:right;font-family:'JetBrains Mono';">${(item.price || 0).toLocaleString()}</td>
+        <td style="padding:4px 8px;">${esc(item.name)}</td>
+        <td style="padding:4px 8px;color:#666;">${esc(item.spec || '')}</td>
+        <td style="padding:4px 8px;text-align:right;font-family:'JetBrains Mono';">${qty}</td>
+        <td style="padding:4px 8px;">${esc(item.unit || '')}</td>
+        <td style="padding:4px 8px;text-align:right;font-family:'JetBrains Mono';">${price.toLocaleString()}</td>
         <td style="padding:4px 8px;text-align:right;font-family:'JetBrains Mono';">${amount.toLocaleString()}</td>
+        <td style="padding:4px 8px;text-align:right;font-family:'JetBrains Mono';"${bukSource}>${buk.value > 0 ? buk.value.toFixed(3) : '<span style="color:#ccc;">―</span>'}</td>
+        <td style="padding:4px 8px;text-align:right;font-family:'JetBrains Mono';color:#6366f1;">${kosu > 0 ? kosu.toFixed(3) : ''}</td>
       </tr>`;
     });
     html += `</tbody></table></div>`;
   });
 
-  html += `<div style="text-align:right;padding:10px 8px 4px;font-size:14px;font-weight:700;color:var(--accent);border-top:2px solid #e2e8f0;">
-    材料合計（自動計算行除く）: ¥${totalAmount.toLocaleString()}
+  const totalLaborSell = Math.round(totalKosu * LABOR_RATES.sell);
+  html += `<div style="text-align:right;padding:10px 8px 4px;font-size:13px;border-top:2px solid #e2e8f0;display:flex;justify-content:flex-end;gap:32px;">
+    <span style="color:#6366f1;font-weight:600;">電工労務費（推計）: <span style="font-family:'JetBrains Mono';">${totalKosu.toFixed(2)}人工 → ¥${totalLaborSell.toLocaleString()}</span></span>
+    <span style="font-weight:700;color:var(--accent);">材料合計: <span style="font-family:'JetBrains Mono';">¥${totalAmount.toLocaleString()}</span></span>
   </div>`;
 
   body.innerHTML = html;
@@ -264,18 +301,14 @@ function applyAiDraft() {
     (cat.items || []).forEach(item => {
       const qty   = parseFloat(item.qty)   || 0;
       const price = parseFloat(item.price) || 0;
-      items[targetCat.id].push({
-        id:       itemIdCounter++,
-        name:     item.name  || '',
-        spec:     item.spec  || '',
-        qty,
-        unit:     item.unit  || '',
-        price,
-        amount:   qty * price,
-        bukariki1: '', bukariki2: '', bukariki3: '',
-        listPrice: '', basePrice: '', costRate: '', sellRate: '',
-        note:     '',
-      });
+      // 歩掛: AI提案値(>0)を優先、なければDBから補完
+      const bukExplicit = (parseFloat(item.bukariki) || 0) > 0 ? item.bukariki : '';
+      const buk = resolveBukariki(item.name, item.spec, bukExplicit);
+      items[targetCat.id].push(createBlankItem({
+        name: item.name || '', spec: item.spec || '',
+        qty, unit: item.unit || '', price, amount: qty * price,
+        bukariki1: buk.value > 0 ? buk.value : '',
+      }));
       addedItems++;
     });
   });
@@ -485,17 +518,15 @@ function applySupplierImport() {
       ? `定価¥${item.listPrice.toLocaleString()}（仕入¥${item.costPrice.toLocaleString()}）`
       : `仕入¥${item.costPrice.toLocaleString()}`;
 
-    items[catId].push({
-      id:       itemIdCounter++,
-      name:     (item.symbol ? `[${item.symbol}]` : '') + item.name,
-      spec:     item.partNo  || '',
-      qty:      item.qty     || 1,
-      unit:     item.unit    || '台',
-      price:    sellPrice,
-      amount:   sellPrice * (item.qty || 1),
-      bukariki: '',
-      note:     noteStr,
-    });
+    const itemName = (item.symbol ? `[${item.symbol}]` : '') + item.name;
+    const buk = resolveBukariki(itemName, item.partNo, '');
+    items[catId].push(createBlankItem({
+      name: itemName, spec: item.partNo || '',
+      qty: item.qty || 1, unit: item.unit || '台',
+      price: sellPrice, amount: sellPrice * (item.qty || 1),
+      bukariki1: buk.value > 0 ? buk.value : '',
+      note: noteStr,
+    }));
     added++;
   });
 

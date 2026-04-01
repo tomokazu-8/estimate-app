@@ -1,6 +1,6 @@
 # estimate-app 全体アーキテクチャ
 
-> 最終更新: 2026-03-11
+> 最終更新: 2026-03-14
 
 ---
 
@@ -86,7 +86,7 @@ tridge-manager.js — Tridgeマスタ管理UI（db-manager統合）
 | ファイル | 責務 | 主要な公開API |
 |---------|------|--------------|
 | `data.js` | グローバル変数定義・共通関数 | `norm()` `esc()` `genId()` `downloadBlob()` `normItemKey()` |
-| `knowledge-db.js` | ナレッジDBのCRUD・入出力 (IIFE) | `knowledgeDB.save()` `.getAll()` `.searchSimilar()` `.buildRecord()` `.exportXLSX()` `.importFile()` `.autoBackup()` `.setExcluded()` `.getClientItemHistory()` |
+| `knowledge-db.js` | ナレッジDBのCRUD・入出力 (IIFE) | `knowledgeDB.save()` `.getAll()` `.searchSimilar()` `.buildRecord()` `.exportXLSX()` `.importFile()` `.autoBackup()` `.setExcluded()` `.clearAll()` `.replaceFromFile()` `.getClientItemHistory()` |
 | `honmaru-import.js` | 本丸EX 3ファイルの解析・ナレッジDB登録 | `honmaruOpenModal()` `honmaruHandleFiles()` `honmaruImportConfirm()` |
 | `labor.js` | 品目ごとの歩掛検索・労務費計算 | `findBukariki(name, spec)` `calcLaborBreakdown(catId)` |
 | `material-search.js` | 資材DB検索モーダル・候補表示 | `openSearchModal(itemId)` `searchMaterial()` `showSuggestions()` `filterMaterialsByTerms()` |
@@ -178,13 +178,23 @@ honmaruImportConfirm() → knowledgeDB.save() でナレッジDBに登録
 | 労務単価 | 物件×職種ごとに1行（4列） | 物件数×職種数 |
 | 分析 | 読み取り専用サマリー。㎡単価・坪単価（11列） | 物件数 |
 
+### importXLSX() の対応フォーマット（自動検出）
+
+| 形式 | 検出条件 | ピボットキー | `source`値 |
+|------|---------|------------|------------|
+| 集約ファイル（katsuyo） | `物件ヘッダー`シートあり | `見積番号` | `'katsuyo'` |
+| knowledge_db.xlsx（新形式） | `物件マスタ`シートあり | `物件ID` | `''`（元の値） |
+| レガシー | その他 | `id` | `''` |
+
+工種サマリーシート名: 集約形式=`工種サマリー`（長音符あり）、その他=`工種サマリ`
+
 ### ナレッジレコードの構造
 
 ```javascript
 {
   id,              // IndexedDB自動採番
-  registeredAt,    // 登録日（YYYY-MM-DD）
-  source,          // 'honmaru' | 'app'（登録元）
+  registeredAt,    // 登録日（YYYY-MM-DD）。row['登録日'] || row['更新日'] || row['見積日付'] で取得
+  source,          // 'honmaru' | 'app' | 'katsuyo'（登録元）
   excluded,        // boolean（自動見積りから除外するフラグ）
 
   project: {
@@ -330,6 +340,6 @@ honmaruImportConfirm() → knowledgeDB.save() でナレッジDBに登録
 | 優先度 | 内容 | 対象ファイル | ステータス |
 |--------|------|-------------|-----------|
 | 高 | ナレッジDB永続化 案B: File System Access API | knowledge-db.js / app.js | 未着手 |
-| 中 | ナレッジDB詳細画面の全項目表示 | app.js | 未着手 |
+| 中 | ナレッジDB詳細画面の全項目表示 | app.js | ✅ 実装済み（`showKnowledgeDetail()`拡充済み） |
 | 低 | Tridgeイジェクトボタン | excel-loader.js / app.js | 未着手 |
 | 低 | 大中小フィルタ非表示化 | material-search.js / app.js | 未着手 |
