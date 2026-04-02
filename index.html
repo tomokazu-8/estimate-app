@@ -641,6 +641,8 @@
           <div style="display:flex;gap:6px;margin-left:auto;">
             <button class="btn btn-secondary btn-sm" onclick="tmImportExcelAsNewDb()">📥 Excel取込</button>
             <input type="file" id="tm-importFileInput" accept=".xlsx,.xls,.csv,.zip" style="display:none" onchange="tmHandleImportFile(event)">
+            <button class="btn btn-sm" onclick="tmImportSupplierFile()" title="仕入れ業者の見積書をAI解析してTridgeに保存" style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;">📋 仕入れ取込</button>
+            <input type="file" id="tm-supplierFileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="tmHandleSupplierFile(event)">
             <button class="btn btn-secondary btn-sm" id="tm-btnExport" disabled onclick="tmExportCurrentDb()">📤 Excelエクスポート</button>
             <button class="btn btn-sm" id="tm-btnApplyKoshu" disabled onclick="tmApplyAsKoshu()" title="工種マスタ・労務・キーワードを適用" style="background:#dcfce7;color:#16a34a;border:1px solid #86efac;">▶ 工種適用</button>
             <button class="btn btn-sm" id="tm-btnApplyZairyo" disabled onclick="tmApplyAsZairyo()" title="資材マスタ・カテゴリ・分類を適用" style="background:#dbeafe;color:#2563eb;border:1px solid #93c5fd;">▶ 資材適用</button>

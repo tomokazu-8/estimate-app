@@ -1299,6 +1299,134 @@ function _tmRenderAppliedBadges() {
   el.innerHTML = html || '<div style="font-size:11px;color:#94a3b8;padding:4px;">適用中のTridgeはありません</div>';
 }
 
+// ===== 仕入れ見積 → Tridgeとして保存 =====
+
+function tmImportSupplierFile() {
+  document.getElementById('tm-supplierFileInput').click();
+}
+
+async function tmHandleSupplierFile(event) {
+  const file = event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+
+  showToast('⏳ 仕入れ見積をAI解析中...');
+
+  try {
+    // Excel → CSV テキスト化（既存ロジック流用）
+    const buf = await file.arrayBuffer();
+    const wb  = XLSX.read(buf, { type: 'array' });
+    let csvText = '';
+    wb.SheetNames.forEach(sheetName => {
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: '' });
+      csvText += `\n[シート: ${sheetName}]\n`;
+      rows.slice(0, 120).forEach(row => {
+        const line = row.map(c => String(c).replace(/\r\n|\n/g, '/')).join('\t');
+        if (line.trim()) csvText += line + '\n';
+      });
+    });
+
+    // AI解析
+    const prompt = _tmBuildSupplierPrompt(csvText, file.name);
+    const responseText = await callClaude(prompt, 8192);
+
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('AIの回答からJSONを取り出せませんでした');
+    const result = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(result.items) || result.items.length === 0) {
+      throw new Error('品目が検出できませんでした');
+    }
+
+    // Tridge形式に変換（カテゴリ・歩掛・単位を自動補完）
+    const rows = result.items.map(item => {
+      const itemName = (item.symbol ? `[${item.symbol}]` : '') + (item.name || '');
+      const spec = item.partNo || '';
+
+      // カテゴリ自動判定
+      let catId = '';
+      if (CATEGORY_MASTER.length > 0) {
+        const n = norm(itemName + ' ' + spec);
+        for (const cat of CATEGORY_MASTER) {
+          if (cat.isDefault) continue;
+          if (cat.keywords.some(k => n.includes(norm(k)))) { catId = cat.catId; break; }
+        }
+        if (!catId) { const def = CATEGORY_MASTER.find(c => c.isDefault); catId = def ? def.catId : ''; }
+      }
+
+      // 歩掛をDBから補完
+      const buk = typeof resolveBukariki === 'function'
+        ? resolveBukariki(itemName, spec, '').value : 0;
+
+      // 単位をDBから補完
+      let unit = item.unit || '';
+      if (!unit || unit === '台') {
+        const nName = norm(itemName);
+        const match = MATERIAL_DB.find(m => norm(m.n) === nName)
+          || MATERIAL_DB.find(m => nName.includes(norm(m.n)) && norm(m.n).length >= 3);
+        if (match && match.u) unit = match.u;
+      }
+
+      return {
+        id: genId(),
+        n: itemName,
+        s: spec,
+        u: unit || item.unit || '台',
+        ep: item.listPrice > 0 ? item.listPrice : item.costPrice || 0,
+        cp: item.costPrice || 0,
+        r: item.listPrice > 0 && item.costPrice > 0
+          ? Math.round(item.costPrice / item.listPrice * 100) / 100 : 0.75,
+        b: buk,
+        c: catId,
+        daiId: '', chuId: '', shoId: '', shoName: '',
+      };
+    }).filter(r => r.n);
+
+    // Tridgeとして保存
+    const supplierName = result.supplier || file.name.replace(/\.(xlsx?|csv|pdf)$/i, '');
+    const date = new Date().toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit' });
+    const name = `${supplierName} ${date}`;
+    const memo = `AI解析 ${rows.length}品目`;
+
+    tmSaveImportedTridge(name, memo, rows, 0, [], { v2: [], v3: [] }, [], tmDefaultSettings(), 'supplier');
+
+    showToast(`「${name}」を仕入れTridgeとして保存しました（${rows.length}品目）`);
+
+  } catch(e) {
+    showToast('仕入れ見積の解析に失敗しました: ' + e.message);
+    console.error(e);
+  }
+}
+
+function _tmBuildSupplierPrompt(csvText, filename) {
+  return `あなたは電気工事会社の積算担当者です。以下は仕入れ業者から届いた見積書（Excel）のデータです。品目情報を抽出してJSONで返してください。
+
+ファイル名: ${filename}
+
+【見積書データ（タブ区切り）】
+${csvText}
+
+以下のJSON形式のみで回答してください（前後の説明文不要）:
+{
+  "supplier": "仕入れ業者名",
+  "items": [
+    {
+      "symbol": "記号（F1/A5等。なければ空文字）",
+      "name": "品名（商品名のみ。型番は含めない）",
+      "partNo": "品番・型番",
+      "qty": 数量の数値,
+      "unit": "単位（台/個/m/式等）",
+      "listPrice": 定価の数値（オープン価格は0）,
+      "costPrice": 仕入れ単価の数値
+    }
+  ]
+}
+
+【注意事項】
+- 合計行・小計行・送料・役務行は除外
+- 数値はカンマなしの数値型（文字列不可）
+- qty・listPrice・costPrice は数値型`;
+}
+
 // ===== キーボードショートカット（Tridgeパネル用）=====
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
