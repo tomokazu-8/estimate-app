@@ -37,10 +37,21 @@ const knowledgeDB = (() => {
     });
   }
 
-  // --- 保存 ---
-  function save(record) {
+  // --- 保存（同一見積番号+物件名があれば上書き、なければ新規追加） ---
+  async function save(record) {
+    const all = await getAll();
+    const key = (record.project?.number || '') + '|' + (record.project?.name || '');
+    const existing = all.find(r =>
+      (r.project?.number || '') + '|' + (r.project?.name || '') === key
+    );
     return _withStore('readwrite', (store, resolve, reject) => {
-      const req = store.add(record);
+      let req;
+      if (existing) {
+        record.id = existing.id; // 既存のIDを保持
+        req = store.put(record);
+      } else {
+        req = store.add(record);
+      }
       req.onsuccess = () => resolve(req.result);
       req.onerror   = () => reject(req.error);
     });
