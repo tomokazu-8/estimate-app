@@ -797,7 +797,7 @@ function tmHandleImportFile(event) {
 
       // 設定（労務単価マスタ）
       let settings = tmDefaultSettings();
-      const wsLabor = sh('労務単価マスタ');
+      const wsLabor = wb.Sheets['労務単価マスタ'] ? XLSX.utils.sheet_to_json(wb.Sheets['労務単価マスタ']) : null;
       if (wsLabor && wsLabor.length > 0) {
         const first = wsLabor[0];
         const sell = parseFloat(getCol(first,'見積単価（円/人工）','見積単価','売単価')||0);
