@@ -1057,8 +1057,8 @@ function renderSummary() {
     discountRow.style.display = 'none';
   }
 
-  // 見積合計 = 工事費計 + 法定福利費 - 値引き
-  const grandTotal = workTotal + legalAmt - discountAmt;
+  // 見積合計 = 工事費計 - 値引き + 法定福利費（法定福利費は値引き対象外）
+  const grandTotal = workTotal - discountAmt + legalAmt;
   document.getElementById('summaryTotal').textContent = '¥' + formatNum(Math.round(grandTotal));
   document.getElementById('prev-projname').textContent = project.name || '（物件名未入力）';
 }
