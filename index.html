@@ -314,18 +314,20 @@
           <div class="card-header">
             <span class="card-title">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6m-9-9h6m6 0h6"/></svg>
-              計算パラメータ
+              労務設定・計算パラメータ
             </span>
           </div>
           <div class="card-body">
             <div class="form-grid">
               <div class="form-group">
-                <label class="form-label">労務費 原価率（デフォルト72%）</label>
-                <input type="number" class="form-input" id="pj-labor-rate" value="72" step="0.1" min="50" max="100" oninput="recalcAll()">
+                <label class="form-label">労務 見積単価（円/人工）</label>
+                <input type="number" class="form-input" id="pj-labor-sell" step="1000" oninput="syncLaborSettingsFromForm()"
+                  placeholder="Tridge設定を使用">
+                <small id="pj-labor-sell-hint" style="color:var(--text-sub);font-size:10px;"></small>
               </div>
               <div class="form-group">
-                <label class="form-label">基準労務売価（円/人工）</label>
-                <input type="number" class="form-input" id="pj-labor-sell" placeholder="例：26700（全国平均）" step="1000" oninput="recalcAll()">
+                <label class="form-label">労務 原価率（%）</label>
+                <input type="number" class="form-input" id="pj-labor-rate" value="72" step="0.1" min="50" max="100" oninput="syncLaborSettingsFromForm()">
               </div>
               <div class="form-group">
                 <label class="form-label">消費税率（%）</label>
@@ -475,7 +477,7 @@
             <div style="font-size:12px;color:var(--text-sub);margin-bottom:10px;">
               ▲▼で並び替え。チェックで表示/非表示。割合工種は%を入力すると金額を自動計算します。
             </div>
-            <div id="catManagerList"></div>
+            <div id="catManagerList" style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px;"></div>
             <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;">
               <input type="text" id="customCatName" class="input"
                      placeholder="カスタム工種名を入力（例：空調設備工事）"
@@ -928,12 +930,12 @@
 
 <!-- Knowledge Detail Modal -->
 <div class="modal-overlay" id="knowledgeDetailModal">
-  <div class="modal" style="max-width:780px;">
-    <div class="modal-header">
+  <div class="modal" style="max-width:780px;max-height:85vh;display:flex;flex-direction:column;">
+    <div class="modal-header" style="position:sticky;top:0;background:var(--card);z-index:1;flex-shrink:0;">
       <span class="modal-title">📋 ナレッジ詳細</span>
       <button class="modal-close" onclick="document.getElementById('knowledgeDetailModal').classList.remove('show')">✕</button>
     </div>
-    <div class="modal-body" id="knowledgeDetailBody" style="padding:16px 20px;"></div>
+    <div class="modal-body" id="knowledgeDetailBody" style="padding:16px 20px;overflow-y:auto;flex:1;"></div>
   </div>
 </div>
 

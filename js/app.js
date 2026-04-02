@@ -25,6 +25,7 @@ function applyTridgeCategories(newCats) {
   }
   saveActiveCategories();
   renderCatTabs();
+  if (typeof syncLaborSettingsToForm === 'function') syncLaborSettingsToForm();
 }
 
 
@@ -281,13 +282,20 @@ function renderCategoryManager() {
                  style="width:96px;text-align:right;padding:2px 4px;font-size:12px;font-weight:600;color:${amtColor};border:1px solid ${amtBorderColor};border-radius:4px;">
           ${resetBtn}
         </div>`;
-      return `<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--bg-alt);background:#faf9f7;">
+      return `<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--bg-alt);background:#faf9f7;grid-column:1/-1;">
         ${moveBtns}${checkbox}${nameSpan}${rateSection}${deleteBtn}
       </div>`;
     }
 
-    return `<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--bg-alt);">
-      ${moveBtns}${checkbox}${nameSpan}${deleteBtn}
+    // 品目数と金額を表示
+    const itemCount = (items[c.id] || []).filter(i => i.name && !isAutoName(i.name)).length;
+    const catAmt = c.active ? Math.round(getCatAmount(c.id)) : 0;
+    const infoSpan = `<span style="font-size:10px;color:${itemCount > 0 ? '#16a34a' : '#94a3b8'};white-space:nowrap;flex-shrink:0;">
+      ${itemCount > 0 ? itemCount + '品目' : '空'}${catAmt > 0 ? ' ¥' + catAmt.toLocaleString() : ''}
+    </span>`;
+
+    return `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--bg-alt);">
+      ${moveBtns}${checkbox}${nameSpan}${infoSpan}${deleteBtn}
     </div>`;
   }).join('');
 }
@@ -942,6 +950,32 @@ function recalcAll() {
   renderItems();
 }
 
+// 物件情報の労務設定フォームから LABOR_RATES を同期
+function syncLaborSettingsFromForm() {
+  const sell = parseFloat(document.getElementById('pj-labor-sell').value) || 0;
+  const rate = parseFloat(document.getElementById('pj-labor-rate').value) || 72;
+  if (sell > 0) {
+    LABOR_RATES.sell = sell;
+    LABOR_RATES.cost = Math.round(sell * rate / 100);
+  }
+  AUTO_CALC.laborCostRatio = rate / 100;
+  project.laborSell = sell || '';
+  project.laborRate = rate;
+  recalcAll();
+}
+
+// Tridge適用後にフォームの表示を更新
+function syncLaborSettingsToForm() {
+  const sellInput = document.getElementById('pj-labor-sell');
+  const rateInput = document.getElementById('pj-labor-rate');
+  const hint = document.getElementById('pj-labor-sell-hint');
+  if (sellInput) sellInput.value = LABOR_RATES.sell || '';
+  if (rateInput && LABOR_RATES.cost > 0 && LABOR_RATES.sell > 0) {
+    rateInput.value = Math.round(LABOR_RATES.cost / LABOR_RATES.sell * 1000) / 10;
+  }
+  if (hint) hint.textContent = LABOR_RATES.sell ? 'Tridge設定: ¥' + LABOR_RATES.sell.toLocaleString() + '/人工' : '';
+}
+
 // ===== SUMMARY BAR =====
 function updateSummaryBar() {
   let grandTotal = 0;
@@ -1514,6 +1548,9 @@ async function exportEstimate() {
   }
 
   showToast('Excel出力完了');
+
+  // 見積を自動保存
+  try { saveEstimate(); } catch(e) { console.warn('自動保存失敗:', e); }
 
   // ナレッジDBに自動登録
   try {
