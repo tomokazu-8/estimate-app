@@ -62,6 +62,10 @@ function calcLaborBreakdown(catId) {
       bukariki: buk.value,
       kosu: Math.round(kosu * 1000) / 1000,
       source: buk.source,
+      bukariki2: buk2,
+      kosu2: Math.round(qty * buk2 * 1000) / 1000,
+      bukariki3: buk3,
+      kosu3: Math.round(qty * buk3 * 1000) / 1000,
     });
   }
 

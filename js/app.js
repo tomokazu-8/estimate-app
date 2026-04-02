@@ -516,18 +516,53 @@ function renderLaborSection() {
 function showLaborDetail() {
   const lb = calcLaborBreakdown(currentCat);
   if (lb.details.length === 0) { showToast('材料を先に入力してください'); return; }
+
+  const hasBuk2 = lb.details.some(d => d.bukariki2 > 0);
+  const hasBuk3 = lb.details.some(d => d.bukariki3 > 0);
+
   let html = '<div style="padding:12px 16px;max-height:450px;overflow-y:auto;font-size:12px;">';
-  html += '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#f0fdf4;"><th style="text-align:left;padding:4px;">品名</th><th style="text-align:right;padding:4px;">数量</th><th style="text-align:right;padding:4px;">歩掛1</th><th style="text-align:right;padding:4px;">工数</th><th style="padding:4px;">根拠</th></tr></thead><tbody>';
+  html += '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#f0fdf4;">';
+  html += '<th style="text-align:left;padding:4px;">品名</th>';
+  html += '<th style="text-align:right;padding:4px;">数量</th>';
+  html += '<th style="text-align:right;padding:4px;">歩掛1</th>';
+  html += '<th style="text-align:right;padding:4px;">工数1</th>';
+  if (hasBuk2) {
+    html += '<th style="text-align:right;padding:4px;">歩掛2</th>';
+    html += '<th style="text-align:right;padding:4px;">工数2</th>';
+  }
+  if (hasBuk3) {
+    html += '<th style="text-align:right;padding:4px;">歩掛3</th>';
+    html += '<th style="text-align:right;padding:4px;">工数3</th>';
+  }
+  html += '</tr></thead><tbody>';
+
   for (const d of lb.details) {
-    html += '<tr style="border-bottom:1px solid #eee;"><td style="padding:3px 4px;">'+d.name+'</td><td style="text-align:right;padding:3px 4px;">'+d.qty+'</td><td style="text-align:right;padding:3px 4px;">'+d.bukariki.toFixed(3)+'</td><td style="text-align:right;padding:3px 4px;">'+d.kosu.toFixed(3)+'</td><td style="padding:3px 4px;font-size:10px;color:#888;">'+d.source+'</td></tr>';
+    html += '<tr style="border-bottom:1px solid #eee;">';
+    html += '<td style="padding:3px 4px;">'+esc(d.name)+'</td>';
+    html += '<td style="text-align:right;padding:3px 4px;">'+d.qty+'</td>';
+    html += '<td style="text-align:right;padding:3px 4px;">'+d.bukariki.toFixed(3)+'</td>';
+    html += '<td style="text-align:right;padding:3px 4px;">'+d.kosu.toFixed(3)+'</td>';
+    if (hasBuk2) {
+      html += '<td style="text-align:right;padding:3px 4px;color:#6366f1;">'+(d.bukariki2 > 0 ? d.bukariki2.toFixed(3) : '')+'</td>';
+      html += '<td style="text-align:right;padding:3px 4px;color:#6366f1;">'+(d.kosu2 > 0 ? d.kosu2.toFixed(3) : '')+'</td>';
+    }
+    if (hasBuk3) {
+      html += '<td style="text-align:right;padding:3px 4px;color:#d97706;">'+(d.bukariki3 > 0 ? d.bukariki3.toFixed(3) : '')+'</td>';
+      html += '<td style="text-align:right;padding:3px 4px;color:#d97706;">'+(d.kosu3 > 0 ? d.kosu3.toFixed(3) : '')+'</td>';
+    }
+    html += '</tr>';
   }
   html += '</tbody></table>';
+
+  // サマリー
   html += '<div style="margin-top:12px;padding:10px;background:#f0fdf4;border-radius:8px;font-size:13px;">';
-  html += '<b>'+esc(LABOR_ROW_NAMES.labor1)+':</b> '+lb.totalKosu.toFixed(2)+'人工';
-  if (lb.撤去Kosu > 0) html += '　<b>'+esc(LABOR_ROW_NAMES.labor2)+':</b> '+lb.撤去Kosu.toFixed(2)+'人工';
-  if (lb.開口Kosu > 0) html += '　<b>'+esc(LABOR_ROW_NAMES.labor3)+':</b> '+lb.開口Kosu.toFixed(2)+'人工';
-  html += '<br><b>見積:</b> ¥'+formatNum(Math.round(lb.totalKosu*LABOR_RATES.sell))+' / <b>原価:</b> ¥'+formatNum(Math.round(lb.totalKosu*LABOR_RATES.cost));
+  html += '<b>'+esc(LABOR_ROW_NAMES.labor1)+':</b> '+lb.totalKosu.toFixed(2)+'人工 → ¥'+formatNum(Math.round(lb.totalKosu*LABOR_RATES.sell));
+  if (lb.撤去Kosu > 0) html += '<br><b>'+esc(LABOR_ROW_NAMES.labor2)+':</b> '+lb.撤去Kosu.toFixed(2)+'人工 → ¥'+formatNum(Math.round(lb.撤去Kosu*LABOR_RATES.sell));
+  if (lb.開口Kosu > 0) html += '<br><b>'+esc(LABOR_ROW_NAMES.labor3)+':</b> '+lb.開口Kosu.toFixed(2)+'人工 → ¥'+formatNum(Math.round(lb.開口Kosu*LABOR_RATES.sell));
+  const totalAllKosu = lb.totalKosu + lb.撤去Kosu + lb.開口Kosu;
+  html += '<br><b>労務費合計:</b> '+totalAllKosu.toFixed(2)+'人工 → 見積 ¥'+formatNum(Math.round(totalAllKosu*LABOR_RATES.sell))+' / 原価 ¥'+formatNum(Math.round(totalAllKosu*LABOR_RATES.cost));
   html += '</div></div>';
+
   document.getElementById('laborModalBody').innerHTML = html;
   document.getElementById('laborModal').classList.add('show');
 }
