@@ -322,12 +322,12 @@
               <div class="form-group">
                 <label class="form-label">労務 見積単価（円/人工）</label>
                 <input type="number" class="form-input" id="pj-labor-sell" step="1000" oninput="syncLaborSettingsFromForm()"
-                  placeholder="Tridge設定を使用">
-                <small id="pj-labor-sell-hint" style="color:var(--text-sub);font-size:10px;"></small>
+                  placeholder="例：29000">
               </div>
               <div class="form-group">
-                <label class="form-label">労務 原価率（%）</label>
-                <input type="number" class="form-input" id="pj-labor-rate" value="72" step="0.1" min="50" max="100" oninput="syncLaborSettingsFromForm()">
+                <label class="form-label">労務 原価単価（円/人工）</label>
+                <input type="number" class="form-input" id="pj-labor-cost" step="1000" oninput="syncLaborSettingsFromForm()"
+                  placeholder="例：20300">
               </div>
               <div class="form-group">
                 <label class="form-label">消費税率（%）</label>
@@ -477,7 +477,7 @@
             <div style="font-size:12px;color:var(--text-sub);margin-bottom:10px;">
               ▲▼で並び替え。チェックで表示/非表示。割合工種は%を入力すると金額を自動計算します。
             </div>
-            <div id="catManagerList" style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px;"></div>
+            <div id="catManagerList" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 12px;"></div>
             <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;">
               <input type="text" id="customCatName" class="input"
                      placeholder="カスタム工種名を入力（例：空調設備工事）"

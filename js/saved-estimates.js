@@ -489,8 +489,8 @@ function _restoreProjectForm() {
   document.getElementById('pj-area-tsubo').value = project.areaTsubo || '';
   document.getElementById('pj-location').value   = project.location || '';
   document.getElementById('pj-person').value     = project.person || '';
-  document.getElementById('pj-labor-rate').value = project.laborRate || 72;
   document.getElementById('pj-labor-sell').value = project.laborSell || '';
+  document.getElementById('pj-labor-cost').value = project.laborCost || '';
   document.getElementById('pj-tax').value        = project.tax || 10;
 }
 
@@ -530,6 +530,7 @@ function onEstListFinalToggle(checked) {
 /** 1日1回自動バックアップ（saveEstimate から呼ばれる） */
 function autoBackupEstimates(list) {
   if (!list || list.length === 0) return;
+  if (typeof _suppressBackupDownload !== 'undefined' && _suppressBackupDownload) return;
   const today = new Date().toISOString().split('T')[0];
   const last  = localStorage.getItem('estimates_last_backup') || '';
   if (last.startsWith(today)) return;

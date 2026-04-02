@@ -1,4 +1,5 @@
 let _laborSellTotal = 0; // renderLaborSection → updateSummaryBar で参照
+let _suppressBackupDownload = false; // Excel出力中にバックアップダウンロードを抑制
 let _undoStack = [];
 let _redoStack = [];
 
@@ -241,7 +242,7 @@ function renderCategoryManager() {
       onchange="toggleCategory('${c.id}', this.checked)"
       style="width:15px;height:15px;cursor:pointer;flex-shrink:0;">`;
 
-    const nameSpan = `<span style="font-size:13px;flex:1;min-width:0;">${c.name}</span>`;
+    const nameSpan = `<span style="font-size:11px;color:#94a3b8;flex-shrink:0;width:16px;text-align:right;">${idx+1}</span><span style="font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.name}</span>`;
 
     const deleteBtn = c.custom
       ? `<button class="btn btn-sm" onclick="removeCustomCategory('${c.id}')"
@@ -780,7 +781,9 @@ function updateItem(id, field, value) {
     item.bukariki1 = buk.value > 0 ? buk.value : '';
     // 単位をDBから補完（手入力で「式」以外に変更済みならスキップ）
     if (!item.unit || item.unit === '式') {
-      const match = MATERIAL_DB.find(m => norm(m.n) === norm(item.name));
+      const nName = norm(item.name);
+      const match = MATERIAL_DB.find(m => norm(m.n) === nName)
+        || MATERIAL_DB.find(m => nName.includes(norm(m.n)) && norm(m.n).length >= 3);
       if (match && match.u) item.unit = match.u;
     }
   }
@@ -953,27 +956,21 @@ function recalcAll() {
 // 物件情報の労務設定フォームから LABOR_RATES を同期
 function syncLaborSettingsFromForm() {
   const sell = parseFloat(document.getElementById('pj-labor-sell').value) || 0;
-  const rate = parseFloat(document.getElementById('pj-labor-rate').value) || 72;
-  if (sell > 0) {
-    LABOR_RATES.sell = sell;
-    LABOR_RATES.cost = Math.round(sell * rate / 100);
-  }
-  AUTO_CALC.laborCostRatio = rate / 100;
+  const cost = parseFloat(document.getElementById('pj-labor-cost').value) || 0;
+  if (sell > 0) LABOR_RATES.sell = sell;
+  if (cost > 0) LABOR_RATES.cost = cost;
+  AUTO_CALC.laborCostRatio = (sell > 0 && cost > 0) ? cost / sell : 0.72;
   project.laborSell = sell || '';
-  project.laborRate = rate;
+  project.laborCost = cost || '';
   recalcAll();
 }
 
 // Tridge適用後にフォームの表示を更新
 function syncLaborSettingsToForm() {
   const sellInput = document.getElementById('pj-labor-sell');
-  const rateInput = document.getElementById('pj-labor-rate');
-  const hint = document.getElementById('pj-labor-sell-hint');
+  const costInput = document.getElementById('pj-labor-cost');
   if (sellInput) sellInput.value = LABOR_RATES.sell || '';
-  if (rateInput && LABOR_RATES.cost > 0 && LABOR_RATES.sell > 0) {
-    rateInput.value = Math.round(LABOR_RATES.cost / LABOR_RATES.sell * 1000) / 10;
-  }
-  if (hint) hint.textContent = LABOR_RATES.sell ? 'Tridge設定: ¥' + LABOR_RATES.sell.toLocaleString() + '/人工' : '';
+  if (costInput) costInput.value = LABOR_RATES.cost || '';
 }
 
 // ===== SUMMARY BAR =====
@@ -1549,23 +1546,22 @@ async function exportEstimate() {
 
   showToast('Excel出力完了');
 
-  // 見積を自動保存
-  try { saveEstimate(); } catch(e) { console.warn('自動保存失敗:', e); }
+  // 見積を自動保存（ダウンロードは抑制）
+  try {
+    _suppressBackupDownload = true;
+    saveEstimate();
+  } catch(e) { console.warn('自動保存失敗:', e); }
+  finally { _suppressBackupDownload = false; }
 
-  // ナレッジDBに自動登録
+  // ナレッジDBに自動登録（ダウンロードは抑制、DB保存のみ）
   try {
     const record = knowledgeDB.buildRecord();
     if (record.grandTotal > 0) {
       await knowledgeDB.save(record);
-      showToast('ナレッジDBに登録しました');
+      showToast('保存 + ナレッジDB登録 完了');
       renderDBTable();
     }
   } catch(e) { console.warn('ナレッジDB登録失敗:', e); }
-
-  // ナレッジDB自動バックアップ（JSONダウンロード）
-  try {
-    await knowledgeDB.autoBackup();
-  } catch(e) { console.warn('ナレッジDBバックアップ失敗:', e); }
 }
 
 // ===== 最新の変更点（GitHub API） =====
