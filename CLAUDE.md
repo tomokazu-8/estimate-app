@@ -75,15 +75,19 @@
 - 見積自動作成（ナレッジDBの類似物件から品目を面積比スケーリングで自動投入）
 - **Tridgeマスタ管理UI**（tridge-manager.js）— db-manager の全機能を Deck 内に統合
 - **AI機能**（ai-features.js）— たたき台作成・仕入れ見積インポート・単価調査・掛率チェック
-- **保存済み見積管理**（saved-estimates.js）— 見積番号採番・複数スロット保存/読み込み
+- **保存済み見積管理**（saved-estimates.js）— バージョン管理・上書き保存・版上げ保存・本見積フラグ
+- **法定福利費・値引き** — 内訳書パネルで有効/無効切り替え、法定福利費は値引き後に加算
+- **自動計算行の完全自動化** — 品目入力と同時に雑材料・労務費・運搬費が自動追加・更新（ボタン不要）
 
 ### 重要なグローバル変数（data.js）
 - `TRIDGE_SETTINGS`: 設定マスタの値（copperEnabled/copperBase/copperFraction/laborSell/laborCost）
 - `TRIDGE_KEYWORDS`: キーワードマスタの配列（keyword/laborType/bukariki/copperLinked/ceilingOpening）
 - `koshuTridgeLoaded`: 工種Tridge装着フラグ
 - `zairyoTridgeLoaded`: 資材Tridge装着フラグ
-- `activeCategories`: 工種マスタから動的ロード（Tridge未装着時は[]）
+- `activeCategories`: 工種マスタから動的ロード（Tridge未装着時は[]）。各工種に `laborNames` を保持
 - `TRIDGE_CLIENTS`: 得意先マスタ（工種Tridgeから読み込み）
+- `LABOR_ROW_DEFAULTS`: 歩掛1〜3+経費の名称・有効フラグのデフォルト値
+- `LABOR_ROW_NAMES`: currentCat の laborNames を返すProxy（後方互換用）
 
 ### 内蔵DB
 `data/material_db.json` と `data/bukariki_db.json` は空の`[]`。
@@ -117,10 +121,12 @@
 - 解析元フォルダ: `OneDrive/見積りソフト作成プロジェクト/過去物件明細/`
 - 関数プレフィックス: `hm`（`hmParseChecklist` / `hmParseSummary` / `hmParseKiki`）
 
-### 自動バックアップ（実装済み）
-- **タイミング**: Excel出力のたびに `knowledgeDB.autoBackup()` が自動実行
-- **出力**: `knowledge_db.xlsx`（固定名・6シート構成）がダウンロードされる
-- **OneDrive保存**: ユーザーがOneDriveフォルダに保存 → クラウドバックアップ＆複数PC共有
+### ナレッジDB保存とバックアップ
+- **save()**: upsert方式（見積番号+物件名で既存チェック → 上書き or 新規追加）
+- **Excel出力時**: 自動保存（saveEstimate） + ナレッジDB登録。バックアップダウンロードは抑制
+- **手動バックアップ**: ナレッジDBパネルの「📥 Excelエクスポート」で knowledge_db.xlsx を出力
+- **置き換えインポート**: 「🔄 置き換えインポート」で全件削除→再インポート（重複解消に使用）
+- **追加インポート**: 重複チェック付き（見積番号+物件名が既存と一致すればスキップ）
 - **起動時復元チェック**: DB件数0件 + 最終バックアップ記録がある場合に復元バナーを表示
 
 ## テンプレート方式Excel出力
@@ -224,7 +230,7 @@ estimate-app/
     ├── calc-engine.js             ← 見積計算エンジン（自動計算行の追加・雑材料費等）
     ├── excel-loader.js            ← トリッジ読み込み（資材/工種/設定/キーワード4シート対応）
     ├── excel-template-export.js   ← テンプレート方式Excel出力（テンプレート読み込み→データ書き込み）
-    ├── saved-estimates.js         ← 見積番号採番・複数スロット保存/読み込み/バックアップ
+    ├── saved-estimates.js         ← 見積バージョン管理・上書き/版上げ保存・本見積フラグ・グループ一覧
     ├── ai-features.js             ← AI設定・Claude API・たたき台/仕入れインポート/単価調査/掛率チェック
     ├── app.js                     ← メインUIロジック（exportEstimate: ExcelJS優先→SheetJSフォールバック）
     └── tridge-manager.js          ← Tridgeマスタ管理UI（db-manager統合、tmプレフィックス）
@@ -244,15 +250,19 @@ SheetJS CDN → ExcelJS CDN
 - `norm(s)`: NFKC正規化で全角/半角統一 → data.jsで定義、全ファイルで使用
 - `esc(s)`: フルHTMLエスケープ（&/</>/") → data.jsで定義、全ファイルで使用
 - `genId()`: ユニークID生成 → data.jsで定義、全ファイルで使用
+- `createBlankItem(overrides)`: 品目オブジェクトの雛型を一元生成 → data.jsで定義
+- `resolveBukariki(name, spec, explicitValue)`: 歩掛解決（明示値→DB検索の優先順位） → labor.jsで定義
+- `getLaborNames(catId)`: 工種ごとの労務費名・有効フラグを取得 → data.jsで定義
+- `isAutoName(name)` / `isLaborLocked(name)`: 自動計算行の判定（動的、Proxy経由）
 - `cache: 'no-store'`: app.jsのfetch呼び出しに設定（ブラウザキャッシュ防止）
 - `getCol(row, ...names)`: excel-loader.jsの柔軟な列名検索（グローバル）
-- `activeCategories`: Tridge装着時に `applyTridgeCategories()` で上書き、localStorageに保存
+- `activeCategories[*].laborNames`: 工種ごとの自動計算行名称・有効フラグ
 - 銅建値補正: `TRIDGE_SETTINGS.copperEnabled === true` の時のみ有効（Tridge設定マスタ連動）
-- `isCableItem()`: TRIDGE_KEYWORDS の copperLinked フラグで判定（ハードコードなし）
-- `miscRate`: activeCategories[*].miscRate に格納（工種マスタの「雑材料率%」列）
+- `syncLaborItemPrices()`: renderItems()のたびに自動計算行を自動追加・更新（ボタン不要）
 - `getCatTotal(catId)`: 品目金額の合計（items配列のamountを集計）
 - `getCatAmount(catId)`: 割合モード込みの金額（rateModeの場合は前工種合計×割合%で算出）
-- `exportEstimate()`: async関数、ExcelJS版を試行→失敗時SheetJSフォールバック→ナレッジDB自動登録
+- `exportEstimate()`: async関数、ExcelJS版を試行→失敗時SheetJSフォールバック→自動保存→ナレッジDB登録
+- **見積バージョン管理**: baseNo（基番号）+ branch（枝番）+ isFinal（本見積フラグ）
 - **tridge-manager.js の命名規則**: 状態変数・関数は `tm` プレフィックス、HTML要素IDは `tm-` プレフィックス
 - **tmLoadToEstimate()**: TridgeデータをDeckグローバル変数に直接書き込む（Excelエクスポート不要）
 
