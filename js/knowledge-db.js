@@ -449,6 +449,13 @@ const knowledgeDB = (() => {
     if (!ws1) throw new Error('「' + projSheet + '」シートが見つかりません');
     const projects = XLSX.utils.sheet_to_json(ws1);
 
+    // 既存レコードのキーセットを取得（重複防止用）
+    const existingRecords = await getAll();
+    const existingKeys = new Set(existingRecords.map(r =>
+      (r.project?.number || '') + '|' + (r.project?.name || '')
+    ));
+    let skipped = 0;
+
     // ===== 工種サマリ =====
     const koshuMap = {}; // pid → catName → { total, costTotal, profitRate, profitAmt, laborHours, qty, unit }
     if (wb.Sheets[koshuSheet]) {
@@ -612,12 +619,17 @@ const knowledgeDB = (() => {
         categories,
         kikiList: kikiMap[pid] || [],
       };
+      // 重複チェック: 同一見積番号+物件名があればスキップ
+      const key = (record.project.number || '') + '|' + (record.project.name || '');
+      if (existingKeys.has(key)) { skipped++; continue; }
+      existingKeys.add(key);
+
       store.add(record);
       cnt++;
     }
 
     return new Promise((resolve, reject) => {
-      tx.oncomplete = () => { db.close(); resolve(cnt); };
+      tx.oncomplete = () => { db.close(); resolve({ added: cnt, skipped }); };
       tx.onerror    = () => { db.close(); reject(tx.error); };
     });
   }

@@ -304,9 +304,17 @@ function applyAiDraft() {
       // 歩掛: AI提案値(>0)を優先、なければDBから補完
       const bukExplicit = (parseFloat(item.bukariki) || 0) > 0 ? item.bukariki : '';
       const buk = resolveBukariki(item.name, item.spec, bukExplicit);
+      // 単位: AI提案値を優先、なければDBから補完
+      let unit = item.unit || '';
+      if (!unit || unit === '式') {
+        const nName = norm(item.name || '');
+        const dbMatch = MATERIAL_DB.find(m => norm(m.n) === nName)
+          || MATERIAL_DB.find(m => nName.includes(norm(m.n)) && norm(m.n).length >= 3);
+        if (dbMatch && dbMatch.u) unit = dbMatch.u;
+      }
       items[targetCat.id].push(createBlankItem({
         name: item.name || '', spec: item.spec || '',
-        qty, unit: item.unit || '', price, amount: qty * price,
+        qty, unit: unit || '式', price, amount: qty * price,
         bukariki1: buk.value > 0 ? buk.value : '',
       }));
       addedItems++;

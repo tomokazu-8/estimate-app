@@ -1407,8 +1407,10 @@ async function knowledgeExportXLSX() {
 async function knowledgeImportFile(file) {
   if (!file) return;
   try {
-    const count = await knowledgeDB.importFile(file);
-    showToast(count + '件インポートしました');
+    const result = await knowledgeDB.importFile(file);
+    const count = typeof result === 'object' ? result.added : result;
+    const skip  = typeof result === 'object' ? result.skipped : 0;
+    showToast(count + '件インポートしました' + (skip > 0 ? `（${skip}件は重複スキップ）` : ''));
     renderDBTable();
   } catch(e) { showToast('インポートに失敗しました: ' + e.message); }
   document.getElementById('knowledgeImportFile').value = '';
