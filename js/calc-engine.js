@@ -20,15 +20,15 @@ function addAutoCalcRows() {
       note: (miscRate * 100).toFixed(1) + '%', locked: false });
   }
   if (lb.totalKosu > 0) {
-    toAdd.push({ name: '電工労務費', price: Math.round(lb.totalKosu * LABOR_RATES.sell),
+    toAdd.push({ name: LABOR_ROW_NAMES.labor1, price: Math.round(lb.totalKosu * LABOR_RATES.sell),
       note: lb.totalKosu.toFixed(2) + '人工', locked: true });
   }
   if (lb.撤去Kosu > 0) {
-    toAdd.push({ name: '既設器具撤去処分費', price: Math.round(lb.撤去Kosu * LABOR_RATES.sell),
+    toAdd.push({ name: LABOR_ROW_NAMES.labor2, price: Math.round(lb.撤去Kosu * LABOR_RATES.sell),
       note: lb.撤去Kosu.toFixed(2) + '人工', locked: true });
   }
   if (lb.開口Kosu > 0) {
-    toAdd.push({ name: '天井材開口費', price: Math.round(lb.開口Kosu * LABOR_RATES.sell),
+    toAdd.push({ name: LABOR_ROW_NAMES.labor3, price: Math.round(lb.開口Kosu * LABOR_RATES.sell),
       note: lb.開口Kosu.toFixed(2) + '人工', locked: true });
   }
   if (lb.materialTotal > 0) {
@@ -42,12 +42,10 @@ function addAutoCalcRows() {
     if (!exists) {
       list.push(createBlankItem({ name, qty: 1, price, amount: price, note }));
     } else if (locked) {
-      // 労務費行は既存でも常に更新
       exists.price  = price;
       exists.amount = price;
       exists.note   = note;
     }
-    // 雑材料消耗品・運搬費は既存行を上書きしない（手動変更を保持）
   });
 
   renderItems();
@@ -77,7 +75,7 @@ function calcAutoRows() {
   const cat  = activeCategories.find(c => c.id === currentCat);
 
   const materialTotal = list
-    .filter(i => !AUTO_NAMES.includes(i.name))
+    .filter(i => !isAutoName(i.name))
     .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
 
   const lb = calcLaborBreakdown(currentCat);
@@ -94,32 +92,14 @@ function calcAutoRows() {
     miscItem.note   = (miscRate * 100).toFixed(1) + '%';
   }
 
-  // 電工労務費
-  const denkoItem = list.find(i => i.name === '電工労務費');
-  if (denkoItem) {
-    denkoItem.qty = 1; denkoItem.unit = '式';
-    denkoItem.price  = Math.round(lb.totalKosu * LABOR_RATES.sell);
-    denkoItem.amount = denkoItem.price;
-    denkoItem.note   = lb.totalKosu.toFixed(2) + '人工';
-  }
+  // 労務費1 (歩掛1)
+  _updateLaborRow(list, LABOR_ROW_NAMES.labor1, lb.totalKosu);
 
-  // 既設器具撤去処分費
-  const撤去Item = list.find(i => i.name === '既設器具撤去処分費');
-  if (撤去Item) {
-    撤去Item.qty = 1; 撤去Item.unit = '式';
-    撤去Item.price  = Math.round(lb.撤去Kosu * LABOR_RATES.sell);
-    撤去Item.amount = 撤去Item.price;
-    撤去Item.note   = lb.撤去Kosu.toFixed(2) + '人工';
-  }
+  // 労務費2 (歩掛2)
+  _updateLaborRow(list, LABOR_ROW_NAMES.labor2, lb.撤去Kosu);
 
-  // 天井材開口費
-  const tenjoItem = list.find(i => i.name === '天井材開口費');
-  if (tenjoItem) {
-    tenjoItem.qty = 1; tenjoItem.unit = '式';
-    tenjoItem.price  = Math.round(lb.開口Kosu * LABOR_RATES.sell);
-    tenjoItem.amount = tenjoItem.price;
-    tenjoItem.note   = lb.開口Kosu.toFixed(2) + '人工';
-  }
+  // 労務費3 (歩掛3)
+  _updateLaborRow(list, LABOR_ROW_NAMES.labor3, lb.開口Kosu);
 
   // 運搬費
   const transportItem = list.find(i => i.name === '運搬費');
@@ -134,4 +114,14 @@ function calcAutoRows() {
   renderItems();
   renderCatTabs();
   showToast('自動計算行を更新しました');
+}
+
+// 労務費行の更新ヘルパー
+function _updateLaborRow(list, name, kosu) {
+  const item = list.find(i => i.name === name);
+  if (!item) return;
+  item.qty = 1; item.unit = '式';
+  item.price  = Math.round(kosu * LABOR_RATES.sell);
+  item.amount = item.price;
+  item.note   = kosu.toFixed(2) + '人工';
 }

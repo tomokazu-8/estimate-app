@@ -100,7 +100,7 @@ async function aiDraftEstimate() {
     } catch (e) { /* DBなしでも続行 */ }
 
     const prompt = _buildAiDraftPrompt(similar, area);
-    const responseText = await callClaude(prompt);
+    const responseText = await callClaude(prompt, 8192);
 
     // JSON抽出
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);

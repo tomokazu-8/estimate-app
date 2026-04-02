@@ -433,11 +433,10 @@ function getCatAmount(catId) {
 // 労務費セクションの計算値を、明細リスト内の固定行に自動反映する
 function syncLaborItemPrices() {
   const lb = calcLaborBreakdown(currentCat);
-  const priceMap = {
-    '電工労務費':         Math.round(lb.totalKosu  * LABOR_RATES.sell),
-    '既設器具撤去処分費': Math.round(lb.撤去Kosu   * LABOR_RATES.sell),
-    '天井材開口費':       Math.round(lb.開口Kosu   * LABOR_RATES.sell),
-  };
+  const priceMap = {};
+  priceMap[LABOR_ROW_NAMES.labor1] = Math.round(lb.totalKosu * LABOR_RATES.sell);
+  priceMap[LABOR_ROW_NAMES.labor2] = Math.round(lb.撤去Kosu  * LABOR_RATES.sell);
+  priceMap[LABOR_ROW_NAMES.labor3] = Math.round(lb.開口Kosu  * LABOR_RATES.sell);
   (items[currentCat] || []).forEach(item => {
     if (Object.prototype.hasOwnProperty.call(priceMap, item.name)) {
       item.price  = priceMap[item.name];
@@ -462,22 +461,22 @@ function renderLaborSection() {
   
   const laborSellStr = '¥' + formatNum(LABOR_RATES.sell);
 
-  // 1. 電工労務費（歩掛1合計）
+  // 1. 労務費1（歩掛1合計）
   if (lb.totalKosu > 0) {
     const sell = Math.round(lb.totalKosu * LABOR_RATES.sell);
-    rows.push({ name: '電工労務費', basis: lb.totalKosu.toFixed(2) + '人工 × ' + laborSellStr, sell, cost: Math.round(sell * lr) });
+    rows.push({ name: LABOR_ROW_NAMES.labor1, basis: lb.totalKosu.toFixed(2) + '人工 × ' + laborSellStr, sell, cost: Math.round(sell * lr) });
   }
 
-  // 2. 既設器具撤去処分費（歩掛2合計）
+  // 2. 労務費2（歩掛2合計）
   if (lb.撤去Kosu > 0) {
     const sell = Math.round(lb.撤去Kosu * LABOR_RATES.sell);
-    rows.push({ name: '既設器具撤去処分費', basis: lb.撤去Kosu.toFixed(2) + '人工 × ' + laborSellStr, sell, cost: Math.round(sell * lr) });
+    rows.push({ name: LABOR_ROW_NAMES.labor2, basis: lb.撤去Kosu.toFixed(2) + '人工 × ' + laborSellStr, sell, cost: Math.round(sell * lr) });
   }
 
-  // 3. 天井材開口費（歩掛3合計）
+  // 3. 労務費3（歩掛3合計）
   if (lb.開口Kosu > 0) {
     const sell = Math.round(lb.開口Kosu * LABOR_RATES.sell);
-    rows.push({ name: '天井材開口費', basis: lb.開口Kosu.toFixed(2) + '人工 × ' + laborSellStr, sell, cost: Math.round(sell * lr) });
+    rows.push({ name: LABOR_ROW_NAMES.labor3, basis: lb.開口Kosu.toFixed(2) + '人工 × ' + laborSellStr, sell, cost: Math.round(sell * lr) });
   }
 
   // 4. 雑材料消耗品
@@ -524,13 +523,70 @@ function showLaborDetail() {
   }
   html += '</tbody></table>';
   html += '<div style="margin-top:12px;padding:10px;background:#f0fdf4;border-radius:8px;font-size:13px;">';
-  html += '<b>電工労務費:</b> '+lb.totalKosu.toFixed(2)+'人工';
-  if (lb.撤去Kosu > 0) html += '　<b>撤去処分費:</b> '+lb.撤去Kosu.toFixed(2)+'人工';
-  if (lb.開口Kosu > 0) html += '　<b>天井材開口費:</b> '+lb.開口Kosu.toFixed(2)+'人工';
+  html += '<b>'+esc(LABOR_ROW_NAMES.labor1)+':</b> '+lb.totalKosu.toFixed(2)+'人工';
+  if (lb.撤去Kosu > 0) html += '　<b>'+esc(LABOR_ROW_NAMES.labor2)+':</b> '+lb.撤去Kosu.toFixed(2)+'人工';
+  if (lb.開口Kosu > 0) html += '　<b>'+esc(LABOR_ROW_NAMES.labor3)+':</b> '+lb.開口Kosu.toFixed(2)+'人工';
   html += '<br><b>見積:</b> ¥'+formatNum(Math.round(lb.totalKosu*LABOR_RATES.sell))+' / <b>原価:</b> ¥'+formatNum(Math.round(lb.totalKosu*LABOR_RATES.cost));
   html += '</div></div>';
   document.getElementById('laborModalBody').innerHTML = html;
   document.getElementById('laborModal').classList.add('show');
+}
+
+function editLaborRowNames() {
+  const html = `<div style="padding:16px 20px;">
+    <p style="font-size:13px;color:#555;margin:0 0 16px;">歩掛1〜3に対応する労務費行の名称を変更できます。<br>変更後、自動計算行の名称が更新されます。</p>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <label style="font-size:12px;font-weight:600;">歩掛1 → 労務費名称
+        <input id="laborName1" class="form-input" value="${esc(LABOR_ROW_NAMES.labor1)}" style="margin-top:4px;">
+      </label>
+      <label style="font-size:12px;font-weight:600;">歩掛2 → 労務費名称
+        <input id="laborName2" class="form-input" value="${esc(LABOR_ROW_NAMES.labor2)}" style="margin-top:4px;">
+      </label>
+      <label style="font-size:12px;font-weight:600;">歩掛3 → 労務費名称
+        <input id="laborName3" class="form-input" value="${esc(LABOR_ROW_NAMES.labor3)}" style="margin-top:4px;">
+      </label>
+    </div>
+    <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn btn-secondary btn-sm" onclick="document.getElementById('laborNameModal').classList.remove('show')">キャンセル</button>
+      <button class="btn btn-primary btn-sm" onclick="applyLaborRowNames()">適用</button>
+    </div>
+  </div>`;
+  // 汎用モーダルを流用
+  let modal = document.getElementById('laborNameModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'laborNameModal';
+    modal.className = 'modal-overlay';
+    modal.innerHTML = '<div class="modal" style="max-width:420px;"><div class="modal-header"><span class="modal-title">労務費 項目名の設定</span><button class="modal-close" onclick="this.closest(\'.modal-overlay\').classList.remove(\'show\')">✕</button></div><div id="laborNameModalBody"></div></div>';
+    document.body.appendChild(modal);
+  }
+  document.getElementById('laborNameModalBody').innerHTML = html;
+  modal.classList.add('show');
+}
+
+function applyLaborRowNames() {
+  const oldNames = { ...LABOR_ROW_NAMES };
+  const n1 = document.getElementById('laborName1').value.trim();
+  const n2 = document.getElementById('laborName2').value.trim();
+  const n3 = document.getElementById('laborName3').value.trim();
+  if (!n1) { showToast('歩掛1の名称は必須です'); return; }
+
+  LABOR_ROW_NAMES.labor1 = n1;
+  LABOR_ROW_NAMES.labor2 = n2 || '労務費2';
+  LABOR_ROW_NAMES.labor3 = n3 || '労務費3';
+
+  // 既存の明細行の名前も更新
+  Object.values(items).forEach(list => {
+    (list || []).forEach(item => {
+      if (item.name === oldNames.labor1) item.name = LABOR_ROW_NAMES.labor1;
+      if (item.name === oldNames.labor2) item.name = LABOR_ROW_NAMES.labor2;
+      if (item.name === oldNames.labor3) item.name = LABOR_ROW_NAMES.labor3;
+    });
+  });
+
+  document.getElementById('laborNameModal').classList.remove('show');
+  renderItems();
+  showToast('労務費の項目名を更新しました');
 }
 
 function renderItems() {
@@ -542,10 +598,9 @@ function renderItems() {
   const tbody = document.getElementById('itemBody');
   const list = items[currentCat] || [];
 
-  // 歩掛列の表示判定：歩掛1は資材入力行があれば常時表示、歩掛2/3は値がある場合のみ
-  const showBuk1 = list.some(i => !AUTO_NAMES.includes(i.name));
-  const showBuk2 = list.some(i => parseFloat(i.bukariki2) > 0);
-  const showBuk3 = list.some(i => parseFloat(i.bukariki3) > 0);
+  // 歩掛列の表示判定：資材入力行があれば3列とも常時表示
+  const hasItems = list.some(i => !AUTO_NAMES.includes(i.name));
+  const showBuk1 = hasItems, showBuk2 = hasItems, showBuk3 = hasItems;
   const tbl = document.getElementById('itemTable');
   tbl.classList.toggle('hide-buk1', !showBuk1);
   tbl.classList.toggle('hide-buk2', !showBuk2);
@@ -665,10 +720,15 @@ function updateItem(id, field, value) {
   saveUndoState();
   item[field] = value;
 
-  // 品名変更時：歩掛をDBから再検索してセット
+  // 品名変更時：歩掛・単位をDBから再検索してセット
   if (field === 'name') {
     const buk = resolveBukariki(item.name, item.spec, '');
     item.bukariki1 = buk.value > 0 ? buk.value : '';
+    // 単位をDBから補完（手入力で「式」以外に変更済みならスキップ）
+    if (!item.unit || item.unit === '式') {
+      const match = MATERIAL_DB.find(m => norm(m.n) === norm(item.name));
+      if (match && match.u) item.unit = match.u;
+    }
   }
   // 規格変更時：歩掛が未設定の場合のみDB再検索
   if (field === 'spec' && !item.bukariki1) {
@@ -861,13 +921,12 @@ function updateSummaryBar() {
 function renderSummary() {
   const tbody = document.getElementById('summaryBody');
   let rows = '';
-  let grandTotal = 0;
+  let workTotal = 0;
 
   activeCategories.filter(c => c.active).forEach(c => {
     const total = getCatAmount(c.id);
-    // rateMode 工種は %=0 で金額ゼロでも表示（入力欄として存在させる）、非 rateMode は金額ゼロをスキップ
     if (total === 0 && !c.rateMode) return;
-    grandTotal += total;
+    workTotal += total;
     const noteCell = c.rateMode
       ? `<span style="font-size:11px;color:var(--text-sub);">${
           (c.fixedAmount != null && c.fixedAmount !== '')
@@ -886,6 +945,43 @@ function renderSummary() {
   });
 
   tbody.innerHTML = rows;
+  document.getElementById('summaryWorkTotal').textContent = '¥' + formatNum(Math.round(workTotal));
+
+  // 法定福利費
+  const enableLegal = document.getElementById('enableLegalWelfare')?.checked || false;
+  const legalRow = document.getElementById('summaryLegalRow');
+  let legalAmt = 0;
+  if (enableLegal) {
+    legalRow.style.display = '';
+    const rate = parseFloat(document.getElementById('legalWelfareRate')?.value) || 15;
+    // 全工種の労務費合計を算出
+    let totalLaborSell = 0;
+    activeCategories.filter(c => c.active && !c.rateMode).forEach(c => {
+      const lb = calcLaborBreakdown(c.id);
+      totalLaborSell += Math.round(lb.totalKosu * LABOR_RATES.sell);
+      totalLaborSell += Math.round(lb.撤去Kosu * LABOR_RATES.sell);
+      totalLaborSell += Math.round(lb.開口Kosu * LABOR_RATES.sell);
+    });
+    legalAmt = Math.round(totalLaborSell * rate / 100);
+    document.getElementById('summaryLegalAmt').textContent = '¥' + formatNum(legalAmt);
+  } else {
+    legalRow.style.display = 'none';
+  }
+
+  // 値引き
+  const enableDiscount = document.getElementById('enableDiscount')?.checked || false;
+  const discountRow = document.getElementById('summaryDiscountRow');
+  let discountAmt = 0;
+  if (enableDiscount) {
+    discountRow.style.display = '';
+    discountAmt = parseFloat(document.getElementById('discountAmount')?.value) || 0;
+    document.getElementById('summaryDiscountAmt').textContent = discountAmt > 0 ? '△ ¥' + formatNum(discountAmt) : '¥0';
+  } else {
+    discountRow.style.display = 'none';
+  }
+
+  // 見積合計 = 工事費計 + 法定福利費 - 値引き
+  const grandTotal = workTotal + legalAmt - discountAmt;
   document.getElementById('summaryTotal').textContent = '¥' + formatNum(Math.round(grandTotal));
   document.getElementById('prev-projname').textContent = project.name || '（物件名未入力）';
 }
@@ -1487,7 +1583,9 @@ function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
+  // エラーメッセージは長めに表示
+  const duration = (msg && (msg.includes('エラー') || msg.includes('Error') || msg.includes('❌'))) ? 8000 : 2500;
+  setTimeout(() => t.classList.remove('show'), duration);
 }
 
 // ===== 見積自動作成 =====
