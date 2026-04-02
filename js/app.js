@@ -568,17 +568,24 @@ function showLaborDetail() {
 }
 
 function editLaborRowNames() {
+  if (!currentCat) { showToast('工種を選択してください'); return; }
+  const cat = activeCategories.find(c => c.id === currentCat);
+  const names = getLaborNames(currentCat);
+
   const html = `<div style="padding:16px 20px;">
-    <p style="font-size:13px;color:#555;margin:0 0 16px;">歩掛1〜3に対応する労務費行の名称を変更できます。<br>変更後、自動計算行の名称が更新されます。</p>
+    <p style="font-size:13px;color:#555;margin:0 0 12px;">
+      <b>「${esc(cat?.name || currentCat)}」</b>の労務費行の名称を変更します。<br>
+      <span style="font-size:11px;color:#888;">工種ごとに個別の名称を設定できます。</span>
+    </p>
     <div style="display:flex;flex-direction:column;gap:12px;">
       <label style="font-size:12px;font-weight:600;">歩掛1 → 労務費名称
-        <input id="laborName1" class="form-input" value="${esc(LABOR_ROW_NAMES.labor1)}" style="margin-top:4px;">
+        <input id="laborName1" class="form-input" value="${esc(names.labor1)}" style="margin-top:4px;">
       </label>
       <label style="font-size:12px;font-weight:600;">歩掛2 → 労務費名称
-        <input id="laborName2" class="form-input" value="${esc(LABOR_ROW_NAMES.labor2)}" style="margin-top:4px;">
+        <input id="laborName2" class="form-input" value="${esc(names.labor2)}" style="margin-top:4px;">
       </label>
       <label style="font-size:12px;font-weight:600;">歩掛3 → 労務費名称
-        <input id="laborName3" class="form-input" value="${esc(LABOR_ROW_NAMES.labor3)}" style="margin-top:4px;">
+        <input id="laborName3" class="form-input" value="${esc(names.labor3)}" style="margin-top:4px;">
       </label>
     </div>
     <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px;">
@@ -586,7 +593,6 @@ function editLaborRowNames() {
       <button class="btn btn-primary btn-sm" onclick="applyLaborRowNames()">適用</button>
     </div>
   </div>`;
-  // 汎用モーダルを流用
   let modal = document.getElementById('laborNameModal');
   if (!modal) {
     modal = document.createElement('div');
@@ -600,28 +606,33 @@ function editLaborRowNames() {
 }
 
 function applyLaborRowNames() {
-  const oldNames = { ...LABOR_ROW_NAMES };
+  if (!currentCat) return;
+  const names = getLaborNames(currentCat);
+  const oldNames = { ...names };
+
   const n1 = document.getElementById('laborName1').value.trim();
   const n2 = document.getElementById('laborName2').value.trim();
   const n3 = document.getElementById('laborName3').value.trim();
   if (!n1) { showToast('歩掛1の名称は必須です'); return; }
 
-  LABOR_ROW_NAMES.labor1 = n1;
-  LABOR_ROW_NAMES.labor2 = n2 || '労務費2';
-  LABOR_ROW_NAMES.labor3 = n3 || '労務費3';
+  names.labor1 = n1;
+  names.labor2 = n2 || '労務費2';
+  names.labor3 = n3 || '労務費3';
 
-  // 既存の明細行の名前も更新
-  Object.values(items).forEach(list => {
-    (list || []).forEach(item => {
-      if (item.name === oldNames.labor1) item.name = LABOR_ROW_NAMES.labor1;
-      if (item.name === oldNames.labor2) item.name = LABOR_ROW_NAMES.labor2;
-      if (item.name === oldNames.labor3) item.name = LABOR_ROW_NAMES.labor3;
-    });
+  // 現在の工種の明細行の名前を更新
+  const list = items[currentCat] || [];
+  list.forEach(item => {
+    if (item.name === oldNames.labor1) item.name = names.labor1;
+    if (item.name === oldNames.labor2) item.name = names.labor2;
+    if (item.name === oldNames.labor3) item.name = names.labor3;
   });
+
+  // activeCategories を保存（laborNamesを永続化）
+  if (typeof saveActiveCategories === 'function') saveActiveCategories();
 
   document.getElementById('laborNameModal').classList.remove('show');
   renderItems();
-  showToast('労務費の項目名を更新しました');
+  showToast(`「${activeCategories.find(c=>c.id===currentCat)?.name||''}」の労務費項目名を更新しました`);
 }
 
 function renderItems() {

@@ -18,7 +18,7 @@ function isAutoName(name) {
     '機器取付け及び試験調整費', 'UTPケーブル試験費', '既設器具撤去処分費',
   ];
   if (staticNames.includes(name)) return true;
-  return Object.values(LABOR_ROW_NAMES).includes(name);
+  return _allLaborNames().has(name);
 }
 // 後方互換: 配列として参照される箇所向け
 const AUTO_NAMES = new Proxy([], {
@@ -36,7 +36,7 @@ function isLaborLocked(name) {
     '既設器具撤去処分費', '天井及び壁材開口費',
   ];
   if (staticNames.includes(name)) return true;
-  return Object.values(LABOR_ROW_NAMES).includes(name);
+  return _allLaborNames().has(name);
 }
 const LABOR_LOCKED_NAMES = new Proxy([], {
   get(target, prop) {
@@ -51,12 +51,35 @@ const AUTO_CALC = {
   laborCostRatio: 0.72, // default
 };
 
-// 歩掛1/2/3 に対応する労務費行の名称（カスタマイズ可能）
-let LABOR_ROW_NAMES = {
+// 歩掛1/2/3 に対応する労務費行の名称デフォルト
+const LABOR_ROW_DEFAULTS = {
   labor1: '電工労務費',
   labor2: '既設器具撤去処分費',
   labor3: '天井材開口費',
 };
+
+// 後方互換: グローバル LABOR_ROW_NAMES は currentCat の laborNames を返す動的プロキシ
+const LABOR_ROW_NAMES = new Proxy({}, {
+  get(_, prop) { return getLaborNames(currentCat)[prop]; },
+  set(_, prop, val) { getLaborNames(currentCat)[prop] = val; return true; },
+});
+
+// 工種ごとの労務費名を取得（activeCategories に laborNames がなければデフォルト付与）
+function getLaborNames(catId) {
+  const cat = activeCategories.find(c => c.id === catId);
+  if (!cat) return { ...LABOR_ROW_DEFAULTS };
+  if (!cat.laborNames) cat.laborNames = { ...LABOR_ROW_DEFAULTS };
+  return cat.laborNames;
+}
+
+// 全工種の laborNames を含めて isAutoName / isLaborLocked が正しく判定できるようにする
+function _allLaborNames() {
+  const names = new Set(Object.values(LABOR_ROW_DEFAULTS));
+  activeCategories.forEach(c => {
+    if (c.laborNames) Object.values(c.laborNames).forEach(n => names.add(n));
+  });
+  return names;
+}
 
 // ===== TRIDGE DATA (Tridge読み込み時に上書きされる) =====
 
