@@ -51,11 +51,19 @@ const AUTO_CALC = {
   laborCostRatio: 0.72, // default
 };
 
-// 歩掛1/2/3 に対応する労務費行の名称デフォルト
+// 歩掛1/2/3 + 経費行の名称・有効フラグ デフォルト
 const LABOR_ROW_DEFAULTS = {
   labor1: '電工労務費',
   labor2: '既設器具撤去処分費',
   labor3: '天井材開口費',
+  misc:   '雑材料消耗品',
+  transport: '運搬費',
+  // 有効フラグ（工種ごとにON/OFF可能）
+  enableLabor1: true,
+  enableLabor2: true,
+  enableLabor3: true,
+  enableMisc: true,
+  enableTransport: true,
 };
 
 // 後方互換: グローバル LABOR_ROW_NAMES は currentCat の laborNames を返す動的プロキシ
@@ -74,9 +82,16 @@ function getLaborNames(catId) {
 
 // 全工種の laborNames を含めて isAutoName / isLaborLocked が正しく判定できるようにする
 function _allLaborNames() {
-  const names = new Set(Object.values(LABOR_ROW_DEFAULTS));
+  const names = new Set();
+  // デフォルト名を追加（文字列のみ）
+  Object.entries(LABOR_ROW_DEFAULTS).forEach(([k, v]) => {
+    if (typeof v === 'string') names.add(v);
+  });
+  // 各工種のカスタム名を追加
   activeCategories.forEach(c => {
-    if (c.laborNames) Object.values(c.laborNames).forEach(n => names.add(n));
+    if (c.laborNames) Object.entries(c.laborNames).forEach(([k, v]) => {
+      if (typeof v === 'string') names.add(v);
+    });
   });
   return names;
 }

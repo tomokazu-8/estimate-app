@@ -450,45 +450,42 @@ function syncLaborItemPrices() {
   // 材料品目がなければ何もしない
   if (lb.materialTotal <= 0 && lb.totalKosu <= 0 && lb.撤去Kosu <= 0 && lb.開口Kosu <= 0) return;
 
-  const names = getLaborNames(currentCat);
+  const n = getLaborNames(currentCat);
   const miscRate = cat?.miscRate ?? 0.05;
 
-  // 追加/更新する自動計算行の定義
+  // 追加/更新する自動計算行の定義（有効フラグで制御）
   const autoRows = [];
-  if (lb.materialTotal > 0) {
-    autoRows.push({ name: '雑材料消耗品', price: Math.round(lb.materialTotal * miscRate),
+  if (n.enableMisc !== false && lb.materialTotal > 0) {
+    autoRows.push({ name: n.misc || '雑材料消耗品', price: Math.round(lb.materialTotal * miscRate),
       note: (miscRate * 100).toFixed(1) + '%', locked: false });
   }
-  if (lb.totalKosu > 0) {
-    autoRows.push({ name: names.labor1, price: Math.round(lb.totalKosu * LABOR_RATES.sell),
+  if (n.enableLabor1 !== false && lb.totalKosu > 0) {
+    autoRows.push({ name: n.labor1, price: Math.round(lb.totalKosu * LABOR_RATES.sell),
       note: lb.totalKosu.toFixed(2) + '人工', locked: true });
   }
-  if (lb.撤去Kosu > 0) {
-    autoRows.push({ name: names.labor2, price: Math.round(lb.撤去Kosu * LABOR_RATES.sell),
+  if (n.enableLabor2 !== false && lb.撤去Kosu > 0) {
+    autoRows.push({ name: n.labor2, price: Math.round(lb.撤去Kosu * LABOR_RATES.sell),
       note: lb.撤去Kosu.toFixed(2) + '人工', locked: true });
   }
-  if (lb.開口Kosu > 0) {
-    autoRows.push({ name: names.labor3, price: Math.round(lb.開口Kosu * LABOR_RATES.sell),
+  if (n.enableLabor3 !== false && lb.開口Kosu > 0) {
+    autoRows.push({ name: n.labor3, price: Math.round(lb.開口Kosu * LABOR_RATES.sell),
       note: lb.開口Kosu.toFixed(2) + '人工', locked: true });
   }
-  if (lb.materialTotal > 0) {
+  if (n.enableTransport !== false && lb.materialTotal > 0) {
     const transport = calcTransportForCat(cat, lb.materialTotal);
-    autoRows.push({ name: '運搬費', price: transport,
+    autoRows.push({ name: n.transport || '運搬費', price: transport,
       note: (transport / lb.materialTotal * 100).toFixed(1) + '%', locked: false });
   }
 
   autoRows.forEach(({ name, price, note, locked }) => {
     const exists = list.find(i => i.name === name);
     if (!exists) {
-      // 自動追加
       list.push(createBlankItem({ name, qty: 1, price, amount: price, note }));
     } else if (locked) {
-      // 労務費行は常に更新
       exists.price  = price;
       exists.amount = price;
       exists.note   = note;
     }
-    // 雑材料消耗品・運搬費は既存行を上書きしない（手動変更を保持）
   });
 }
 
@@ -504,40 +501,31 @@ function renderLaborSection() {
   document.getElementById('laborSection').style.display = '';
   
   const rows = [];
-  const lr = AUTO_CALC.laborCostRatio; // 0.72
-  
+  const lr = AUTO_CALC.laborCostRatio;
+  const n = getLaborNames(currentCat);
   const laborSellStr = '¥' + formatNum(LABOR_RATES.sell);
 
-  // 1. 労務費1（歩掛1合計）
-  if (lb.totalKosu > 0) {
+  if (n.enableLabor1 !== false && lb.totalKosu > 0) {
     const sell = Math.round(lb.totalKosu * LABOR_RATES.sell);
-    rows.push({ name: LABOR_ROW_NAMES.labor1, basis: lb.totalKosu.toFixed(2) + '人工 × ' + laborSellStr, sell, cost: Math.round(sell * lr) });
+    rows.push({ name: n.labor1, basis: lb.totalKosu.toFixed(2) + '人工 × ' + laborSellStr, sell, cost: Math.round(sell * lr) });
   }
-
-  // 2. 労務費2（歩掛2合計）
-  if (lb.撤去Kosu > 0) {
+  if (n.enableLabor2 !== false && lb.撤去Kosu > 0) {
     const sell = Math.round(lb.撤去Kosu * LABOR_RATES.sell);
-    rows.push({ name: LABOR_ROW_NAMES.labor2, basis: lb.撤去Kosu.toFixed(2) + '人工 × ' + laborSellStr, sell, cost: Math.round(sell * lr) });
+    rows.push({ name: n.labor2, basis: lb.撤去Kosu.toFixed(2) + '人工 × ' + laborSellStr, sell, cost: Math.round(sell * lr) });
   }
-
-  // 3. 労務費3（歩掛3合計）
-  if (lb.開口Kosu > 0) {
+  if (n.enableLabor3 !== false && lb.開口Kosu > 0) {
     const sell = Math.round(lb.開口Kosu * LABOR_RATES.sell);
-    rows.push({ name: LABOR_ROW_NAMES.labor3, basis: lb.開口Kosu.toFixed(2) + '人工 × ' + laborSellStr, sell, cost: Math.round(sell * lr) });
+    rows.push({ name: n.labor3, basis: lb.開口Kosu.toFixed(2) + '人工 × ' + laborSellStr, sell, cost: Math.round(sell * lr) });
   }
-
-  // 4. 雑材料消耗品
-  if (lb.materialTotal > 0) {
+  if (n.enableMisc !== false && lb.materialTotal > 0) {
     const _miscCat = activeCategories.find(c => c.id === currentCat);
     const rate = _miscCat?.miscRate ?? 0.05;
     const sell = Math.round(lb.materialTotal * rate);
-    rows.push({ name: '雑材料消耗品', basis: '材料費 × ' + (rate*100).toFixed(0) + '%', sell, cost: Math.round(sell * lr) });
+    rows.push({ name: n.misc || '雑材料消耗品', basis: '材料費 × ' + (rate*100).toFixed(0) + '%', sell, cost: Math.round(sell * lr) });
   }
-  
-  // 6. 運搬費
-  if (lb.materialTotal > 0) {
+  if (n.enableTransport !== false && lb.materialTotal > 0) {
     const t = calcTransport(lb.materialTotal);
-    rows.push({ name: '運搬費', basis: '材料費規模別', sell: t, cost: Math.round(t * lr) });
+    rows.push({ name: n.transport || '運搬費', basis: '材料費規模別', sell: t, cost: Math.round(t * lr) });
   }
   
   // Render table
@@ -617,24 +605,28 @@ function showLaborDetail() {
 function editLaborRowNames() {
   if (!currentCat) { showToast('工種を選択してください'); return; }
   const cat = activeCategories.find(c => c.id === currentCat);
-  const names = getLaborNames(currentCat);
+  const n = getLaborNames(currentCat);
+
+  function _row(key, enableKey, label) {
+    const name = n[key] || '';
+    const enabled = n[enableKey] !== false;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f1f5f9;">
+      <input type="checkbox" id="lrn-${enableKey}" ${enabled ? 'checked' : ''} style="width:16px;height:16px;flex-shrink:0;">
+      <span style="font-size:11px;color:#94a3b8;width:40px;flex-shrink:0;">${label}</span>
+      <input id="lrn-${key}" class="form-input" value="${esc(name)}" style="flex:1;font-size:13px;padding:4px 8px;">
+    </div>`;
+  }
 
   const html = `<div style="padding:16px 20px;">
     <p style="font-size:13px;color:#555;margin:0 0 12px;">
-      <b>「${esc(cat?.name || currentCat)}」</b>の労務費行の名称を変更します。<br>
-      <span style="font-size:11px;color:#888;">工種ごとに個別の名称を設定できます。</span>
+      <b>「${esc(cat?.name || currentCat)}」</b>の自動計算行の設定<br>
+      <span style="font-size:11px;color:#888;">チェックを外すと自動追加されません。名称は自由に変更できます。</span>
     </p>
-    <div style="display:flex;flex-direction:column;gap:12px;">
-      <label style="font-size:12px;font-weight:600;">歩掛1 → 労務費名称
-        <input id="laborName1" class="form-input" value="${esc(names.labor1)}" style="margin-top:4px;">
-      </label>
-      <label style="font-size:12px;font-weight:600;">歩掛2 → 労務費名称
-        <input id="laborName2" class="form-input" value="${esc(names.labor2)}" style="margin-top:4px;">
-      </label>
-      <label style="font-size:12px;font-weight:600;">歩掛3 → 労務費名称
-        <input id="laborName3" class="form-input" value="${esc(names.labor3)}" style="margin-top:4px;">
-      </label>
-    </div>
+    ${_row('labor1', 'enableLabor1', '歩掛1')}
+    ${_row('labor2', 'enableLabor2', '歩掛2')}
+    ${_row('labor3', 'enableLabor3', '歩掛3')}
+    ${_row('misc', 'enableMisc', '経費1')}
+    ${_row('transport', 'enableTransport', '経費2')}
     <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px;">
       <button class="btn btn-secondary btn-sm" onclick="document.getElementById('laborNameModal').classList.remove('show')">キャンセル</button>
       <button class="btn btn-primary btn-sm" onclick="applyLaborRowNames()">適用</button>
@@ -645,7 +637,7 @@ function editLaborRowNames() {
     modal = document.createElement('div');
     modal.id = 'laborNameModal';
     modal.className = 'modal-overlay';
-    modal.innerHTML = '<div class="modal" style="max-width:420px;"><div class="modal-header"><span class="modal-title">労務費 項目名の設定</span><button class="modal-close" onclick="this.closest(\'.modal-overlay\').classList.remove(\'show\')">✕</button></div><div id="laborNameModalBody"></div></div>';
+    modal.innerHTML = '<div class="modal" style="max-width:480px;"><div class="modal-header"><span class="modal-title">自動計算行の設定</span><button class="modal-close" onclick="this.closest(\'.modal-overlay\').classList.remove(\'show\')">✕</button></div><div id="laborNameModalBody"></div></div>';
     document.body.appendChild(modal);
   }
   document.getElementById('laborNameModalBody').innerHTML = html;
@@ -654,32 +646,45 @@ function editLaborRowNames() {
 
 function applyLaborRowNames() {
   if (!currentCat) return;
-  const names = getLaborNames(currentCat);
-  const oldNames = { ...names };
+  const n = getLaborNames(currentCat);
+  const oldNames = { labor1: n.labor1, labor2: n.labor2, labor3: n.labor3, misc: n.misc, transport: n.transport };
 
-  const n1 = document.getElementById('laborName1').value.trim();
-  const n2 = document.getElementById('laborName2').value.trim();
-  const n3 = document.getElementById('laborName3').value.trim();
-  if (!n1) { showToast('歩掛1の名称は必須です'); return; }
+  // 名称を更新
+  n.labor1    = document.getElementById('lrn-labor1').value.trim() || '電工労務費';
+  n.labor2    = document.getElementById('lrn-labor2').value.trim() || '既設器具撤去処分費';
+  n.labor3    = document.getElementById('lrn-labor3').value.trim() || '天井材開口費';
+  n.misc      = document.getElementById('lrn-misc').value.trim() || '雑材料消耗品';
+  n.transport = document.getElementById('lrn-transport').value.trim() || '運搬費';
 
-  names.labor1 = n1;
-  names.labor2 = n2 || '労務費2';
-  names.labor3 = n3 || '労務費3';
+  // 有効フラグを更新
+  n.enableLabor1    = document.getElementById('lrn-enableLabor1').checked;
+  n.enableLabor2    = document.getElementById('lrn-enableLabor2').checked;
+  n.enableLabor3    = document.getElementById('lrn-enableLabor3').checked;
+  n.enableMisc      = document.getElementById('lrn-enableMisc').checked;
+  n.enableTransport = document.getElementById('lrn-enableTransport').checked;
 
-  // 現在の工種の明細行の名前を更新
+  // 既存の明細行の名前を更新
   const list = items[currentCat] || [];
   list.forEach(item => {
-    if (item.name === oldNames.labor1) item.name = names.labor1;
-    if (item.name === oldNames.labor2) item.name = names.labor2;
-    if (item.name === oldNames.labor3) item.name = names.labor3;
+    if (item.name === oldNames.labor1) item.name = n.labor1;
+    if (item.name === oldNames.labor2) item.name = n.labor2;
+    if (item.name === oldNames.labor3) item.name = n.labor3;
+    if (item.name === oldNames.misc) item.name = n.misc;
+    if (item.name === oldNames.transport) item.name = n.transport;
   });
 
-  // activeCategories を保存（laborNamesを永続化）
+  // 無効にされた行を明細から削除
+  if (!n.enableLabor1)    { const idx = list.findIndex(i => i.name === n.labor1);    if (idx >= 0) list.splice(idx, 1); }
+  if (!n.enableLabor2)    { const idx = list.findIndex(i => i.name === n.labor2);    if (idx >= 0) list.splice(idx, 1); }
+  if (!n.enableLabor3)    { const idx = list.findIndex(i => i.name === n.labor3);    if (idx >= 0) list.splice(idx, 1); }
+  if (!n.enableMisc)      { const idx = list.findIndex(i => i.name === n.misc);      if (idx >= 0) list.splice(idx, 1); }
+  if (!n.enableTransport) { const idx = list.findIndex(i => i.name === n.transport); if (idx >= 0) list.splice(idx, 1); }
+
   if (typeof saveActiveCategories === 'function') saveActiveCategories();
 
   document.getElementById('laborNameModal').classList.remove('show');
   renderItems();
-  showToast(`「${activeCategories.find(c=>c.id===currentCat)?.name||''}」の労務費項目名を更新しました`);
+  showToast(`「${activeCategories.find(c=>c.id===currentCat)?.name||''}」の自動計算行を更新しました`);
 }
 
 function renderItems() {
