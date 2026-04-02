@@ -234,10 +234,18 @@ function tmUpdateToolbar() {
   const db = tmDbList.find(d => d.id === tmCurrentDbId);
   const nameEl = document.getElementById('tm-currentDbName');
   if (nameEl) nameEl.textContent = db ? db.name : 'トリッジを選択してください';
-  const btnExport = document.getElementById('tm-btnExport');
-  const btnApply  = document.getElementById('tm-btnApply');
+  const btnExport      = document.getElementById('tm-btnExport');
+  const btnApply       = document.getElementById('tm-btnApply');
+  const btnApplyKoshu  = document.getElementById('tm-btnApplyKoshu');
+  const btnApplyZairyo = document.getElementById('tm-btnApplyZairyo');
   if (btnExport) btnExport.disabled = !tmCurrentDbId;
   if (btnApply)  btnApply.disabled  = !tmCurrentDbId;
+  // 種別に応じてボタンの有効/無効を切り替え
+  const type = db?.type || 'mixed';
+  const hasKoshu  = type === 'koshu' || type === 'mixed';
+  const hasZairyo = type === 'zairyo' || type === 'mixed' || type === 'supplier';
+  if (btnApplyKoshu)  btnApplyKoshu.disabled  = !tmCurrentDbId || !hasKoshu;
+  if (btnApplyZairyo) btnApplyZairyo.disabled = !tmCurrentDbId || !hasZairyo;
   const table = document.getElementById('tm-mainTable');
   const empty = document.getElementById('tm-emptyState');
   if (tmCurrentDbId) {
@@ -1010,13 +1018,100 @@ function tmSaveImportedTridge(name, memo, rows, skipped, koshu, kw, bunruiRows, 
 }
 
 // ===== INTEGRATION: Tridgeとして適用 =====
+
+// 後方互換: 旧「Deckに適用」ボタン（type に応じて自動振り分け）
 function tmLoadToEstimate() {
   if (!tmCurrentDbId) { showToast('先にトリッジを選択してください'); return; }
+  const db = tmDbList.find(d => d.id === tmCurrentDbId);
+  if (!db) return;
   tmAutoSave();
 
-  const db = tmDbList.find(d => d.id === tmCurrentDbId);
+  const type = db.type || 'mixed';
+  const msgs = [];
 
-  // === 資材マスタ → MATERIAL_DB + BUKARIKI_DB ===
+  if (type === 'koshu' || type === 'mixed') {
+    msgs.push(_tmApplyKoshu(db));
+  }
+  if (type === 'zairyo' || type === 'mixed') {
+    msgs.push(_tmApplyZairyo(db));
+  }
+  if (type === 'supplier') {
+    msgs.push(_tmApplySupplier(db));
+  }
+
+  _tmRenderAppliedBadges();
+  showToast(msgs.filter(Boolean).join(' / '));
+  if (typeof navigate === 'function') navigate('project');
+}
+
+// 工種として適用
+function tmApplyAsKoshu() {
+  if (!tmCurrentDbId) { showToast('先にトリッジを選択してください'); return; }
+  const db = tmDbList.find(d => d.id === tmCurrentDbId);
+  if (!db) return;
+  tmAutoSave();
+  const msg = _tmApplyKoshu(db);
+  _tmRenderAppliedBadges();
+  showToast(msg || '工種データがありません');
+}
+
+// 資材として適用
+function tmApplyAsZairyo() {
+  if (!tmCurrentDbId) { showToast('先にトリッジを選択してください'); return; }
+  const db = tmDbList.find(d => d.id === tmCurrentDbId);
+  if (!db) return;
+  tmAutoSave();
+  const msg = _tmApplyZairyo(db);
+  _tmRenderAppliedBadges();
+  showToast(msg || '資材データがありません');
+}
+
+// 仕入れとして追加適用
+function tmApplyAsSupplier() {
+  if (!tmCurrentDbId) { showToast('先にトリッジを選択してください'); return; }
+  const db = tmDbList.find(d => d.id === tmCurrentDbId);
+  if (!db) return;
+  tmAutoSave();
+  const msg = _tmApplySupplier(db);
+  _tmRenderAppliedBadges();
+  showToast(msg || '品目データがありません');
+}
+
+// --- 内部: 工種データの適用 ---
+function _tmApplyKoshu(db) {
+  if (tmCurrentKoshu.length === 0) return '';
+
+  const cats = tmCurrentKoshu.map(k => ({
+    id: k.id, name: k.name, short: k.short,
+    rateMode: k.rateMode, ratePct: 0, rateIncludeLabor: false,
+    miscRate: (parseFloat(k.miscRate) || 5) / 100,
+    order: k.order,
+    autoRows: k.autoRows ? k.autoRows.split('|').filter(Boolean) : [],
+  }));
+  if (typeof applyTridgeCategories === 'function') applyTridgeCategories(cats);
+  koshuTridgeLoaded = true;
+  if (typeof updateKoshuBadge === 'function') updateKoshuBadge();
+
+  // キーワードマスタ
+  if (typeof TRIDGE_KEYWORDS !== 'undefined' && Array.isArray(TRIDGE_KEYWORDS)) {
+    TRIDGE_KEYWORDS.length = 0;
+    tmCurrentKeywords.forEach(k => TRIDGE_KEYWORDS.push(k));
+  }
+
+  // 労務単価
+  const s = tmCurrentSettings || tmDefaultSettings();
+  if (s.laborSell > 0) {
+    LABOR_RATES.sell = s.laborSell;
+    LABOR_RATES.cost = s.laborCost;
+  }
+  if (typeof syncLaborSettingsToForm === 'function') syncLaborSettingsToForm();
+
+  TRIDGE_APPLIED.koshu = { tridgeId: db.id, tridgeName: db.name };
+  return `工種: ${tmCurrentKoshu.length}工種`;
+}
+
+// --- 内部: 資材データの適用 ---
+function _tmApplyZairyo(db) {
   const newMaterials = [];
   const newBukariki  = [];
   const seen = new Set();
@@ -1035,12 +1130,11 @@ function tmLoadToEstimate() {
     const b = parseFloat(r.b) || 0;
     if (b > 0) {
       const key = r.n + '|' + r.s;
-      if (!seen.has(key)) {
-        seen.add(key);
-        newBukariki.push({ n: r.n, s: r.s, u: r.u, b, c: r.c });
-      }
+      if (!seen.has(key)) { seen.add(key); newBukariki.push({ n: r.n, s: r.s, u: r.u, b, c: r.c }); }
     }
   });
+
+  if (newMaterials.length === 0) return '';
 
   MATERIAL_DB.length = 0;
   newMaterials.forEach(m => MATERIAL_DB.push(m));
@@ -1049,11 +1143,9 @@ function tmLoadToEstimate() {
     newBukariki.forEach(b => BUKARIKI_DB.push(b));
   }
 
-  // === 分類マスタ → BUNRUI_DB ===
+  // 分類・カテゴリマスタ
   BUNRUI_DB.rows     = [...(tmCurrentBunrui.rows || [])];
   BUNRUI_DB.keywords = [...(tmCurrentBunrui.keywords || [])];
-
-  // === カテゴリマスタ → CATEGORY_MASTER ===
   CATEGORY_MASTER.length = 0;
   TM_STANDARD_CATEGORY_MASTER.slice(1).forEach(r => {
     const kwStr = r[3];
@@ -1061,40 +1153,150 @@ function tmLoadToEstimate() {
     CATEGORY_MASTER.push({ catId: r[0], catName: r[1], engKey: r[2], keywords, isDefault: keywords.length === 0 });
   });
 
-  // === 工種マスタ → activeCategories ===
-  if (tmCurrentKoshu.length > 0) {
-    const cats = tmCurrentKoshu.map(k => ({
-      id: k.id, name: k.name, short: k.short,
-      rateMode: k.rateMode, ratePct: 0, rateIncludeLabor: false,
-      miscRate: (parseFloat(k.miscRate) || 5) / 100,
-      order: k.order,
-      autoRows: k.autoRows ? k.autoRows.split('|').filter(Boolean) : [],
-    }));
-    if (typeof applyTridgeCategories === 'function') applyTridgeCategories(cats);
-    koshuTridgeLoaded = true;
-    updateKoshuBadge();
-  }
-
-  // === キーワードマスタ → TRIDGE_KEYWORDS (labor.js用) ===
-  if (typeof TRIDGE_KEYWORDS !== 'undefined' && Array.isArray(TRIDGE_KEYWORDS)) {
-    TRIDGE_KEYWORDS.length = 0;
-    tmCurrentKeywords.forEach(k => TRIDGE_KEYWORDS.push(k));
-  }
-
-  // === 労務単価 → LABOR_RATES ===
-  const s = tmCurrentSettings || tmDefaultSettings();
-  if (s.laborSell > 0) {
-    LABOR_RATES.sell = s.laborSell;
-    LABOR_RATES.cost = s.laborCost;
-  }
-
   zairyoTridgeLoaded = true;
-  updateZairyoBadge();
+  if (typeof updateZairyoBadge === 'function') updateZairyoBadge();
   if (typeof initCatFilter === 'function') initCatFilter();
 
-  const count = newMaterials.length;
-  showToast(`「${db ? db.name : 'Tridge'}」を適用しました（${count}品目）`);
-  if (typeof navigate === 'function') navigate('project');
+  TRIDGE_APPLIED.zairyo = { tridgeId: db.id, tridgeName: db.name };
+  return `資材: ${newMaterials.length}品目`;
+}
+
+// --- 内部: 仕入れデータの追加適用（MATERIAL_DBに追記） ---
+function _tmApplySupplier(db) {
+  const rows = tmLoadDbData(db.id);
+  if (!rows || rows.length === 0) return '';
+
+  let added = 0;
+  const seen = new Set(MATERIAL_DB.map(m => m.n + '|' + m.s));
+
+  rows.forEach(r => {
+    const ep = parseFloat(r.ep) || 0;
+    if (ep <= 0) return;
+    const key = r.n + '|' + r.s;
+    if (seen.has(key)) return; // 既にある品目はスキップ
+    seen.add(key);
+    const cp  = parseFloat(r.cp) > 0 ? parseFloat(r.cp) : Math.round(ep * 0.75);
+    const rat = parseFloat(r.cp) > 0 ? Math.round(parseFloat(r.cp) / ep * 100) / 100 : 0.75;
+    MATERIAL_DB.push({
+      n: r.n, s: r.s, u: r.u, c: r.c,
+      ep, cp, r: rat, a: 1,
+      daiId: r.daiId||'', chuId: r.chuId||'', shoId: r.shoId||'', shoName: r.shoName||'',
+    });
+    const b = parseFloat(r.b) || 0;
+    if (b > 0) BUKARIKI_DB.push({ n: r.n, s: r.s, u: r.u, b, c: r.c });
+    added++;
+  });
+
+  // 仕入れスロットに追加（重複チェック）
+  if (!TRIDGE_APPLIED.suppliers.find(s => s.tridgeId === db.id)) {
+    TRIDGE_APPLIED.suppliers.push({ tridgeId: db.id, tridgeName: db.name, itemCount: added });
+  }
+  return `仕入れ: ${added}品目を追加`;
+}
+
+// --- イジェクト ---
+function tmEjectKoshu() {
+  if (!TRIDGE_APPLIED.koshu) return;
+  TRIDGE_APPLIED.koshu = null;
+  koshuTridgeLoaded = false;
+  activeCategories = [];
+  localStorage.removeItem('activeCategories');
+  if (typeof updateKoshuBadge === 'function') updateKoshuBadge();
+  if (typeof renderCatTabs === 'function') renderCatTabs();
+  _tmRenderAppliedBadges();
+  showToast('工種Tridgeを取り外しました');
+}
+
+function tmEjectZairyo() {
+  if (!TRIDGE_APPLIED.zairyo) return;
+  TRIDGE_APPLIED.zairyo = null;
+  MATERIAL_DB.length = 0;
+  BUKARIKI_DB.length = 0;
+  BUNRUI_DB.rows = []; BUNRUI_DB.keywords = [];
+  CATEGORY_MASTER.length = 0;
+  zairyoTridgeLoaded = false;
+  if (typeof updateZairyoBadge === 'function') updateZairyoBadge();
+  if (typeof initCatFilter === 'function') initCatFilter();
+  _tmRenderAppliedBadges();
+  showToast('資材Tridgeを取り外しました');
+}
+
+function tmEjectSupplier(tridgeId) {
+  const idx = TRIDGE_APPLIED.suppliers.findIndex(s => s.tridgeId === tridgeId);
+  if (idx < 0) return;
+  // 該当仕入れの品目をMATERIAL_DBから除去（再構築が安全）
+  TRIDGE_APPLIED.suppliers.splice(idx, 1);
+  // MATERIAL_DB を資材Tridge + 残りの仕入れから再構築
+  _tmRebuildMaterialDB();
+  _tmRenderAppliedBadges();
+  showToast('仕入れTridgeを取り外しました');
+}
+
+// 資材Tridge + 全仕入れからMATERIAL_DBを再構築
+function _tmRebuildMaterialDB() {
+  MATERIAL_DB.length = 0;
+  BUKARIKI_DB.length = 0;
+  // 資材Tridgeを再適用
+  if (TRIDGE_APPLIED.zairyo) {
+    const rows = tmLoadDbData(TRIDGE_APPLIED.zairyo.tridgeId);
+    const seen = new Set();
+    rows.forEach(r => {
+      const ep = parseFloat(r.ep) || 0;
+      if (ep > 0) {
+        const cp  = parseFloat(r.cp) > 0 ? parseFloat(r.cp) : Math.round(ep * 0.75);
+        const rat = parseFloat(r.cp) > 0 ? Math.round(parseFloat(r.cp) / ep * 100) / 100 : 0.75;
+        MATERIAL_DB.push({ n: r.n, s: r.s, u: r.u, c: r.c, ep, cp, r: rat, a: 1,
+          daiId: r.daiId||'', chuId: r.chuId||'', shoId: r.shoId||'', shoName: r.shoName||'' });
+      }
+      const b = parseFloat(r.b) || 0;
+      const key = r.n + '|' + r.s;
+      if (b > 0 && !seen.has(key)) { seen.add(key); BUKARIKI_DB.push({ n: r.n, s: r.s, u: r.u, b, c: r.c }); }
+    });
+  }
+  // 仕入れを追加
+  TRIDGE_APPLIED.suppliers.forEach(sup => {
+    const rows = tmLoadDbData(sup.tridgeId);
+    rows.forEach(r => {
+      const ep = parseFloat(r.ep) || 0;
+      if (ep > 0) {
+        const cp  = parseFloat(r.cp) > 0 ? parseFloat(r.cp) : Math.round(ep * 0.75);
+        const rat = parseFloat(r.cp) > 0 ? Math.round(parseFloat(r.cp) / ep * 100) / 100 : 0.75;
+        MATERIAL_DB.push({ n: r.n, s: r.s, u: r.u, c: r.c, ep, cp, r: rat, a: 1,
+          daiId: r.daiId||'', chuId: r.chuId||'', shoId: r.shoId||'', shoName: r.shoName||'' });
+      }
+      const b = parseFloat(r.b) || 0;
+      if (b > 0) BUKARIKI_DB.push({ n: r.n, s: r.s, u: r.u, b, c: r.c });
+    });
+  });
+}
+
+// --- 適用中バッジの表示 ---
+function _tmRenderAppliedBadges() {
+  const el = document.getElementById('tm-appliedBadges');
+  if (!el) return;
+  let html = '';
+  if (TRIDGE_APPLIED.koshu) {
+    html += `<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:#dcfce7;border-radius:6px;font-size:11px;">
+      <span style="font-weight:600;color:#16a34a;">工種:</span>
+      <span>${esc(TRIDGE_APPLIED.koshu.tridgeName)}</span>
+      <button onclick="tmEjectKoshu()" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:12px;padding:0 2px;" title="取り外す">✕</button>
+    </div>`;
+  }
+  if (TRIDGE_APPLIED.zairyo) {
+    html += `<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:#dbeafe;border-radius:6px;font-size:11px;">
+      <span style="font-weight:600;color:#2563eb;">資材:</span>
+      <span>${esc(TRIDGE_APPLIED.zairyo.tridgeName)}</span>
+      <button onclick="tmEjectZairyo()" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:12px;padding:0 2px;" title="取り外す">✕</button>
+    </div>`;
+  }
+  TRIDGE_APPLIED.suppliers.forEach(s => {
+    html += `<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:#fef3c7;border-radius:6px;font-size:11px;">
+      <span style="font-weight:600;color:#92400e;">仕入:</span>
+      <span>${esc(s.tridgeName)}(${s.itemCount}品目)</span>
+      <button onclick="tmEjectSupplier('${s.tridgeId}')" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:12px;padding:0 2px;" title="取り外す">✕</button>
+    </div>`;
+  });
+  el.innerHTML = html || '<div style="font-size:11px;color:#94a3b8;padding:4px;">適用中のTridgeはありません</div>';
 }
 
 // ===== キーボードショートカット（Tridgeパネル用）=====

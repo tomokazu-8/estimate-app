@@ -96,6 +96,13 @@ function _allLaborNames() {
   return names;
 }
 
+// ===== TRIDGE 適用状態 =====
+let TRIDGE_APPLIED = {
+  koshu:     null,  // { tridgeId, tridgeName } 工種スロット
+  zairyo:    null,  // { tridgeId, tridgeName } 資材スロット
+  suppliers: [],    // [{ tridgeId, tridgeName, itemCount }] 仕入れスロット（複数可）
+};
+
 // ===== TRIDGE DATA (Tridge読み込み時に上書きされる) =====
 
 // カテゴリマスタ（資材Tridgeから読み込む）
