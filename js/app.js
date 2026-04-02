@@ -439,18 +439,56 @@ function getCatAmount(catId) {
 // ===== ITEM ENTRY =====
 
 
-// 労務費セクションの計算値を、明細リスト内の固定行に自動反映する
+// 労務費・雑材料・運搬費の自動計算行を自動追加・更新する
 function syncLaborItemPrices() {
+  if (!currentCat) return;
+  const list = items[currentCat];
+  if (!list) return;
+  const cat = activeCategories.find(c => c.id === currentCat);
   const lb = calcLaborBreakdown(currentCat);
-  const priceMap = {};
-  priceMap[LABOR_ROW_NAMES.labor1] = Math.round(lb.totalKosu * LABOR_RATES.sell);
-  priceMap[LABOR_ROW_NAMES.labor2] = Math.round(lb.撤去Kosu  * LABOR_RATES.sell);
-  priceMap[LABOR_ROW_NAMES.labor3] = Math.round(lb.開口Kosu  * LABOR_RATES.sell);
-  (items[currentCat] || []).forEach(item => {
-    if (Object.prototype.hasOwnProperty.call(priceMap, item.name)) {
-      item.price  = priceMap[item.name];
-      item.amount = priceMap[item.name];
+
+  // 材料品目がなければ何もしない
+  if (lb.materialTotal <= 0 && lb.totalKosu <= 0 && lb.撤去Kosu <= 0 && lb.開口Kosu <= 0) return;
+
+  const names = getLaborNames(currentCat);
+  const miscRate = cat?.miscRate ?? 0.05;
+
+  // 追加/更新する自動計算行の定義
+  const autoRows = [];
+  if (lb.materialTotal > 0) {
+    autoRows.push({ name: '雑材料消耗品', price: Math.round(lb.materialTotal * miscRate),
+      note: (miscRate * 100).toFixed(1) + '%', locked: false });
+  }
+  if (lb.totalKosu > 0) {
+    autoRows.push({ name: names.labor1, price: Math.round(lb.totalKosu * LABOR_RATES.sell),
+      note: lb.totalKosu.toFixed(2) + '人工', locked: true });
+  }
+  if (lb.撤去Kosu > 0) {
+    autoRows.push({ name: names.labor2, price: Math.round(lb.撤去Kosu * LABOR_RATES.sell),
+      note: lb.撤去Kosu.toFixed(2) + '人工', locked: true });
+  }
+  if (lb.開口Kosu > 0) {
+    autoRows.push({ name: names.labor3, price: Math.round(lb.開口Kosu * LABOR_RATES.sell),
+      note: lb.開口Kosu.toFixed(2) + '人工', locked: true });
+  }
+  if (lb.materialTotal > 0) {
+    const transport = calcTransportForCat(cat, lb.materialTotal);
+    autoRows.push({ name: '運搬費', price: transport,
+      note: (transport / lb.materialTotal * 100).toFixed(1) + '%', locked: false });
+  }
+
+  autoRows.forEach(({ name, price, note, locked }) => {
+    const exists = list.find(i => i.name === name);
+    if (!exists) {
+      // 自動追加
+      list.push(createBlankItem({ name, qty: 1, price, amount: price, note }));
+    } else if (locked) {
+      // 労務費行は常に更新
+      exists.price  = price;
+      exists.amount = price;
+      exists.note   = note;
     }
+    // 雑材料消耗品・運搬費は既存行を上書きしない（手動変更を保持）
   });
 }
 
