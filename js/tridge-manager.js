@@ -786,14 +786,25 @@ function tmHandleImportFile(event) {
         ? XLSX.read(e.target.result.replace(/^\uFEFF/,''), { type:'string', codepage:65001 })
         : XLSX.read(e.target.result, { type:'array' });
 
-      const sheetName = wb.SheetNames.includes('資材マスタ') ? '資材マスタ' : wb.SheetNames[0];
-      const data = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
-      if (!data || data.length === 0) { alert('データが見つかりませんでした。'); return; }
+      // 資材マスタの読み込み（あれば）
+      let rows = [], skipped = 0;
+      if (wb.SheetNames.includes('資材マスタ')) {
+        const data = XLSX.utils.sheet_to_json(wb.Sheets['資材マスタ']);
+        if (data && data.length > 0) {
+          const parsed = tmParseZaihoSheet(data);
+          rows = parsed.rows;
+          skipped = parsed.skipped;
+        }
+      }
 
-      const { rows, skipped } = tmParseZaihoSheet(data);
-      if (rows.length === 0) { alert('取り込める品目がありませんでした。\n検出列: ' + Object.keys(data[0]).join(', ')); return; }
-
+      // 工種・キーワード・分類マスタ
       const { koshu, kw, bunrui } = tmParseAllSheets(wb.Sheets);
+
+      // 資材も工種もなければエラー
+      if (rows.length === 0 && koshu.length === 0) {
+        alert('取り込めるデータが見つかりませんでした。\n「資材マスタ」または「工種マスタ」シートが必要です。\n検出シート: ' + wb.SheetNames.join(', '));
+        return;
+      }
 
       // 設定（労務単価マスタ）
       let settings = tmDefaultSettings();
@@ -805,8 +816,25 @@ function tmHandleImportFile(event) {
         if (sell > 0) { settings.laborSell = sell; settings.laborCost = cost; }
       }
 
+      // 設定マスタ
+      const wsSettei = wb.Sheets['設定マスタ'] ? XLSX.utils.sheet_to_json(wb.Sheets['設定マスタ']) : null;
+      if (wsSettei) {
+        wsSettei.forEach(r => {
+          const pName = String(getCol(r, 'パラメーター名', 'パラメータ名') || '').trim();
+          const pVal  = getCol(r, '値');
+          if (pName === '労務売単価（円/人工）' && parseFloat(pVal) > 0) settings.laborSell = parseFloat(pVal);
+          if (pName === '労務原価単価（円/人工）' && parseFloat(pVal) > 0) settings.laborCost = parseFloat(pVal);
+        });
+      }
+
+      // 得意先マスタ
+      const wsClients = wb.Sheets['得意先マスタ'] ? XLSX.utils.sheet_to_json(wb.Sheets['得意先マスタ']) : null;
+
       const name = file.name.replace(/\.(xlsx?|csv)$/i, '');
-      tmSaveImportedTridge(name, `インポート (${rows.length}品目)`, rows, skipped, koshu, kw, bunrui, settings);
+      const memo = rows.length > 0
+        ? `インポート (${rows.length}品目)`
+        : `インポート (${koshu.length}工種)`;
+      tmSaveImportedTridge(name, memo, rows, skipped, koshu, kw, bunrui, settings);
     } catch(err) {
       alert('読み込みエラー: ' + err.message);
       console.error(err);
