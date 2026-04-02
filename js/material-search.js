@@ -28,9 +28,25 @@ function openSearchModal(itemId) {
   document.getElementById('searchModal').classList.add('show');
   document.getElementById('searchQuery').value = '';
   document.getElementById('searchCatFilter').value = '';
+  _initSearchSourceFilter();
   initBunruiFilter();
   searchMaterial();
   setTimeout(() => document.getElementById('searchQuery').focus(), 100);
+}
+
+// ソース切替セレクトを動的生成
+function _initSearchSourceFilter() {
+  const sel = document.getElementById('searchSource');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">全ソース</option>';
+  if (typeof TRIDGE_APPLIED !== 'undefined') {
+    if (TRIDGE_APPLIED.zairyo) {
+      sel.innerHTML += `<option value="zairyo">資材: ${esc(TRIDGE_APPLIED.zairyo.tridgeName)}</option>`;
+    }
+    (TRIDGE_APPLIED.suppliers || []).forEach(s => {
+      sel.innerHTML += `<option value="sup_${s.tridgeId}">仕入: ${esc(s.tridgeName)}</option>`;
+    });
+  }
 }
 
 // ===== 分類階層フィルタ =====
@@ -119,11 +135,43 @@ function applyMaterialToItem(item, m) {
 function searchMaterial() {
   const query = norm(document.getElementById('searchQuery').value).trim();
   const catFilter = document.getElementById('searchCatFilter').value;
+  const sourceFilter = document.getElementById('searchSource')?.value || '';
   const shoId = document.getElementById('searchShoFilter')?.value || '';
   const chuId = document.getElementById('searchChuFilter')?.value || '';
   const daiId = document.getElementById('searchDaiFilter')?.value || '';
 
-  let results = MATERIAL_DB;
+  // ソース別の検索対象を構築
+  let searchPool;
+  if (!sourceFilter) {
+    // 全ソース: MATERIAL_DB（適用中の全品目）をそのまま検索
+    searchPool = MATERIAL_DB.map(m => ({ ...m, _source: '' }));
+  } else if (sourceFilter === 'zairyo' && typeof TRIDGE_APPLIED !== 'undefined' && TRIDGE_APPLIED.zairyo) {
+    // 資材Tridgeのみ: localStorageから直接読み込み
+    const rows = typeof tmLoadDbData === 'function' ? tmLoadDbData(TRIDGE_APPLIED.zairyo.tridgeId) : [];
+    searchPool = rows.filter(r => parseFloat(r.ep) > 0).map(r => ({
+      n: r.n, s: r.s, u: r.u, c: r.c, ep: parseFloat(r.ep) || 0,
+      cp: parseFloat(r.cp) || 0, r: parseFloat(r.r) || 0.75,
+      daiId: r.daiId, chuId: r.chuId, shoId: r.shoId, shoName: r.shoName,
+      _source: '資材',
+    }));
+  } else if (sourceFilter.startsWith('sup_')) {
+    // 特定の仕入れTridge
+    const tridgeId = sourceFilter.slice(4);
+    const rows = typeof tmLoadDbData === 'function' ? tmLoadDbData(tridgeId) : [];
+    const sup = typeof TRIDGE_APPLIED !== 'undefined'
+      ? TRIDGE_APPLIED.suppliers.find(s => s.tridgeId === tridgeId) : null;
+    const sourceName = sup ? sup.tridgeName : '仕入れ';
+    searchPool = rows.filter(r => parseFloat(r.ep) > 0).map(r => ({
+      n: r.n, s: r.s, u: r.u, c: r.c, ep: parseFloat(r.ep) || 0,
+      cp: parseFloat(r.cp) || 0, r: parseFloat(r.r) || 0.75,
+      daiId: r.daiId, chuId: r.chuId, shoId: r.shoId, shoName: r.shoName,
+      _source: sourceName,
+    }));
+  } else {
+    searchPool = MATERIAL_DB.map(m => ({ ...m, _source: '' }));
+  }
+
+  let results = searchPool;
 
   if (catFilter) results = results.filter(m => m.c === catFilter);
 
@@ -134,10 +182,14 @@ function searchMaterial() {
 
   results = filterMaterialsByTerms(results, query, 50);
 
-  document.getElementById('searchCount').textContent = `${results.length}件表示（全${MATERIAL_DB.length}品目）`;
+  const totalCount = sourceFilter ? searchPool.length : MATERIAL_DB.length;
+  document.getElementById('searchCount').textContent = `${results.length}件表示（全${totalCount}品目）`;
   document.getElementById('searchBody').innerHTML = results.map((m, i) => `
     <tr>
-      <td style="font-size:11px;"><span class="tag tag-blue" style="margin-right:4px;">${CAT_LABELS[m.c]||m.c}</span>${esc(m.n)}</td>
+      <td style="font-size:11px;">
+        ${m._source ? `<span class="tag" style="background:#fef3c7;color:#92400e;margin-right:3px;font-size:9px;">${esc(m._source)}</span>` : ''}
+        <span class="tag tag-blue" style="margin-right:4px;">${CAT_LABELS[m.c]||m.c}</span>${esc(m.n)}
+      </td>
       <td style="font-size:11px;color:var(--text-sub);">${esc(m.s)}</td>
       <td class="td-center" style="font-size:11px;">${m.u}</td>
       <td class="td-right" style="font-size:11px;">¥${formatNum(Math.round(m.ep))}</td>

@@ -821,6 +821,9 @@
     <div class="modal-body" style="padding:12px 20px;">
       <div style="display:flex;gap:8px;margin-bottom:8px;">
         <input type="text" class="form-input" id="searchQuery" placeholder="品名・規格で検索（例：VVF, コンセント, PF-S）" style="flex:1;font-size:13px;" oninput="searchMaterial()" autofocus>
+        <select class="form-select" id="searchSource" onchange="searchMaterial()" style="width:150px;">
+          <option value="">全ソース</option>
+        </select>
         <select class="form-select" id="searchCatFilter" onchange="searchMaterial()" style="width:130px;">
           <option value="">全カテゴリ</option>
         </select>
