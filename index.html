@@ -55,7 +55,7 @@
   <!-- Tridge読み込みオーバーレイ -->
   <div id="dbOverlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;">
     <div style="background:#fff;border-radius:16px;padding:36px 40px;max-width:540px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-      <div style="font-size:48px;margin-bottom:12px;">🎮</div>
+      <div style="margin-bottom:12px;"><svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="#6366f1" stroke-width="2"><rect x="6" y="4" width="36" height="40" rx="3"/><rect x="12" y="8" width="24" height="14" rx="2" fill="#eff6ff"/><rect x="14" y="30" width="6" height="4" rx="1" fill="#c7d2fe"/><rect x="28" y="30" width="6" height="4" rx="1" fill="#c7d2fe"/><line x1="6" y1="26" x2="42" y2="26"/></svg></div>
       <h2 style="margin:0 0 6px;font-size:20px;">Tridge 読み込み</h2>
       <p style="color:#666;margin:0 0 4px;font-size:13px;">工種Tridgeまたは資材TridgeのExcelファイルを読み込んでください</p>
       <div style="display:flex;gap:12px;margin:12px 0;font-size:11px;color:#888;text-align:left;">
@@ -147,7 +147,7 @@
         <span class="sidebar-badge" id="knowledgeBadge">0</span>
       </div>
       <div class="sidebar-item" onclick="navigate('tridge', this); tmInit();">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="2" width="18" height="20" rx="2"/><rect x="6" y="4" width="12" height="7" rx="1"/><line x1="3" y1="13" x2="21" y2="13"/><rect x="7" y="15" width="3" height="2" rx="0.5"/><rect x="14" y="15" width="3" height="2" rx="0.5"/></svg>
         <span>Tridgeマスタ</span>
       </div>
     </div>
@@ -409,7 +409,7 @@
             <div style="display:flex;gap:6px;">
               <button class="btn btn-secondary btn-sm" onclick="openSearchModal(null)">🔍 DB検索</button>
               <button class="btn btn-secondary btn-sm" onclick="openSupplierImportModal()" title="仕入れ業者の見積書（Excel）をAIで解析して品目を取り込む" style="color:#6366f1;border-color:#a5b4fc;">📋 仕入れ見積</button>
-              <button class="btn btn-secondary btn-sm" onclick="showDbOverlay()" title="Tridge読み込み">🎮 Tridge</button>
+              <button class="btn btn-secondary btn-sm" onclick="showDbOverlay()" title="Tridge読み込み"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;"><rect x="3" y="2" width="18" height="20" rx="2"/><rect x="6" y="4" width="12" height="7" rx="1"/><line x1="3" y1="13" x2="21" y2="13"/></svg> Tridge</button>
               <button class="btn btn-primary btn-sm" onclick="addItem()">＋ 行追加</button>
             </div>
           </div>
