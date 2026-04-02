@@ -12,7 +12,18 @@ const TM_LS_BUNRUI   = 'dbm_db_bunrui_';
 
 // ===== LOCAL STORAGE HELPERS =====
 function tmLoadLocal(key, def) { try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : def; } catch { return def; } }
-function tmLoadDbList()            { return tmLoadLocal(TM_LS_LIST, []); }
+function tmLoadDbList() {
+  const list = tmLoadLocal(TM_LS_LIST, []);
+  // マイグレーション: type がない既存データを補完
+  list.forEach(db => {
+    if (!db.type) {
+      const hasRows  = (tmLoadLocal(TM_LS_DATA + db.id, [])).length > 0;
+      const hasKoshu = (tmLoadLocal(TM_LS_KOSHU + db.id, [])).length > 0;
+      db.type = hasRows && hasKoshu ? 'mixed' : hasRows ? 'zairyo' : hasKoshu ? 'koshu' : 'mixed';
+    }
+  });
+  return list;
+}
 function tmSaveDbList(list)        { localStorage.setItem(TM_LS_LIST, JSON.stringify(list)); }
 function tmLoadDbData(id)          { return tmLoadLocal(TM_LS_DATA     + id, []); }
 function tmSaveDbData(id, rows)    { localStorage.setItem(TM_LS_DATA     + id, JSON.stringify(rows)); }
@@ -116,6 +127,17 @@ function tmNewKeywordRow() {
 }
 const tmYn = v => ['true','1','yes','有効','割合','はい','○'].includes(String(v||'').trim());
 
+// Tridge種別のラベルとスタイル
+function _tmTypeLabel(type) {
+  switch (type) {
+    case 'koshu':    return { text: '工種', style: 'background:#dcfce7;color:#16a34a;' };
+    case 'zairyo':   return { text: '資材', style: 'background:#dbeafe;color:#2563eb;' };
+    case 'supplier': return { text: '仕入', style: 'background:#fef3c7;color:#92400e;' };
+    case 'mixed':    return { text: '統合', style: 'background:#f3e8ff;color:#7c3aed;' };
+    default:         return { text: '他',   style: 'background:#f1f5f9;color:#64748b;' };
+  }
+}
+
 // ===== INIT =====
 function tmInit() {
   if (tmInitialized) return;
@@ -145,19 +167,26 @@ function tmRenderSidebar() {
     el.innerHTML = '<div style="color:#64748b;font-size:11px;padding:8px 4px;text-align:center;">トリッジがありません</div>';
     return;
   }
-  el.innerHTML = tmDbList.map(db => `
+  el.innerHTML = tmDbList.map(db => {
+    const typeLabel = _tmTypeLabel(db.type);
+    const countLabel = db.type === 'koshu'
+      ? (tmLoadLocal(TM_LS_KOSHU + db.id, [])).length + '工種'
+      : db.rowCount + '品目';
+    return `
     <div class="tm-db-item ${db.id === tmCurrentDbId ? 'selected' : ''}" onclick="tmSelectDb('${db.id}')">
-      <span>📦</span>
       <div style="flex:1;min-width:0;">
-        <div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(db.name)}</div>
-        <div style="font-size:10px;color:var(--text-sub);">${db.rowCount}品目${db.memo ? ' · ' + esc(db.memo) : ''}</div>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <span style="font-size:9px;padding:1px 5px;border-radius:3px;font-weight:600;white-space:nowrap;${typeLabel.style}">${typeLabel.text}</span>
+          <span style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(db.name)}</span>
+        </div>
+        <div style="font-size:10px;color:var(--text-sub);margin-top:1px;">${countLabel}${db.memo ? ' · ' + esc(db.memo) : ''}</div>
       </div>
       <div style="display:flex;gap:2px;flex-shrink:0;">
         <button class="tm-menu-btn" title="編集" onclick="event.stopPropagation();tmShowRenameModal('${db.id}')">✏</button>
         <button class="tm-menu-btn" title="削除" onclick="event.stopPropagation();tmShowDeleteModal('${db.id}')">🗑</button>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 // ===== SELECT DB =====
@@ -596,8 +625,9 @@ function tmConfirmCreateDb() {
   const name = document.getElementById('tm-newDbName').value.trim();
   if (!name) { alert('トリッジ名称を入力してください'); return; }
   const memo = document.getElementById('tm-newDbMemo').value.trim();
+  const type = document.getElementById('tm-newDbType')?.value || 'mixed';
   const id = genId();
-  const db = { id, name, memo, rowCount: 0, updatedAt: new Date().toISOString() };
+  const db = { id, name, type, memo, rowCount: 0, updatedAt: new Date().toISOString() };
   tmDbList.push(db);
   tmSaveDbList(tmDbList);
   tmSaveDbData(id, []);
@@ -958,9 +988,13 @@ function tmParseBunruiSheet(data) {
   })).filter(r => r.shoId);
 }
 
-function tmSaveImportedTridge(name, memo, rows, skipped, koshu, kw, bunruiRows, settings) {
+function tmSaveImportedTridge(name, memo, rows, skipped, koshu, kw, bunruiRows, settings, overrideType) {
   const id = genId();
-  tmDbList.push({ id, name, memo, rowCount: rows.length, updatedAt: new Date().toISOString() });
+  // type 自動判定: 資材あり+工種あり→mixed、資材のみ→zairyo、工種のみ→koshu
+  const type = overrideType || (rows.length > 0 && koshu.length > 0 ? 'mixed'
+    : rows.length > 0 ? 'zairyo'
+    : koshu.length > 0 ? 'koshu' : 'mixed');
+  tmDbList.push({ id, name, type, memo, rowCount: rows.length, updatedAt: new Date().toISOString() });
   tmSaveDbList(tmDbList);
   tmSaveDbData(id, rows);
   tmSaveKoshuData(id, koshu);

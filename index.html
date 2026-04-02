@@ -1131,6 +1131,12 @@
     <div style="font-size:14px;font-weight:700;margin-bottom:16px;">新規トリッジ作成</div>
     <label class="form-label">トリッジ名称</label>
     <input id="tm-newDbName" type="text" class="form-input" style="width:100%;margin-bottom:10px;" placeholder="例: 電気設備用トリッジ" maxlength="40">
+    <label class="form-label">種別</label>
+    <select id="tm-newDbType" class="form-input" style="width:100%;margin-bottom:10px;">
+      <option value="mixed">統合（工種+資材）</option>
+      <option value="koshu">工種のみ</option>
+      <option value="zairyo">資材のみ</option>
+    </select>
     <label class="form-label">メモ（任意）</label>
     <input id="tm-newDbMemo" type="text" class="form-input" style="width:100%;margin-bottom:16px;" placeholder="工種・用途など">
     <div style="display:flex;justify-content:flex-end;gap:8px;">
