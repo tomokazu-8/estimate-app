@@ -167,7 +167,7 @@ function loadKoshuSheets(wb) {
     if (first) {
       const sell = parseFloat(getCol(first, '見積単価（円/人工）', '見積単価', '売単価') || 0);
       const cost = parseFloat(getCol(first, '原価単価（円/人工）', '原価単価', '原価') || 0);
-      if (sell > 0) { LABOR_RATES.sell = sell; LABOR_RATES.cost = cost; }
+      if (sell > 0) setLaborRates(sell, cost);
     }
     console.log('[工種Tridge] 労務単価マスタ:', dataLabor.length, '件 → LABOR_RATES:', LABOR_RATES);
     msgs.push('労務: ' + dataLabor.length + '区分');

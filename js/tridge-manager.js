@@ -1101,8 +1101,7 @@ function _tmApplyKoshu(db) {
   // 労務単価
   const s = tmCurrentSettings || tmDefaultSettings();
   if (s.laborSell > 0) {
-    LABOR_RATES.sell = s.laborSell;
-    LABOR_RATES.cost = s.laborCost;
+    setLaborRates(s.laborSell, s.laborCost);
   }
   if (typeof syncLaborSettingsToForm === 'function') syncLaborSettingsToForm();
 

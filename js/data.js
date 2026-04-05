@@ -20,13 +20,6 @@ function isAutoName(name) {
   if (staticNames.includes(name)) return true;
   return _allLaborNames().has(name);
 }
-// 後方互換: 配列として参照される箇所向け
-const AUTO_NAMES = new Proxy([], {
-  get(target, prop) {
-    if (prop === 'includes') return (name) => isAutoName(name);
-    return target[prop];
-  }
-});
 
 // 労務費・経費から自動算出され価格が固定される行（手動変更不可）
 function isLaborLocked(name) {
@@ -38,12 +31,6 @@ function isLaborLocked(name) {
   if (staticNames.includes(name)) return true;
   return _allLaborNames().has(name);
 }
-const LABOR_LOCKED_NAMES = new Proxy([], {
-  get(target, prop) {
-    if (prop === 'includes') return (name) => isLaborLocked(name);
-    return target[prop];
-  }
-});
 
 // ===== AUTO-CALC RULES =====
 const AUTO_CALC = {
@@ -160,6 +147,26 @@ function createBlankItem(overrides) {
     bukariki1: '', bukariki2: '', bukariki3: '',
     listPrice: '', basePrice: '', costRate: '', sellRate: '',
   }, overrides);
+}
+
+// 指定工種の材料費小計（自動計算行を除く品目の amount 合計）
+function calcMaterialTotal(catId) {
+  return (items[catId] || [])
+    .filter(i => !isAutoName(i.name))
+    .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+}
+
+// 労務費の見積金額を算出（人工数 × 売単価）
+function calcLaborSell(kosu) {
+  return Math.round(kosu * LABOR_RATES.sell);
+}
+
+// LABOR_RATES を安全に更新するセッター
+function setLaborRates(sell, cost) {
+  if (sell > 0) LABOR_RATES.sell = sell;
+  if (cost > 0) LABOR_RATES.cost = cost;
+  AUTO_CALC.laborCostRatio = (LABOR_RATES.sell > 0 && LABOR_RATES.cost > 0)
+    ? LABOR_RATES.cost / LABOR_RATES.sell : 0.72;
 }
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }

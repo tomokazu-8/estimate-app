@@ -162,7 +162,7 @@ function _buildAiDraftPrompt(similar, targetArea) {
         if (!cat.items || cat.items.length === 0) return;
         pastSection += `[${cat.name}]\n`;
         cat.items.slice(0, 25).forEach(item => {
-          if (AUTO_NAMES.includes(item.name)) return;
+          if (isAutoName(item.name)) return;
           pastSection += `  ${item.name}  ${item.spec || ''}  ${item.qty}${item.unit}  ¥${item.price}\n`;
         });
       });

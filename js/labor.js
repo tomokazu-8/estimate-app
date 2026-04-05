@@ -39,7 +39,7 @@ function calcLaborBreakdown(catId) {
   const details = [];
 
   for (const item of list) {
-    if (AUTO_NAMES.includes(item.name) || !item.qty) continue;
+    if (isAutoName(item.name) || !item.qty) continue;
     const qty = parseFloat(item.qty) || 0;
     if (qty <= 0) continue;
 
@@ -69,10 +69,7 @@ function calcLaborBreakdown(catId) {
     });
   }
 
-  // 自動計算行を除いた材料費小計
-  const materialTotal = list
-    .filter(i => !AUTO_NAMES.includes(i.name))
-    .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const materialTotal = calcMaterialTotal(catId);
 
   return {
     totalKosu, 撤去Kosu, 開口Kosu, materialTotal, details,

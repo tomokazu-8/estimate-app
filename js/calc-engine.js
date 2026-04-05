@@ -74,9 +74,7 @@ function calcAutoRows() {
   const list = items[currentCat];
   const cat  = activeCategories.find(c => c.id === currentCat);
 
-  const materialTotal = list
-    .filter(i => !isAutoName(i.name))
-    .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const materialTotal = calcMaterialTotal(currentCat);
 
   const lb = calcLaborBreakdown(currentCat);
 

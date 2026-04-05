@@ -177,10 +177,8 @@ function updateProject() {
   project.laborRate = parseFloat(document.getElementById('pj-labor-rate').value) || 72;
   project.laborSell = parseFloat(document.getElementById('pj-labor-sell').value) || 33000;
   project.tax = parseFloat(document.getElementById('pj-tax').value) || 10;
-  // LABOR_RATES / laborCostRatio を project 値と同期
-  LABOR_RATES.sell = project.laborSell;
-  LABOR_RATES.cost = Math.round(project.laborSell * project.laborRate / 100);
-  AUTO_CALC.laborCostRatio = project.laborRate / 100;
+  // LABOR_RATES を project 値と同期
+  setLaborRates(project.laborSell, Math.round(project.laborSell * project.laborRate / 100));
 }
 
 function syncArea(from) {
@@ -460,15 +458,15 @@ function syncLaborItemPrices() {
       note: (miscRate * 100).toFixed(1) + '%', locked: false });
   }
   if (n.enableLabor1 !== false && lb.totalKosu > 0) {
-    autoRows.push({ name: n.labor1, price: Math.round(lb.totalKosu * LABOR_RATES.sell),
+    autoRows.push({ name: n.labor1, price: calcLaborSell(lb.totalKosu),
       note: lb.totalKosu.toFixed(2) + '人工', locked: true });
   }
   if (n.enableLabor2 !== false && lb.撤去Kosu > 0) {
-    autoRows.push({ name: n.labor2, price: Math.round(lb.撤去Kosu * LABOR_RATES.sell),
+    autoRows.push({ name: n.labor2, price: calcLaborSell(lb.撤去Kosu),
       note: lb.撤去Kosu.toFixed(2) + '人工', locked: true });
   }
   if (n.enableLabor3 !== false && lb.開口Kosu > 0) {
-    autoRows.push({ name: n.labor3, price: Math.round(lb.開口Kosu * LABOR_RATES.sell),
+    autoRows.push({ name: n.labor3, price: calcLaborSell(lb.開口Kosu),
       note: lb.開口Kosu.toFixed(2) + '人工', locked: true });
   }
   if (n.enableTransport !== false && lb.materialTotal > 0) {
@@ -506,15 +504,15 @@ function renderLaborSection() {
   const laborSellStr = '¥' + formatNum(LABOR_RATES.sell);
 
   if (n.enableLabor1 !== false && lb.totalKosu > 0) {
-    const sell = Math.round(lb.totalKosu * LABOR_RATES.sell);
+    const sell = calcLaborSell(lb.totalKosu);
     rows.push({ name: n.labor1, basis: lb.totalKosu.toFixed(2) + '人工 × ' + laborSellStr, sell, cost: Math.round(sell * lr) });
   }
   if (n.enableLabor2 !== false && lb.撤去Kosu > 0) {
-    const sell = Math.round(lb.撤去Kosu * LABOR_RATES.sell);
+    const sell = calcLaborSell(lb.撤去Kosu);
     rows.push({ name: n.labor2, basis: lb.撤去Kosu.toFixed(2) + '人工 × ' + laborSellStr, sell, cost: Math.round(sell * lr) });
   }
   if (n.enableLabor3 !== false && lb.開口Kosu > 0) {
-    const sell = Math.round(lb.開口Kosu * LABOR_RATES.sell);
+    const sell = calcLaborSell(lb.開口Kosu);
     rows.push({ name: n.labor3, basis: lb.開口Kosu.toFixed(2) + '人工 × ' + laborSellStr, sell, cost: Math.round(sell * lr) });
   }
   if (n.enableMisc !== false && lb.materialTotal > 0) {
@@ -591,11 +589,11 @@ function showLaborDetail() {
 
   // サマリー
   html += '<div style="margin-top:12px;padding:10px;background:#f0fdf4;border-radius:8px;font-size:13px;">';
-  html += '<b>'+esc(LABOR_ROW_NAMES.labor1)+':</b> '+lb.totalKosu.toFixed(2)+'人工 → ¥'+formatNum(Math.round(lb.totalKosu*LABOR_RATES.sell));
-  if (lb.撤去Kosu > 0) html += '<br><b>'+esc(LABOR_ROW_NAMES.labor2)+':</b> '+lb.撤去Kosu.toFixed(2)+'人工 → ¥'+formatNum(Math.round(lb.撤去Kosu*LABOR_RATES.sell));
-  if (lb.開口Kosu > 0) html += '<br><b>'+esc(LABOR_ROW_NAMES.labor3)+':</b> '+lb.開口Kosu.toFixed(2)+'人工 → ¥'+formatNum(Math.round(lb.開口Kosu*LABOR_RATES.sell));
+  html += '<b>'+esc(LABOR_ROW_NAMES.labor1)+':</b> '+lb.totalKosu.toFixed(2)+'人工 → ¥'+formatNum(calcLaborSell(lb.totalKosu));
+  if (lb.撤去Kosu > 0) html += '<br><b>'+esc(LABOR_ROW_NAMES.labor2)+':</b> '+lb.撤去Kosu.toFixed(2)+'人工 → ¥'+formatNum(calcLaborSell(lb.撤去Kosu));
+  if (lb.開口Kosu > 0) html += '<br><b>'+esc(LABOR_ROW_NAMES.labor3)+':</b> '+lb.開口Kosu.toFixed(2)+'人工 → ¥'+formatNum(calcLaborSell(lb.開口Kosu));
   const totalAllKosu = lb.totalKosu + lb.撤去Kosu + lb.開口Kosu;
-  html += '<br><b>労務費合計:</b> '+totalAllKosu.toFixed(2)+'人工 → 見積 ¥'+formatNum(Math.round(totalAllKosu*LABOR_RATES.sell))+' / 原価 ¥'+formatNum(Math.round(totalAllKosu*LABOR_RATES.cost));
+  html += '<br><b>労務費合計:</b> '+totalAllKosu.toFixed(2)+'人工 → 見積 ¥'+formatNum(calcLaborSell(totalAllKosu))+' / 原価 ¥'+formatNum(Math.round(totalAllKosu*LABOR_RATES.cost));
   html += '</div></div>';
 
   document.getElementById('laborModalBody').innerHTML = html;
@@ -700,7 +698,7 @@ function renderItems() {
   list.forEach(i => { if (i.unit) i.unit = _normalizeUnit(i.unit); });
 
   // 歩掛列の表示判定：資材入力行があれば3列とも常時表示
-  const hasItems = list.some(i => !AUTO_NAMES.includes(i.name));
+  const hasItems = list.some(i => !isAutoName(i.name));
   const showBuk1 = hasItems, showBuk2 = hasItems, showBuk3 = hasItems;
   const tbl = document.getElementById('itemTable');
   tbl.classList.toggle('hide-buk1', !showBuk1);
@@ -708,8 +706,8 @@ function renderItems() {
   tbl.classList.toggle('hide-buk3', !showBuk3);
 
   tbody.innerHTML = list.map((item) => {
-    const isAuto = AUTO_NAMES.includes(item.name);
-    const isLaborLocked = LABOR_LOCKED_NAMES.includes(item.name);
+    const isAuto = isAutoName(item.name);
+    const isLaborLockedRow = isLaborLocked(item.name);
 
     // 歩掛1: bukariki1 優先、旧bukarikiに後方互換フォールバック
     const buk1Raw = item.bukariki1 !== undefined ? item.bukariki1 : (item.bukariki ?? '');
@@ -755,9 +753,9 @@ function renderItems() {
         ${disabledAuto}></td>
       <td class="col-buk2"><input class="num" value="${item.bukariki2||''}" onchange="updateItem(${item.id},'bukariki2',this.value)" type="number" step="0.001" placeholder="" ${disabledAuto}></td>
       <td class="col-buk3"><input class="num" value="${item.bukariki3||''}" onchange="updateItem(${item.id},'bukariki3',this.value)" type="number" step="0.001" placeholder="" ${disabledAuto}></td>
-      <td><input class="num" value="${item.price||''}" onchange="updateItem(${item.id},'price',this.value)" type="number" step="any" ${isLaborLocked ? 'disabled style="background:var(--bg-alt);color:var(--text-sub);"' : ''}></td>
+      <td><input class="num" value="${item.price||''}" onchange="updateItem(${item.id},'price',this.value)" type="number" step="any" ${isLaborLockedRow ? 'disabled style="background:var(--bg-alt);color:var(--text-sub);"' : ''}></td>
       <td class="td-right" style="font-weight:500;">${item.amount ? '¥'+formatNum(Math.round(item.amount)) : ''}</td>
-      <td><input value="${esc(item.note)}" onchange="updateItem(${item.id},'note',this.value)" placeholder="${isLaborLocked ? '自動計算' : (item.name==='雑材料消耗品'||item.name==='運搬費') ? '例: 5.0%' : '備考'}" style="font-size:11px;color:var(--text-sub);" ${isLaborLocked ? 'readonly' : ''}></td>
+      <td><input value="${esc(item.note)}" onchange="updateItem(${item.id},'note',this.value)" placeholder="${isLaborLockedRow ? '自動計算' : isAutoName(item.name) ? '例: 5.0%' : '備考'}" style="font-size:11px;color:var(--text-sub);" ${isLaborLockedRow ? 'readonly' : ''}></td>
       <td>
         <span style="display:flex;gap:2px;flex-wrap:wrap;">
           <button class="row-delete" onclick="openSearchModal(${item.id})" title="材料DBから検索" style="opacity:0.5;color:var(--accent);">🔍</button>
@@ -863,9 +861,8 @@ function updateItem(id, field, value) {
     item.amount = qty * price ;
 
     // 雑材料消耗品・運搬費：価格変更時に有効％をnoteへ自動反映
-    if (field === 'price' && (item.name === '雑材料消耗品' || item.name === '運搬費')) {
-      const matTotal = list.filter(i => !AUTO_NAMES.includes(i.name))
-                          .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+    if (field === 'price' && isAutoName(item.name)) {
+      const matTotal = calcMaterialTotal(currentCat);
       if (matTotal > 0 && price > 0) item.note = (price / matTotal * 100).toFixed(1) + '%';
     }
   }
@@ -875,8 +872,7 @@ function updateItem(id, field, value) {
     const m = value.trim().match(/^(\d+\.?\d*)%?$/);
     if (m) {
       const pct = parseFloat(m[1]);
-      const matTotal = list.filter(i => !AUTO_NAMES.includes(i.name))
-                          .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+      const matTotal = calcMaterialTotal(currentCat);
       if (matTotal > 0 && pct > 0) {
         const rounded = Math.round(matTotal * pct / 100 / 1000) * 1000;
         item.price  = rounded;
@@ -1020,9 +1016,7 @@ function recalcAll() {
 function syncLaborSettingsFromForm() {
   const sell = parseFloat(document.getElementById('pj-labor-sell').value) || 0;
   const cost = parseFloat(document.getElementById('pj-labor-cost').value) || 0;
-  if (sell > 0) LABOR_RATES.sell = sell;
-  if (cost > 0) LABOR_RATES.cost = cost;
-  AUTO_CALC.laborCostRatio = (sell > 0 && cost > 0) ? cost / sell : 0.72;
+  setLaborRates(sell, cost);
   project.laborSell = sell || '';
   project.laborCost = cost || '';
   recalcAll();
@@ -1098,9 +1092,9 @@ function renderSummary() {
     let totalLaborSell = 0;
     activeCategories.filter(c => c.active && !c.rateMode).forEach(c => {
       const lb = calcLaborBreakdown(c.id);
-      totalLaborSell += Math.round(lb.totalKosu * LABOR_RATES.sell);
-      totalLaborSell += Math.round(lb.撤去Kosu * LABOR_RATES.sell);
-      totalLaborSell += Math.round(lb.開口Kosu * LABOR_RATES.sell);
+      totalLaborSell += calcLaborSell(lb.totalKosu);
+      totalLaborSell += calcLaborSell(lb.撤去Kosu);
+      totalLaborSell += calcLaborSell(lb.開口Kosu);
     });
     legalAmt = Math.round(totalLaborSell * rate / 100);
     document.getElementById('summaryLegalAmt').textContent = '¥' + formatNum(legalAmt);
@@ -1509,21 +1503,7 @@ function loadFromLocalStorage() {
     const data = JSON.parse(raw);
     if (data.project) {
       project = data.project;
-      document.getElementById('pj-name').value = project.name || '';
-      document.getElementById('pj-number').value = project.number || '';
-      document.getElementById('pj-date').value = project.date || '';
-      document.getElementById('pj-client').value = project.client || '';
-      document.getElementById('pj-struct').value = project.struct || '';
-      document.getElementById('pj-usage').value = project.usage || '';
-      document.getElementById('pj-type').value = project.type || '';
-      document.getElementById('pj-floors').value = project.floors || '';
-      document.getElementById('pj-area-sqm').value = project.areaSqm || '';
-      document.getElementById('pj-area-tsubo').value = project.areaTsubo || '';
-      document.getElementById('pj-location').value = project.location || '';
-      document.getElementById('pj-person').value = project.person || '';
-      document.getElementById('pj-labor-rate').value = project.laborRate || 72;
-      document.getElementById('pj-labor-sell').value = project.laborSell || '';
-      document.getElementById('pj-tax').value = project.tax || 10;
+      if (typeof _restoreProjectForm === 'function') _restoreProjectForm();
     }
     if (data.items) {
       items = data.items;
@@ -1865,7 +1845,7 @@ async function applyAutoCreate(knowledgeId, areaRatio) {
 
     // AUTO_NAMESに該当する行は除外（自動計算行はaddAutoCalcRowsで再生成するため）
     srcCat.items.forEach(srcItem => {
-      if (AUTO_NAMES.includes(srcItem.name)) return;
+      if (isAutoName(srcItem.name)) return;
 
       const qty = areaRatio !== 1
         ? Math.ceil((srcItem.qty || 0) * areaRatio)
