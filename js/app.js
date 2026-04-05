@@ -827,7 +827,7 @@ function updateItem(id, field, value) {
       const nName = norm(item.name);
       const match = MATERIAL_DB.find(m => norm(m.n) === nName)
         || MATERIAL_DB.find(m => nName.includes(norm(m.n)) && norm(m.n).length >= 3);
-      if (match && match.u) item.unit = match.u;
+      if (match && match.u) item.unit = _normalizeUnit(match.u);
     }
   }
   // 規格変更時：歩掛が未設定の場合のみDB再検索
@@ -989,6 +989,23 @@ function batchSetRate(field) {
   });
   renderItems();
   showToast(label + 'を ' + rate + ' に一括設定しました');
+}
+
+// 単位をUNITSリストの値に正規化（半角m→全角ｍ等）
+function _normalizeUnit(u) {
+  if (!u) return '式';
+  // まず完全一致
+  if (UNITS.includes(u)) return u;
+  // NFKC正規化で照合（半角→全角）
+  const n = u.normalize('NFKC');
+  const match = UNITS.find(unit => unit.normalize('NFKC') === n);
+  if (match) return match;
+  // 小文字照合（m→ｍ）
+  const lower = n.toLowerCase();
+  const match2 = UNITS.find(unit => unit.normalize('NFKC').toLowerCase() === lower);
+  if (match2) return match2;
+  // マッチしなければそのまま返す（UNITSにない単位もあり得る）
+  return u;
 }
 
 function recalcAll() {

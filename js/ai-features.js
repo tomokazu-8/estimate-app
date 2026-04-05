@@ -304,7 +304,7 @@ function applyAiDraft() {
       // 歩掛: AI提案値(>0)を優先、なければDBから補完
       const bukExplicit = (parseFloat(item.bukariki) || 0) > 0 ? item.bukariki : '';
       const buk = resolveBukariki(item.name, item.spec, bukExplicit);
-      // 単位: AI提案値を優先、なければDBから補完
+      // 単位: AI提案値を優先、なければDBから補完、UNITS正規化
       let unit = item.unit || '';
       if (!unit || unit === '式') {
         const nName = norm(item.name || '');
@@ -312,6 +312,7 @@ function applyAiDraft() {
           || MATERIAL_DB.find(m => nName.includes(norm(m.n)) && norm(m.n).length >= 3);
         if (dbMatch && dbMatch.u) unit = dbMatch.u;
       }
+      unit = typeof _normalizeUnit === 'function' ? _normalizeUnit(unit) : unit;
       items[targetCat.id].push(createBlankItem({
         name: item.name || '', spec: item.spec || '',
         qty, unit: unit || '式', price, amount: qty * price,
