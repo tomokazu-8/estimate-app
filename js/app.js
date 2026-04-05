@@ -696,6 +696,9 @@ function renderItems() {
   const tbody = document.getElementById('itemBody');
   const list = items[currentCat] || [];
 
+  // 全品目の単位を正規化（半角m→全角ｍ等）
+  list.forEach(i => { if (i.unit) i.unit = _normalizeUnit(i.unit); });
+
   // 歩掛列の表示判定：資材入力行があれば3列とも常時表示
   const hasItems = list.some(i => !AUTO_NAMES.includes(i.name));
   const showBuk1 = hasItems, showBuk2 = hasItems, showBuk3 = hasItems;
@@ -738,7 +741,7 @@ function renderItems() {
       </td>
       <td><input value="${esc(item.spec)}" onchange="updateItem(${item.id},'spec',this.value)" placeholder="規格"></td>
       <td><input class="num" value="${item.qty||''}" onchange="updateItem(${item.id},'qty',this.value)" type="number" step="any"></td>
-      <td><select onchange="updateItem(${item.id},'unit',this.value)">${UNITS.map(u=>`<option${u===item.unit?' selected':''}>${u}</option>`).join('')}</select></td>
+      <td><select onchange="updateItem(${item.id},'unit',this.value)">${UNITS.map(u=>`<option${u===_normalizeUnit(item.unit)?' selected':''}>${u}</option>`).join('')}</select></td>
       <td><input class="num" value="${item.listPrice||''}" onchange="updateItem(${item.id},'listPrice',this.value)" type="number" step="any" placeholder="定価" ${disabledAuto}></td>
       <td><input class="num" value="${item.basePrice||''}" onchange="updateItem(${item.id},'basePrice',this.value)" type="number" step="any" placeholder="基準価格" ${disabledAuto}></td>
       <td><input class="num" value="${item.costRate||''}" onchange="updateItem(${item.id},'costRate',this.value)" type="number" step="0.01" placeholder="掛率" ${disabledAuto}></td>
