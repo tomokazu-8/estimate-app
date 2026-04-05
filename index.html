@@ -276,12 +276,12 @@
               </div>
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                 <button id="aiDraftBtn" onclick="aiDraftEstimate()" style="font-size:14px;padding:10px 24px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:6px;">
-                  ✨ AI提案作成
+                  ✨ AI提案作成（Claude）
                 </button>
                 <button class="btn btn-secondary" onclick="autoCreateEstimate()" style="font-size:13px;padding:9px 18px;">
-                  🗄️ 実績から自動作成
+                  🗄️ 実績データから作成
                 </button>
-                <span style="font-size:11px;color:var(--text-sub);flex:1;">構造・種別・面積を入力後にボタンを押してください。<br>「AIたたき台」はClaude APIで生成、「実績から自動作成」はナレッジDBを直接参照します。</span>
+                <span style="font-size:11px;color:var(--text-sub);flex:1;">構造・種別・面積を入力後にボタンを押してください。<br>「AI提案作成」はClaude AIが品目を提案。「実績データから作成」はナレッジDBの類似物件を直接流用（AI不使用）。</span>
               </div>
             </div>
           </div>
@@ -386,7 +386,6 @@
             <div style="display:flex;gap:6px;">
               <button class="btn btn-primary btn-sm" onclick="addItem()">＋ 行追加</button>
               <button class="btn btn-secondary btn-sm" onclick="openSearchModal(null)">🔍 検索</button>
-              <button class="btn btn-secondary btn-sm" onclick="aiDraftEstimate()" id="aiDraftBtn" title="AIで見積たたき台を自動生成" style="color:#6366f1;border-color:#a5b4fc;">✨ AI提案</button>
             </div>
           </div>
           <!-- 一括操作ツールバー（選択時のみ表示） -->
@@ -994,7 +993,7 @@
 <div class="modal-overlay" id="aiDraftModal">
   <div class="modal" style="max-width:860px;">
     <div class="modal-header">
-      <span class="modal-title">✨ AIたたき台 — プレビュー</span>
+      <span class="modal-title">✨ AI提案作成 — プレビュー</span>
       <button class="modal-close" onclick="document.getElementById('aiDraftModal').classList.remove('show')">✕</button>
     </div>
     <div class="modal-body" id="aiDraftBody" style="padding:16px 20px;max-height:65vh;overflow-y:auto;"></div>
