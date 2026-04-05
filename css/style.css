@@ -59,6 +59,8 @@ body { font-family:'Noto Sans JP','IBM Plex Sans',sans-serif; background:var(--b
 .topbar-title { font-size:15px; font-weight:700; color:var(--text); }
 .topbar-breadcrumb { font-size:11px; color:var(--text-sub); }
 .topbar-actions { margin-left:auto; display:flex; gap:8px; }
+.topbar-btn { color:#fff; border:none; padding:5px 12px; border-radius:6px; font-size:11px; font-family:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
+.topbar-btn:hover { filter:brightness(0.9); }
 
 /* Buttons */
 .btn { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:6px; font-size:12px; font-weight:500; cursor:pointer; border:none; transition:all 0.15s; font-family:inherit; }
