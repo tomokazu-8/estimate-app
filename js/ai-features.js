@@ -83,8 +83,10 @@ async function aiDraftEstimate() {
   btn.innerHTML = '⏳ AI生成中...';
   btn.disabled = true;
 
+  // 全画面ローディングオーバーレイを表示
+  _showAiLoadingOverlay();
+
   try {
-    // ナレッジDBから類似物件を取得（上位3件、明細付きのみ）
     const area = parseFloat(project.areaTsubo) || 0;
     let similar = [];
     try {
@@ -102,7 +104,6 @@ async function aiDraftEstimate() {
     const prompt = _buildAiDraftPrompt(similar, area);
     const responseText = await callClaude(prompt, 8192);
 
-    // JSON抽出
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('AIの回答からJSONを取り出せませんでした');
     const draft = JSON.parse(jsonMatch[0]);
@@ -115,7 +116,32 @@ async function aiDraftEstimate() {
   } finally {
     btn.innerHTML = origHtml;
     btn.disabled = false;
+    _hideAiLoadingOverlay();
   }
+}
+
+// AI処理中のローディングオーバーレイ
+function _showAiLoadingOverlay() {
+  let overlay = document.getElementById('aiLoadingOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'aiLoadingOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = `
+      <div style="background:#fff;border-radius:16px;padding:40px 48px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);max-width:400px;">
+        <div style="font-size:36px;margin-bottom:16px;animation:spin 2s linear infinite;">⚙️</div>
+        <div style="font-size:16px;font-weight:700;color:#1e293b;margin-bottom:8px;">AI提案を生成中...</div>
+        <div style="font-size:13px;color:#64748b;line-height:1.6;">Claude AIが見積の品目を提案しています。<br>通常 <b>30秒〜1分</b> ほどかかります。<br>しばらくお待ちください。</div>
+      </div>
+      <style>@keyframes spin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }</style>`;
+    document.body.appendChild(overlay);
+  }
+  overlay.style.display = 'flex';
+}
+
+function _hideAiLoadingOverlay() {
+  const overlay = document.getElementById('aiLoadingOverlay');
+  if (overlay) overlay.style.display = 'none';
 }
 
 function _buildAiDraftPrompt(similar, targetArea) {
