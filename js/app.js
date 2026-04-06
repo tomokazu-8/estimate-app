@@ -1,5 +1,4 @@
 let _laborSellTotal = 0; // renderLaborSection → updateSummaryBar で参照
-let _suppressBackupDownload = false; // Excel出力中にバックアップダウンロードを抑制
 let _undoStack = [];
 let _redoStack = [];
 
@@ -125,6 +124,23 @@ function saveUndoState() {
   document.getElementById('redoBtn').style.display = 'none';
 }
 
+function toggleTopbarHelp() {
+  const card = document.getElementById('topbarHelpCard');
+  const show = card.style.display === 'none';
+  card.style.display = show ? 'block' : 'none';
+  if (show) {
+    setTimeout(() => {
+      document.addEventListener('click', _onClickOutsideHelp, { once: true });
+    }, 0);
+  }
+}
+function _onClickOutsideHelp(e) {
+  const card = document.getElementById('topbarHelpCard');
+  if (card && !card.contains(e.target) && !e.target.closest('[onclick*="toggleTopbarHelp"]')) {
+    card.style.display = 'none';
+  }
+}
+
 function undoAction() {
   if (_undoStack.length === 0) return;
   _redoStack.push(_captureState());
@@ -240,7 +256,7 @@ function renderCategoryManager() {
       onchange="toggleCategory('${c.id}', this.checked)"
       style="width:15px;height:15px;cursor:pointer;flex-shrink:0;">`;
 
-    const nameSpan = `<span style="font-size:11px;color:#94a3b8;flex-shrink:0;width:16px;text-align:right;">${idx+1}</span><span style="font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.name}</span>`;
+    const nameSpan = `<span style="font-size:11px;color:#94a3b8;flex-shrink:0;width:16px;text-align:right;">${idx+1}</span><span style="font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.name}</span>`;
 
     const deleteBtn = c.custom
       ? `<button class="btn btn-sm" onclick="removeCustomCategory('${c.id}')"
@@ -734,10 +750,10 @@ function renderItems() {
           onchange="toggleSelectItem(${item.id})" style="cursor:pointer;width:14px;height:14px;">
       </td>
       <td class="suggest-wrap">
-        <input value="${esc(item.name)}" onchange="updateItem(${item.id},'name',this.value)" oninput="showSuggestions(${item.id},this.value)" onblur="hideSuggestions(${item.id})" placeholder="品名（入力で候補表示）">
+        <input value="${esc(item.name)}" title="${esc(item.name)}" onchange="updateItem(${item.id},'name',this.value)" oninput="showSuggestions(${item.id},this.value)" onblur="hideSuggestions(${item.id})" placeholder="品名（入力で候補表示）">
         <div class="suggest-list" id="suggest-${item.id}"></div>
       </td>
-      <td><input value="${esc(item.spec)}" onchange="updateItem(${item.id},'spec',this.value)" placeholder="規格"></td>
+      <td class="spec-wrap"><input value="${esc(item.spec)}" title="${esc(item.spec)}" onchange="updateItem(${item.id},'spec',this.value)" placeholder="規格"></td>
       <td><input class="num" value="${item.qty||''}" onchange="updateItem(${item.id},'qty',this.value)" type="number" step="any"></td>
       <td><select onchange="updateItem(${item.id},'unit',this.value)">${UNITS.map(u=>`<option${u===_normalizeUnit(item.unit)?' selected':''}>${u}</option>`).join('')}</select></td>
       <td><input class="num" value="${item.listPrice||''}" onchange="updateItem(${item.id},'listPrice',this.value)" type="number" step="any" placeholder="定価" ${disabledAuto}></td>
@@ -757,9 +773,8 @@ function renderItems() {
       <td class="td-right" style="font-weight:500;">${item.amount ? '¥'+formatNum(Math.round(item.amount)) : ''}</td>
       <td><input value="${esc(item.note)}" onchange="updateItem(${item.id},'note',this.value)" placeholder="${isLaborLockedRow ? '自動計算' : isAutoName(item.name) ? '例: 5.0%' : '備考'}" style="font-size:11px;color:var(--text-sub);" ${isLaborLockedRow ? 'readonly' : ''}></td>
       <td>
-        <span style="display:flex;gap:2px;flex-wrap:wrap;">
+        <span style="display:flex;gap:1px;flex-wrap:nowrap;">
           <button class="row-delete" onclick="openSearchModal(${item.id})" title="材料DBから検索" style="opacity:0.5;color:var(--accent);">🔍</button>
-          ${!isAuto ? `<button id="aiQueryBtn-${item.id}" class="row-delete" onclick="aiQueryItem(${item.id})" title="AI単価・仕様調査" style="opacity:0.6;color:#6366f1;">✨</button>` : ''}
           <button class="row-delete" onclick="insertItemAfter(${item.id})" title="この行の下に新規行を挿入" style="opacity:0.6;color:#059669;">＋</button>
           <button class="row-delete" onclick="copyItem(${item.id})" title="この行をコピー" style="opacity:0.6;color:#d97706;">⧉</button>
           <button class="row-delete" onclick="deleteItem(${item.id})">✕</button>
@@ -1591,12 +1606,10 @@ async function exportEstimate() {
 
   showToast('Excel出力完了');
 
-  // 見積を自動保存（ダウンロードは抑制）
+  // 見積を自動保存
   try {
-    _suppressBackupDownload = true;
     saveEstimate();
   } catch(e) { console.warn('自動保存失敗:', e); }
-  finally { _suppressBackupDownload = false; }
 
   // ナレッジDBに自動登録（ダウンロードは抑制、DB保存のみ）
   try {

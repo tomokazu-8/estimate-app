@@ -74,7 +74,7 @@
 - ナレッジDB（knowledge-db.js）
 - 見積自動作成（ナレッジDBの類似物件から品目を面積比スケーリングで自動投入）
 - **Tridgeマスタ管理UI**（tridge-manager.js）— db-manager の全機能を Deck 内に統合
-- **AI機能**（ai-features.js）— たたき台作成・仕入れ見積インポート・単価調査・掛率チェック
+- **AI機能**（ai-features.js）— AI提案作成（仕入れ取込はTridgeマスタ内。単価調査・掛率チェックは廃止済み）
 - **保存済み見積管理**（saved-estimates.js）— バージョン管理・上書き保存・版上げ保存・本見積フラグ
 - **法定福利費・値引き** — 内訳書パネルで有効/無効切り替え、法定福利費は値引き後に加算
 - **自動計算行の完全自動化** — 品目入力と同時に雑材料・労務費・運搬費が自動追加・更新（ボタン不要）
@@ -231,7 +231,7 @@ estimate-app/
     ├── excel-loader.js            ← トリッジ読み込み（資材/工種/設定/キーワード4シート対応）
     ├── excel-template-export.js   ← テンプレート方式Excel出力（テンプレート読み込み→データ書き込み）
     ├── saved-estimates.js         ← 見積バージョン管理・上書き/版上げ保存・本見積フラグ・グループ一覧
-    ├── ai-features.js             ← AI設定・Claude API・たたき台/仕入れインポート/単価調査/掛率チェック
+    ├── ai-features.js             ← AI設定・Claude API・AI提案作成（単価調査・掛率チェック廃止済み）
     ├── app.js                     ← メインUIロジック（exportEstimate: ExcelJS優先→SheetJSフォールバック）
     └── tridge-manager.js          ← Tridgeマスタ管理UI（db-manager統合、tmプレフィックス）
 ```

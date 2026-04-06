@@ -96,17 +96,21 @@ body { font-family:'Noto Sans JP','IBM Plex Sans',sans-serif; background:var(--b
 /* Table */
 .table-wrap { overflow-x:auto; }
 table { width:100%; border-collapse:collapse; font-size:12px; }
-th { background:var(--bg); color:var(--text-sub); font-weight:500; text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); font-size:11px; position:sticky; top:0; z-index:1; }
-td { padding:7px 10px; border-bottom:1px solid var(--border-light); }
+th { background:var(--bg); color:var(--text-sub); font-weight:500; text-align:left; padding:4px 6px; border-bottom:1px solid var(--border); font-size:11px; position:sticky; top:0; z-index:1; }
+td { padding:2px 4px; border-bottom:1px solid var(--border-light); line-height:1.2; }
 tr:hover td { background:rgba(37,99,235,0.02); }
 .td-right { text-align:right; font-family:'JetBrains Mono',monospace; font-size:11px; }
 .td-center { text-align:center; }
 
-td input { width:100%; padding:4px 6px; border:1px solid transparent; border-radius:4px; font-size:12px; font-family:inherit; background:transparent; }
+td input { width:100%; padding:1px 4px; border:1px solid transparent; border-radius:4px; font-size:12px; font-family:inherit; background:transparent; line-height:1.3; height:24px; box-sizing:border-box; }
 td input:focus { border-color:var(--accent); background:#fff; outline:none; box-shadow:0 0 0 2px var(--accent-light); }
 td input.num { text-align:right; font-family:'JetBrains Mono',monospace; font-size:11px; -moz-appearance:textfield; }
 td input.num::-webkit-outer-spin-button, td input.num::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
-td select { padding:4px 6px; border:1px solid transparent; border-radius:4px; font-size:12px; font-family:inherit; background:transparent; cursor:pointer; }
+td select { padding:1px 4px; border:1px solid transparent; border-radius:4px; font-size:12px; font-family:inherit; background:transparent; cursor:pointer; height:24px; box-sizing:border-box; }
+.suggest-wrap { min-width:180px; }
+.suggest-wrap input { text-overflow:ellipsis; }
+.spec-wrap { min-width:120px; }
+.spec-wrap input { text-overflow:ellipsis; }
 td select:focus { border-color:var(--accent); background:#fff; outline:none; }
 
 .row-delete { opacity:0; cursor:pointer; color:var(--red); transition:opacity 0.15s; background:none; border:none; padding:2px; }

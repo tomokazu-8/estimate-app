@@ -30,7 +30,7 @@ function _allocateNewNo() {
   return String(counter).padStart(4, '0') + '-01';
 }
 
-/** 「自動発番」ボタン: 初回のみ開始番号を確認 */
+/** 自動採番: 初回のみ開始番号を確認（保存時に呼ばれる） */
 function generateEstimateNo() {
   let counter = parseInt(localStorage.getItem(ESTIMATE_NO_KEY) || '0', 10);
   if (counter === 0) {
@@ -134,6 +134,21 @@ function _buildSaveRecord() {
   };
 }
 
+// ===== 保存ボタン（トップバーから呼ばれる） =====
+function smartSave() {
+  if (!_currentEstimateId) {
+    saveEstimate();
+    return;
+  }
+  const noSpan = document.getElementById('saveChoiceCurrentNo');
+  if (noSpan) noSpan.textContent = project.number || '';
+  document.getElementById('saveChoiceModal').classList.add('show');
+}
+
+function _closeSaveChoiceModal() {
+  document.getElementById('saveChoiceModal').classList.remove('show');
+}
+
 // ===== 上書き保存 =====
 function saveEstimate() {
   // 見積番号未設定なら自動採番
@@ -168,7 +183,7 @@ function saveEstimate() {
   showToast(`見積を保存しました（${project.number}）`);
 }
 
-// ===== 版を上げて保存 =====
+// ===== 別名で保存（枝番を上げて新版作成） =====
 function saveAsNewBranch() {
   if (!project.number) {
     saveEstimate(); // まだ一度も保存していない場合は通常保存
@@ -196,7 +211,7 @@ function saveAsNewBranch() {
   _persistEstimates(list);
   autoBackupEstimates(list);
   _updateEstimateHeader();
-  showToast(`版を上げて保存しました（${project.number}）`);
+  showToast(`別名で保存しました（${project.number}）`);
 }
 
 // ===== 本見積フラグ =====
@@ -404,7 +419,7 @@ function _renderGroup(baseNo, list) {
         <div style="display:flex;gap:4px;">
           <button onclick="loadSavedEstimate('${e.id}')" style="padding:3px 10px;font-size:11px;cursor:pointer;border:1px solid #d1d5db;border-radius:4px;background:#fff;">開く</button>
           ${!e.isFinal ? `<button onclick="setFinal('${e.id}')" style="padding:3px 8px;font-size:11px;cursor:pointer;border:1px solid #fbbf24;border-radius:4px;background:#fffbeb;color:#92400e;" title="本見積に設定">★</button>` : ''}
-          <button onclick="copyEstimate('${e.id}')" style="padding:3px 8px;font-size:11px;cursor:pointer;border:1px solid #d1d5db;border-radius:4px;background:#fff;" title="別物件として流用">流用</button>
+          <button onclick="copyEstimate('${e.id}')" style="padding:3px 8px;font-size:11px;cursor:pointer;border:1px solid #d1d5db;border-radius:4px;background:#fff;" title="別物件としてコピーして新規作成">コピー</button>
           <button onclick="deleteSavedEstimate('${e.id}')" style="padding:3px 6px;font-size:11px;cursor:pointer;border:1px solid #fca5a5;border-radius:4px;background:#fff;color:#dc2626;" title="この版を削除">✕</button>
         </div>
       </div>
@@ -417,62 +432,63 @@ function _renderGroup(baseNo, list) {
 
 // ===== 見積読み込み =====
 
-function loadSavedEstimate(id) {
+/** 保存済みレコードを取得して確認ダイアログを表示する共通処理 */
+function _findAndConfirm(id, message) {
   const list = getSavedEstimates();
   const rec  = list.find(e => e.id === id);
+  if (!rec) return null;
+  const no   = rec.project.number || rec.baseNo;
+  const name = rec.project.name || '（物件名なし）';
+  if (!confirm(`「${no} ${name}」${message}\n現在の編集内容は破棄されます。よろしいですか？`)) return null;
+  closeSavedEstimatesModal();
+  return rec;
+}
+
+/** レコードのデータをワークスペースに展開し、UIを再描画する */
+function _applyEstimateRecord(rec) {
+  project       = { ...rec.project };
+  items         = JSON.parse(JSON.stringify(rec.items));
+  itemIdCounter = rec.itemIdCounter || 1;
+  _restoreProjectForm();
+  activeCategories.forEach(c => { if (!items[c.id]) items[c.id] = []; });
+  recalcAll();
+  renderCatTabs();
+  _updateEstimateHeader();
+}
+
+function loadSavedEstimate(id) {
+  const rec = _findAndConfirm(id, 'を開きます。');
   if (!rec) return;
 
-  // メタ情報をセット
   _currentEstimateId = rec.id;
   _currentBaseNo     = rec.baseNo;
   _currentBranch     = rec.branch;
   _currentIsFinal    = rec.isFinal;
 
-  // データを復元
-  project       = { ...rec.project };
-  items         = JSON.parse(JSON.stringify(rec.items));
-  itemIdCounter = rec.itemIdCounter || 1;
-
-  // フォームに反映
-  _restoreProjectForm();
-  activeCategories.forEach(c => { if (!items[c.id]) items[c.id] = []; });
-  recalcAll();
-  renderCatTabs();
-  closeSavedEstimatesModal();
-  _updateEstimateHeader();
-
-  showToast(`見積を読み込みました（${project.number}）`);
+  _applyEstimateRecord(rec);
+  showToast(`見積を読み込みました（${rec.project.number || rec.baseNo}）`);
 }
 
-// 流用（別物件として新規作成）
+// コピーして新規作成（別物件として新規採番）
 function copyEstimate(id) {
-  const list = getSavedEstimates();
-  const rec  = list.find(e => e.id === id);
+  const rec = _findAndConfirm(id, 'をコピーして新規作成します。');
   if (!rec) return;
 
-  // データを復元
-  project       = { ...rec.project };
-  items         = JSON.parse(JSON.stringify(rec.items));
-  itemIdCounter = rec.itemIdCounter || 1;
-
-  // 新規採番
-  project.number = _allocateNewNo();
-  project.name   = project.name ? project.name + '（流用）' : '';
-  const parsed = parseEstimateNo(project.number);
-  _currentBaseNo     = parsed.base;
-  _currentBranch     = parsed.branch;
+  _currentEstimateId = null;
   _currentIsFinal    = false;
-  _currentEstimateId = null; // まだ保存していない
 
-  // フォームに反映
+  _applyEstimateRecord(rec);
+
+  // 新規採番（_applyEstimateRecord後にproject を上書き）
+  project.number = _allocateNewNo();
+  project.name   = project.name ? project.name + '（コピー）' : '';
+  const parsed   = parseEstimateNo(project.number);
+  _currentBaseNo   = parsed.base;
+  _currentBranch   = parsed.branch;
+
   _restoreProjectForm();
-  activeCategories.forEach(c => { if (!items[c.id]) items[c.id] = []; });
-  recalcAll();
-  renderCatTabs();
-  closeSavedEstimatesModal();
   _updateEstimateHeader();
-
-  showToast(`流用しました → ${project.number}（保存はまだされていません）`);
+  showToast(`コピーしました → ${project.number}（保存はまだされていません）`);
 }
 
 // フォーム復元の共通処理
@@ -527,15 +543,9 @@ function onEstListFinalToggle(checked) {
 
 // ===== バックアップ =====
 
-/** 1日1回自動バックアップ（saveEstimate から呼ばれる） */
+/** 自動バックアップ（最終保存日時のみ記録、ダウンロードはしない） */
 function autoBackupEstimates(list) {
   if (!list || list.length === 0) return;
-  if (typeof _suppressBackupDownload !== 'undefined' && _suppressBackupDownload) return;
-  const today = new Date().toISOString().split('T')[0];
-  const last  = localStorage.getItem('estimates_last_backup') || '';
-  if (last.startsWith(today)) return;
-  const json = JSON.stringify(list, null, 2);
-  downloadBlob(new Blob([json], { type: 'application/json' }), `estimates_backup_${today}.json`);
   localStorage.setItem('estimates_last_backup', new Date().toISOString());
 }
 
@@ -548,25 +558,37 @@ function exportSavedEstimates() {
   showToast(`${list.length}件の見積をバックアップしました`);
 }
 
-function importSavedEstimates(file) {
+function importSavedEstimates(fileInput, mode) {
+  const file = fileInput instanceof HTMLInputElement ? fileInput.files[0] : fileInput;
   if (!file) return;
+  if (mode === 'replace' && !confirm('既存の保存済み見積を全て削除して、バックアップファイルの内容で置き換えます。\nよろしいですか？')) return;
   const reader = new FileReader();
   reader.onload = e => {
     try {
       const incoming = JSON.parse(e.target.result);
       if (!Array.isArray(incoming)) throw new Error('フォーマットが正しくありません');
-      const existing = getSavedEstimates();
-      const existingIds = new Set(existing.map(r => r.id));
-      const newEntries  = incoming.map(migrateEstimate).filter(r => r.id && !existingIds.has(r.id));
-      const merged = [...newEntries, ...existing].slice(0, MAX_SAVED_ESTIMATES);
-      localStorage.setItem(SAVED_ESTIMATES_KEY, JSON.stringify(merged));
+      const migrated = incoming.map(migrateEstimate);
+
+      let result;
+      if (mode === 'replace') {
+        result = migrated.slice(0, MAX_SAVED_ESTIMATES);
+        showToast(`${result.length}件で置き換えました`);
+      } else {
+        const existing    = getSavedEstimates();
+        const existingIds = new Set(existing.map(r => r.id));
+        const newEntries  = migrated.filter(r => r.id && !existingIds.has(r.id));
+        result = [...newEntries, ...existing].slice(0, MAX_SAVED_ESTIMATES);
+        showToast(`${newEntries.length}件を追加しました（既存: ${existing.length}件、重複スキップ: ${incoming.length - newEntries.length}件）`);
+      }
+      localStorage.setItem(SAVED_ESTIMATES_KEY, JSON.stringify(result));
       renderSavedEstimatesList();
-      showToast(`${newEntries.length}件を復元しました（既存: ${existing.length}件）`);
     } catch(err) {
       showToast('復元に失敗しました: ' + err.message);
     }
   };
   reader.readAsText(file);
+  // 同じファイルを再選択できるようリセット
+  if (fileInput instanceof HTMLInputElement) fileInput.value = '';
 }
 
 // ===== 起動時チェック =====
