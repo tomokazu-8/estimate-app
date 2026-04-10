@@ -68,6 +68,34 @@ async function callClaude(prompt, maxTokens = 4096) {
 }
 
 // ===== AI提案作成 =====
+
+/** AI提案品目の歩掛を解決する共通処理 */
+function _resolveItemBukariki(item) {
+  const explicit = (parseFloat(item.bukariki) || 0) > 0 ? item.bukariki : '';
+  return resolveBukariki(item.name, item.spec, explicit);
+}
+
+/** AI提案品目の単位を解決（AI値→DB補完→UNITS正規化） */
+function _resolveItemUnit(item) {
+  let unit = item.unit || '';
+  if (!unit || unit === '式') {
+    const nName = norm(item.name || '');
+    const dbMatch = MATERIAL_DB.find(m => norm(m.n) === nName)
+      || MATERIAL_DB.find(m => nName.includes(norm(m.n)) && norm(m.n).length >= 3);
+    if (dbMatch && dbMatch.u) unit = dbMatch.u;
+  }
+  return typeof _normalizeUnit === 'function' ? _normalizeUnit(unit) : unit;
+}
+
+/** AI提案の工種名をactiveCategoriesから照合（完全一致→部分一致→正規化部分一致） */
+function _matchCategory(catName) {
+  return activeCategories.find(c =>
+    c.active && (c.name === catName || c.name.includes(catName) || catName.includes(c.name))
+  ) || activeCategories.find(c =>
+    c.active && (norm(c.name).includes(norm(catName)) || norm(catName).includes(norm(c.name)))
+  );
+}
+
 async function aiDraftEstimate() {
   if (!koshuTridgeLoaded && activeCategories.length === 0) {
     showToast('先にトリッジを装着してください');
@@ -82,35 +110,15 @@ async function aiDraftEstimate() {
   const origHtml = btn.innerHTML;
   btn.innerHTML = '⏳ AI生成中...';
   btn.disabled = true;
-
-  // 全画面ローディングオーバーレイを表示
   _showAiLoadingOverlay();
 
   try {
     const area = parseFloat(project.areaTsubo) || 0;
-    let similar = [];
-    try {
-      const candidates = await knowledgeDB.searchSimilar({
-        struct: project.struct,
-        type: project.type,
-        usage: project.usage,
-        areaTsubo: area,
-      });
-      similar = candidates
-        .filter(r => r.categories && r.categories.some(c => c.items && c.items.length > 0))
-        .slice(0, 3);
-    } catch (e) { /* DBなしでも続行 */ }
-
+    const similar = await _fetchSimilarProjects(area);
     const prompt = _buildAiDraftPrompt(similar, area);
     const responseText = await callClaude(prompt, 8192);
-
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('AIの回答からJSONを取り出せませんでした');
-    const draft = JSON.parse(jsonMatch[0]);
-    if (!draft.categories || !Array.isArray(draft.categories)) throw new Error('不正なフォーマットです');
-
+    const draft = _parseAiDraftResponse(responseText);
     _showAiDraftPreview(draft, similar.length);
-
   } catch (e) {
     showToast('AI生成エラー: ' + e.message);
   } finally {
@@ -118,6 +126,28 @@ async function aiDraftEstimate() {
     btn.disabled = false;
     _hideAiLoadingOverlay();
   }
+}
+
+/** ナレッジDBから類似物件を検索（エラー時は空配列） */
+async function _fetchSimilarProjects(area) {
+  try {
+    const candidates = await knowledgeDB.searchSimilar({
+      struct: project.struct, type: project.type,
+      usage: project.usage, areaTsubo: area,
+    });
+    return candidates
+      .filter(r => r.categories && r.categories.some(c => c.items && c.items.length > 0))
+      .slice(0, 3);
+  } catch (e) { return []; }
+}
+
+/** AIレスポンスからJSONを抽出・検証 */
+function _parseAiDraftResponse(responseText) {
+  const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('AIの回答からJSONを取り出せませんでした');
+  const draft = JSON.parse(jsonMatch[0]);
+  if (!draft.categories || !Array.isArray(draft.categories)) throw new Error('不正なフォーマットです');
+  return draft;
 }
 
 // AI処理中のローディングオーバーレイ
@@ -225,68 +255,27 @@ ${bukSamples}
 
 function _showAiDraftPreview(draft, similarCount) {
   const body = document.getElementById('aiDraftBody');
-  body._draft = draft;
+
+  const sourceNote = similarCount > 0
+    ? `ナレッジDBの類似物件 ${similarCount}件を参照して生成`
+    : 'ナレッジDBに類似物件がないため一般知識から生成（実績が蓄積されると精度が向上します）';
 
   let html = `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#1e40af;">
     <strong>AI コメント:</strong> ${draft.comment || ''}
-    <div style="font-size:11px;color:#3b82f6;margin-top:4px;">
-      ${similarCount > 0 ? `ナレッジDBの類似物件 ${similarCount}件を参照して生成` : 'ナレッジDBに類似物件がないため一般知識から生成（実績が蓄積されると精度が向上します）'}
-    </div>
+    <div style="font-size:11px;color:#3b82f6;margin-top:4px;">${sourceNote}</div>
   </div>`;
 
   let totalAmount = 0;
   let totalKosu = 0;
   (draft.categories || []).forEach(cat => {
     const catTotal = (cat.items || []).reduce((s, i) => s + ((i.qty || 0) * (i.price || 0)), 0);
-    // 歩掛合計（AI提案値→DBフォールバック）
     const catKosu = (cat.items || []).reduce((s, i) => {
-      const qty = parseFloat(i.qty) || 0;
-      const bukE = (parseFloat(i.bukariki) || 0) > 0 ? i.bukariki : '';
-      return s + qty * resolveBukariki(i.name, i.spec, bukE).value;
+      return s + (parseFloat(i.qty) || 0) * _resolveItemBukariki(i).value;
     }, 0);
     totalAmount += catTotal;
     totalKosu += catKosu;
-    const laborSell = Math.round(catKosu * LABOR_RATES.sell);
-    html += `<div style="margin-bottom:14px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:13px;padding:6px 10px;background:#f0f4ff;border-radius:6px 6px 0 0;border:1px solid #dbeafe;border-bottom:none;">
-        <span>${cat.name}</span>
-        <span style="display:flex;gap:16px;align-items:center;">
-          ${catKosu > 0 ? `<span style="font-size:11px;font-weight:400;color:#6366f1;">電工 ${catKosu.toFixed(2)}人工 → ¥${laborSell.toLocaleString()}</span>` : ''}
-          <span style="font-family:'JetBrains Mono';">¥${catTotal.toLocaleString()}</span>
-        </span>
-      </div>
-      <table style="width:100%;border-collapse:collapse;border:1px solid #dbeafe;font-size:12px;">
-        <thead><tr style="background:#f8fafc;color:#64748b;">
-          <th style="padding:5px 8px;text-align:left;font-weight:500;border-bottom:1px solid #e2e8f0;">品目</th>
-          <th style="padding:5px 8px;text-align:left;font-weight:500;border-bottom:1px solid #e2e8f0;">規格</th>
-          <th style="padding:5px 8px;text-align:right;font-weight:500;border-bottom:1px solid #e2e8f0;">数量</th>
-          <th style="padding:5px 8px;text-align:left;font-weight:500;border-bottom:1px solid #e2e8f0;">単位</th>
-          <th style="padding:5px 8px;text-align:right;font-weight:500;border-bottom:1px solid #e2e8f0;">単価</th>
-          <th style="padding:5px 8px;text-align:right;font-weight:500;border-bottom:1px solid #e2e8f0;">金額</th>
-          <th style="padding:5px 8px;text-align:right;font-weight:500;border-bottom:1px solid #e2e8f0;">歩掛</th>
-          <th style="padding:5px 8px;text-align:right;font-weight:500;border-bottom:1px solid #e2e8f0;">人工数</th>
-        </tr></thead>
-        <tbody>`;
-    (cat.items || []).forEach(item => {
-      const qty    = parseFloat(item.qty)   || 0;
-      const price  = parseFloat(item.price) || 0;
-      const amount = qty * price;
-      const bukE   = (parseFloat(item.bukariki) || 0) > 0 ? item.bukariki : '';
-      const buk    = resolveBukariki(item.name, item.spec, bukE);
-      const kosu   = qty * buk.value;
-      const bukSource = buk.source !== '手入力' && buk.value > 0 ? ' style="color:#6366f1;" title="DB補完"' : '';
-      html += `<tr style="border-bottom:1px solid #f1f5f9;">
-        <td style="padding:4px 8px;">${esc(item.name)}</td>
-        <td style="padding:4px 8px;color:#666;">${esc(item.spec || '')}</td>
-        <td style="padding:4px 8px;text-align:right;font-family:'JetBrains Mono';">${qty}</td>
-        <td style="padding:4px 8px;">${esc(item.unit || '')}</td>
-        <td style="padding:4px 8px;text-align:right;font-family:'JetBrains Mono';">${price.toLocaleString()}</td>
-        <td style="padding:4px 8px;text-align:right;font-family:'JetBrains Mono';">${amount.toLocaleString()}</td>
-        <td style="padding:4px 8px;text-align:right;font-family:'JetBrains Mono';"${bukSource}>${buk.value > 0 ? buk.value.toFixed(3) : '<span style="color:#ccc;">―</span>'}</td>
-        <td style="padding:4px 8px;text-align:right;font-family:'JetBrains Mono';color:#6366f1;">${kosu > 0 ? kosu.toFixed(3) : ''}</td>
-      </tr>`;
-    });
-    html += `</tbody></table></div>`;
+
+    html += _renderPreviewCategory(cat, catTotal, catKosu);
   });
 
   const totalLaborSell = Math.round(totalKosu * LABOR_RATES.sell);
@@ -296,8 +285,58 @@ function _showAiDraftPreview(draft, similarCount) {
   </div>`;
 
   body.innerHTML = html;
-  body._draft = draft;  // innerHTML代入後も保持
+  body._draft = draft;
   document.getElementById('aiDraftModal').classList.add('show');
+}
+
+/** プレビュー: 1工種分のHTML生成 */
+function _renderPreviewCategory(cat, catTotal, catKosu) {
+  const laborSell = Math.round(catKosu * LABOR_RATES.sell);
+  const mono = "font-family:'JetBrains Mono';";
+  const thStyle = 'padding:5px 8px;font-weight:500;border-bottom:1px solid #e2e8f0;';
+
+  let html = `<div style="margin-bottom:14px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:13px;padding:6px 10px;background:#f0f4ff;border-radius:6px 6px 0 0;border:1px solid #dbeafe;border-bottom:none;">
+      <span>${cat.name}</span>
+      <span style="display:flex;gap:16px;align-items:center;">
+        ${catKosu > 0 ? `<span style="font-size:11px;font-weight:400;color:#6366f1;">電工 ${catKosu.toFixed(2)}人工 → ¥${laborSell.toLocaleString()}</span>` : ''}
+        <span style="${mono}">¥${catTotal.toLocaleString()}</span>
+      </span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;border:1px solid #dbeafe;font-size:12px;">
+      <thead><tr style="background:#f8fafc;color:#64748b;">
+        <th style="${thStyle}text-align:left;">品目</th>
+        <th style="${thStyle}text-align:left;">規格</th>
+        <th style="${thStyle}text-align:right;">数量</th>
+        <th style="${thStyle}text-align:left;">単位</th>
+        <th style="${thStyle}text-align:right;">単価</th>
+        <th style="${thStyle}text-align:right;">金額</th>
+        <th style="${thStyle}text-align:right;">歩掛</th>
+        <th style="${thStyle}text-align:right;">人工数</th>
+      </tr></thead>
+      <tbody>`;
+
+  (cat.items || []).forEach(item => {
+    const qty    = parseFloat(item.qty)   || 0;
+    const price  = parseFloat(item.price) || 0;
+    const buk    = _resolveItemBukariki(item);
+    const kosu   = qty * buk.value;
+    const bukAttr = buk.source !== '手入力' && buk.value > 0 ? ' style="color:#6366f1;" title="DB補完"' : '';
+    const td = 'padding:4px 8px;';
+    html += `<tr style="border-bottom:1px solid #f1f5f9;">
+      <td style="${td}">${esc(item.name)}</td>
+      <td style="${td}color:#666;">${esc(item.spec || '')}</td>
+      <td style="${td}text-align:right;${mono}">${qty}</td>
+      <td style="${td}">${esc(item.unit || '')}</td>
+      <td style="${td}text-align:right;${mono}">${price.toLocaleString()}</td>
+      <td style="${td}text-align:right;${mono}">${(qty * price).toLocaleString()}</td>
+      <td style="${td}text-align:right;${mono}"${bukAttr}>${buk.value > 0 ? buk.value.toFixed(3) : '<span style="color:#ccc;">―</span>'}</td>
+      <td style="${td}text-align:right;${mono}color:#6366f1;">${kosu > 0 ? kosu.toFixed(3) : ''}</td>
+    </tr>`;
+  });
+
+  html += `</tbody></table></div>`;
+  return html;
 }
 
 function applyAiDraft() {
@@ -309,12 +348,7 @@ function applyAiDraft() {
 
   let skippedCats = [];
   (draft.categories || []).forEach(cat => {
-    // 工種名で照合（完全一致→部分一致→正規化部分一致の順）
-    const targetCat = activeCategories.find(c =>
-      c.active && (c.name === cat.name || c.name.includes(cat.name) || cat.name.includes(c.name))
-    ) || activeCategories.find(c =>
-      c.active && (norm(c.name).includes(norm(cat.name)) || norm(cat.name).includes(norm(c.name)))
-    );
+    const targetCat = _matchCategory(cat.name);
     if (!targetCat) { skippedCats.push(cat.name); return; }
 
     if (!items[targetCat.id]) items[targetCat.id] = [];
@@ -327,18 +361,8 @@ function applyAiDraft() {
     (cat.items || []).forEach(item => {
       const qty   = parseFloat(item.qty)   || 0;
       const price = parseFloat(item.price) || 0;
-      // 歩掛: AI提案値(>0)を優先、なければDBから補完
-      const bukExplicit = (parseFloat(item.bukariki) || 0) > 0 ? item.bukariki : '';
-      const buk = resolveBukariki(item.name, item.spec, bukExplicit);
-      // 単位: AI提案値を優先、なければDBから補完、UNITS正規化
-      let unit = item.unit || '';
-      if (!unit || unit === '式') {
-        const nName = norm(item.name || '');
-        const dbMatch = MATERIAL_DB.find(m => norm(m.n) === nName)
-          || MATERIAL_DB.find(m => nName.includes(norm(m.n)) && norm(m.n).length >= 3);
-        if (dbMatch && dbMatch.u) unit = dbMatch.u;
-      }
-      unit = typeof _normalizeUnit === 'function' ? _normalizeUnit(unit) : unit;
+      const buk   = _resolveItemBukariki(item);
+      const unit  = _resolveItemUnit(item);
       items[targetCat.id].push(createBlankItem({
         name: item.name || '', spec: item.spec || '',
         qty, unit: unit || '式', price, amount: qty * price,
