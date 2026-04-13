@@ -69,42 +69,56 @@ async function callClaude(prompt, maxTokens = 4096) {
 
 // ===== AI提案作成 =====
 
-/** MATERIAL_DBから品名+規格で検索（完全一致→品名部分一致の順） */
+/**
+ * MATERIAL_DBから品名+規格で検索。
+ * 仕入れデータ（_source:'supplier'）を最優先、次にトリッジ資材マスタ。
+ * 検索順: 完全一致→品名一致→部分一致（各段階で仕入れ優先）
+ */
 function _findMaterialInDB(name, spec) {
   const nName = norm(name || '');
   const nSpec = norm(spec || '');
   if (!nName) return null;
-  // 品名+規格の完全一致
-  const exact = MATERIAL_DB.find(m => norm(m.n) === nName && norm(m.s) === nSpec);
-  if (exact) return exact;
-  // 品名のみ完全一致（規格違いでも単価の参考にはなる）
-  const nameMatch = MATERIAL_DB.find(m => norm(m.n) === nName);
-  if (nameMatch) return nameMatch;
-  // 品名の部分一致（3文字以上）
-  return MATERIAL_DB.find(m => nName.includes(norm(m.n)) && norm(m.n).length >= 3)
-    || MATERIAL_DB.find(m => norm(m.n).includes(nName) && nName.length >= 3)
-    || null;
+
+  // 仕入れデータを先に検索（_source === 'supplier'）
+  const suppliers = MATERIAL_DB.filter(m => m._source === 'supplier');
+  const others    = MATERIAL_DB.filter(m => m._source !== 'supplier');
+
+  for (const pool of [suppliers, others]) {
+    const exact = pool.find(m => norm(m.n) === nName && norm(m.s) === nSpec);
+    if (exact) return exact;
+  }
+  for (const pool of [suppliers, others]) {
+    const nameMatch = pool.find(m => norm(m.n) === nName);
+    if (nameMatch) return nameMatch;
+  }
+  for (const pool of [suppliers, others]) {
+    const partial = pool.find(m => nName.includes(norm(m.n)) && norm(m.n).length >= 3)
+      || pool.find(m => norm(m.n).includes(nName) && nName.length >= 3);
+    if (partial) return partial;
+  }
+  return null;
 }
 
 /**
- * AI提案品目をトリッジDB基準で解決する。
+ * AI提案品目をDB基準で解決する。
+ * 優先順位: 仕入れ単価 > トリッジ資材マスタ > AI推定値
  * 返り値: { price, bukariki, unit, priceSource, bukSource }
- *   priceSource/bukSource: 'tridge' | 'ai' | 'none'
+ *   priceSource/bukSource: 'supplier' | 'tridge' | 'ai' | 'none'
  */
 function _resolveItemFromDB(item) {
   const dbMatch = _findMaterialInDB(item.name, item.spec);
   const aiPrice = parseFloat(item.price) || 0;
   const aiBuk   = parseFloat(item.bukariki) || 0;
 
-  // 単価: トリッジ優先 → AI値フォールバック
+  // 単価: 仕入れ > トリッジ > AI
   let price = aiPrice;
   let priceSource = aiPrice > 0 ? 'ai' : 'none';
   if (dbMatch && dbMatch.ep > 0) {
     price = dbMatch.ep;
-    priceSource = 'tridge';
+    priceSource = dbMatch._source === 'supplier' ? 'supplier' : 'tridge';
   }
 
-  // 歩掛: BUKARIKI_DB優先 → AI値フォールバック
+  // 歩掛: BUKARIKI_DB > AI
   const bukFromDB = resolveBukariki(item.name, item.spec, '');
   let bukariki = aiBuk;
   let bukSource = aiBuk > 0 ? 'ai' : 'none';
@@ -113,11 +127,9 @@ function _resolveItemFromDB(item) {
     bukSource = 'tridge';
   }
 
-  // 単位: DB優先 → AI値
+  // 単位: DB > AI
   let unit = item.unit || '';
-  if (dbMatch && dbMatch.u) {
-    unit = dbMatch.u;
-  }
+  if (dbMatch && dbMatch.u) unit = dbMatch.u;
   unit = typeof _normalizeUnit === 'function' ? _normalizeUnit(unit) : unit;
 
   return { price, bukariki, unit: unit || '式', priceSource, bukSource };
@@ -305,13 +317,14 @@ function _showAiDraftPreview(draft, similarCount) {
 
   let totalAmount = 0;
   let totalKosu = 0;
-  let aiOnlyCount = 0;
+  let supplierCount = 0, tridgeCount = 0, aiOnlyCount = 0;
   (draft.categories || []).forEach(cat => {
-    // 各品目をDB解決してからプレビュー
     const resolvedItems = (cat.items || []).map(item => {
       const resolved = _resolveItemFromDB(item);
       const qty = parseFloat(item.qty) || 0;
-      if (resolved.priceSource !== 'tridge' || resolved.bukSource !== 'tridge') aiOnlyCount++;
+      if (resolved.priceSource === 'supplier') supplierCount++;
+      else if (resolved.priceSource === 'tridge') tridgeCount++;
+      else aiOnlyCount++;
       return { ...item, ...resolved, qty };
     });
     const catTotal = resolvedItems.reduce((s, i) => s + i.qty * i.price, 0);
@@ -322,9 +335,17 @@ function _showAiDraftPreview(draft, similarCount) {
     html += _renderPreviewCategory(cat.name, resolvedItems, catTotal, catKosu);
   });
 
+  // 単価ソースのサマリーバナー
+  const badges = [];
+  if (supplierCount > 0) badges.push(`<span style="color:#1e40af;font-weight:600;">仕入れ単価: ${supplierCount}品目</span>`);
+  if (tridgeCount > 0) badges.push(`<span style="color:#334155;">トリッジ単価: ${tridgeCount}品目</span>`);
+  if (aiOnlyCount > 0) badges.push(`<span style="color:#d97706;">AI推定値: ${aiOnlyCount}品目</span>`);
+  html = `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 14px;margin-bottom:12px;font-size:12px;color:#475569;display:flex;gap:16px;align-items:center;">
+    <span>単価ソース:</span>${badges.join('<span style="color:#cbd5e1;">|</span>')}
+  </div>` + html;
   if (aiOnlyCount > 0) {
-    html = `<div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#92400e;">
-      ⚠ <strong>${aiOnlyCount}品目</strong>がトリッジ未登録のためAI推定値を使用しています（<span style="color:#d97706;">オレンジ色</span>で表示）。トリッジに品目を追加すると精度が向上します。
+    html = `<div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:12px;color:#92400e;">
+      ⚠ <strong>${aiOnlyCount}品目</strong>がトリッジ未登録のためAI推定値を使用（<span style="color:#d97706;">オレンジ色</span>で表示）。トリッジに品目を追加すると精度が向上します。
     </div>` + html;
   }
 
@@ -369,9 +390,12 @@ function _renderPreviewCategory(catName, resolvedItems, catTotal, catKosu) {
   resolvedItems.forEach(item => {
     const kosu = item.qty * item.bukariki;
     const td = 'padding:4px 8px;';
-    // トリッジ根拠 = デフォルト色、AI推定 = オレンジ
-    const priceColor = item.priceSource === 'ai' ? 'color:#d97706;' : '';
-    const priceTitle = item.priceSource === 'tridge' ? 'title="トリッジ単価"' : item.priceSource === 'ai' ? 'title="AI推定値"' : '';
+    // 仕入れ = 青, トリッジ = デフォルト, AI推定 = オレンジ
+    const priceColor = item.priceSource === 'supplier' ? 'color:#1e40af;font-weight:600;'
+                     : item.priceSource === 'ai' ? 'color:#d97706;' : '';
+    const priceTitle = item.priceSource === 'supplier' ? 'title="仕入れ単価（最優先）"'
+                     : item.priceSource === 'tridge' ? 'title="トリッジ単価"'
+                     : item.priceSource === 'ai' ? 'title="AI推定値"' : '';
     const bukColor   = item.bukSource === 'ai' ? 'color:#d97706;' : item.bukSource === 'tridge' ? 'color:#6366f1;' : '';
     const bukTitle   = item.bukSource === 'tridge' ? 'title="トリッジ歩掛"' : item.bukSource === 'ai' ? 'title="AI推定値"' : '';
     html += `<tr style="border-bottom:1px solid #f1f5f9;">

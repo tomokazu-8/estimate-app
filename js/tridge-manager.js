@@ -1166,20 +1166,20 @@ function _tmApplySupplier(db) {
   if (!rows || rows.length === 0) return '';
 
   let added = 0;
-  const seen = new Set(MATERIAL_DB.map(m => m.n + '|' + m.s));
 
   rows.forEach(r => {
     const ep = parseFloat(r.ep) || 0;
     if (ep <= 0) return;
-    const key = r.n + '|' + r.s;
-    if (seen.has(key)) return; // 既にある品目はスキップ
-    seen.add(key);
+    // 既存品目があれば上書き（仕入れ単価が最優先）
+    const existIdx = MATERIAL_DB.findIndex(m => m.n === r.n && m.s === r.s);
+    if (existIdx >= 0) { MATERIAL_DB.splice(existIdx, 1); }
     const cp  = parseFloat(r.cp) > 0 ? parseFloat(r.cp) : Math.round(ep * 0.75);
     const rat = parseFloat(r.cp) > 0 ? Math.round(parseFloat(r.cp) / ep * 100) / 100 : 0.75;
     MATERIAL_DB.push({
       n: r.n, s: r.s, u: r.u, c: r.c,
       ep, cp, r: rat, a: 1,
       daiId: r.daiId||'', chuId: r.chuId||'', shoId: r.shoId||'', shoName: r.shoName||'',
+      _source: 'supplier',
     });
     const b = parseFloat(r.b) || 0;
     if (b > 0) BUKARIKI_DB.push({ n: r.n, s: r.s, u: r.u, b, c: r.c });
