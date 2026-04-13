@@ -69,22 +69,58 @@ async function callClaude(prompt, maxTokens = 4096) {
 
 // ===== AI提案作成 =====
 
-/** AI提案品目の歩掛を解決する共通処理 */
-function _resolveItemBukariki(item) {
-  const explicit = (parseFloat(item.bukariki) || 0) > 0 ? item.bukariki : '';
-  return resolveBukariki(item.name, item.spec, explicit);
+/** MATERIAL_DBから品名+規格で検索（完全一致→品名部分一致の順） */
+function _findMaterialInDB(name, spec) {
+  const nName = norm(name || '');
+  const nSpec = norm(spec || '');
+  if (!nName) return null;
+  // 品名+規格の完全一致
+  const exact = MATERIAL_DB.find(m => norm(m.n) === nName && norm(m.s) === nSpec);
+  if (exact) return exact;
+  // 品名のみ完全一致（規格違いでも単価の参考にはなる）
+  const nameMatch = MATERIAL_DB.find(m => norm(m.n) === nName);
+  if (nameMatch) return nameMatch;
+  // 品名の部分一致（3文字以上）
+  return MATERIAL_DB.find(m => nName.includes(norm(m.n)) && norm(m.n).length >= 3)
+    || MATERIAL_DB.find(m => norm(m.n).includes(nName) && nName.length >= 3)
+    || null;
 }
 
-/** AI提案品目の単位を解決（AI値→DB補完→UNITS正規化） */
-function _resolveItemUnit(item) {
-  let unit = item.unit || '';
-  if (!unit || unit === '式') {
-    const nName = norm(item.name || '');
-    const dbMatch = MATERIAL_DB.find(m => norm(m.n) === nName)
-      || MATERIAL_DB.find(m => nName.includes(norm(m.n)) && norm(m.n).length >= 3);
-    if (dbMatch && dbMatch.u) unit = dbMatch.u;
+/**
+ * AI提案品目をトリッジDB基準で解決する。
+ * 返り値: { price, bukariki, unit, priceSource, bukSource }
+ *   priceSource/bukSource: 'tridge' | 'ai' | 'none'
+ */
+function _resolveItemFromDB(item) {
+  const dbMatch = _findMaterialInDB(item.name, item.spec);
+  const aiPrice = parseFloat(item.price) || 0;
+  const aiBuk   = parseFloat(item.bukariki) || 0;
+
+  // 単価: トリッジ優先 → AI値フォールバック
+  let price = aiPrice;
+  let priceSource = aiPrice > 0 ? 'ai' : 'none';
+  if (dbMatch && dbMatch.ep > 0) {
+    price = dbMatch.ep;
+    priceSource = 'tridge';
   }
-  return typeof _normalizeUnit === 'function' ? _normalizeUnit(unit) : unit;
+
+  // 歩掛: BUKARIKI_DB優先 → AI値フォールバック
+  const bukFromDB = resolveBukariki(item.name, item.spec, '');
+  let bukariki = aiBuk;
+  let bukSource = aiBuk > 0 ? 'ai' : 'none';
+  if (bukFromDB.value > 0) {
+    bukariki = bukFromDB.value;
+    bukSource = 'tridge';
+  }
+
+  // 単位: DB優先 → AI値
+  let unit = item.unit || '';
+  if (dbMatch && dbMatch.u) {
+    unit = dbMatch.u;
+  }
+  unit = typeof _normalizeUnit === 'function' ? _normalizeUnit(unit) : unit;
+
+  return { price, bukariki, unit: unit || '式', priceSource, bukSource };
 }
 
 /** AI提案の工種名をactiveCategoriesから照合（完全一致→部分一致→正規化部分一致） */
@@ -245,7 +281,9 @@ ${bukSamples}
 【注意事項】
 - 工種名は必ず上記「使用できる工種」の中から選ぶこと（完全一致で使うこと、略称や別名は不可）
 - qty・price・bukariki は数値型（文字列不可）
-- bukariki は1単位あたりの取付人工数（電工労務費の算出根拠）。不明な品目は 0
+- price（単価）は参考値として記載する。システム側で資材マスタ（トリッジ）の登録単価がある品目は自動的にそちらで上書きされる
+- bukariki（歩掛）も参考値として記載する。システム側で歩掛マスタの登録値がある品目は自動的にそちらで上書きされる
+- 品名・規格は資材マスタに登録されている名称とできるだけ一致させること（マッチ精度に影響する）
 - 雑材料費・電工労務費・運搬費・諸経費・小計 等の自動計算行は含めない（システムが自動追加する）
 - 実際の電気工事に使用する材料・機器のみ列挙する（電線・ケーブル・幹線・配管・プルボックス・分電盤・照明器具・コンセント・スイッチ・電気機器等を適切に含めること）
 - ケーブル・電線類（IV線・CV線・VVF・幹線ケーブル等）は電気工事に不可欠なため、必ず該当する工種の品目に含めること
@@ -267,16 +305,28 @@ function _showAiDraftPreview(draft, similarCount) {
 
   let totalAmount = 0;
   let totalKosu = 0;
+  let aiOnlyCount = 0;
   (draft.categories || []).forEach(cat => {
-    const catTotal = (cat.items || []).reduce((s, i) => s + ((i.qty || 0) * (i.price || 0)), 0);
-    const catKosu = (cat.items || []).reduce((s, i) => {
-      return s + (parseFloat(i.qty) || 0) * _resolveItemBukariki(i).value;
-    }, 0);
+    // 各品目をDB解決してからプレビュー
+    const resolvedItems = (cat.items || []).map(item => {
+      const resolved = _resolveItemFromDB(item);
+      const qty = parseFloat(item.qty) || 0;
+      if (resolved.priceSource !== 'tridge' || resolved.bukSource !== 'tridge') aiOnlyCount++;
+      return { ...item, ...resolved, qty };
+    });
+    const catTotal = resolvedItems.reduce((s, i) => s + i.qty * i.price, 0);
+    const catKosu  = resolvedItems.reduce((s, i) => s + i.qty * i.bukariki, 0);
     totalAmount += catTotal;
     totalKosu += catKosu;
 
-    html += _renderPreviewCategory(cat, catTotal, catKosu);
+    html += _renderPreviewCategory(cat.name, resolvedItems, catTotal, catKosu);
   });
+
+  if (aiOnlyCount > 0) {
+    html = `<div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#92400e;">
+      ⚠ <strong>${aiOnlyCount}品目</strong>がトリッジ未登録のためAI推定値を使用しています（<span style="color:#d97706;">オレンジ色</span>で表示）。トリッジに品目を追加すると精度が向上します。
+    </div>` + html;
+  }
 
   const totalLaborSell = Math.round(totalKosu * LABOR_RATES.sell);
   html += `<div style="text-align:right;padding:10px 8px 4px;font-size:13px;border-top:2px solid #e2e8f0;display:flex;justify-content:flex-end;gap:32px;">
@@ -289,15 +339,15 @@ function _showAiDraftPreview(draft, similarCount) {
   document.getElementById('aiDraftModal').classList.add('show');
 }
 
-/** プレビュー: 1工種分のHTML生成 */
-function _renderPreviewCategory(cat, catTotal, catKosu) {
+/** プレビュー: 1工種分のHTML生成（resolvedItems = _resolveItemFromDB適用済み） */
+function _renderPreviewCategory(catName, resolvedItems, catTotal, catKosu) {
   const laborSell = Math.round(catKosu * LABOR_RATES.sell);
   const mono = "font-family:'JetBrains Mono';";
   const thStyle = 'padding:5px 8px;font-weight:500;border-bottom:1px solid #e2e8f0;';
 
   let html = `<div style="margin-bottom:14px;">
     <div style="display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:13px;padding:6px 10px;background:#f0f4ff;border-radius:6px 6px 0 0;border:1px solid #dbeafe;border-bottom:none;">
-      <span>${cat.name}</span>
+      <span>${catName}</span>
       <span style="display:flex;gap:16px;align-items:center;">
         ${catKosu > 0 ? `<span style="font-size:11px;font-weight:400;color:#6366f1;">電工 ${catKosu.toFixed(2)}人工 → ¥${laborSell.toLocaleString()}</span>` : ''}
         <span style="${mono}">¥${catTotal.toLocaleString()}</span>
@@ -316,21 +366,22 @@ function _renderPreviewCategory(cat, catTotal, catKosu) {
       </tr></thead>
       <tbody>`;
 
-  (cat.items || []).forEach(item => {
-    const qty    = parseFloat(item.qty)   || 0;
-    const price  = parseFloat(item.price) || 0;
-    const buk    = _resolveItemBukariki(item);
-    const kosu   = qty * buk.value;
-    const bukAttr = buk.source !== '手入力' && buk.value > 0 ? ' style="color:#6366f1;" title="DB補完"' : '';
+  resolvedItems.forEach(item => {
+    const kosu = item.qty * item.bukariki;
     const td = 'padding:4px 8px;';
+    // トリッジ根拠 = デフォルト色、AI推定 = オレンジ
+    const priceColor = item.priceSource === 'ai' ? 'color:#d97706;' : '';
+    const priceTitle = item.priceSource === 'tridge' ? 'title="トリッジ単価"' : item.priceSource === 'ai' ? 'title="AI推定値"' : '';
+    const bukColor   = item.bukSource === 'ai' ? 'color:#d97706;' : item.bukSource === 'tridge' ? 'color:#6366f1;' : '';
+    const bukTitle   = item.bukSource === 'tridge' ? 'title="トリッジ歩掛"' : item.bukSource === 'ai' ? 'title="AI推定値"' : '';
     html += `<tr style="border-bottom:1px solid #f1f5f9;">
       <td style="${td}">${esc(item.name)}</td>
       <td style="${td}color:#666;">${esc(item.spec || '')}</td>
-      <td style="${td}text-align:right;${mono}">${qty}</td>
+      <td style="${td}text-align:right;${mono}">${item.qty}</td>
       <td style="${td}">${esc(item.unit || '')}</td>
-      <td style="${td}text-align:right;${mono}">${price.toLocaleString()}</td>
-      <td style="${td}text-align:right;${mono}">${(qty * price).toLocaleString()}</td>
-      <td style="${td}text-align:right;${mono}"${bukAttr}>${buk.value > 0 ? buk.value.toFixed(3) : '<span style="color:#ccc;">―</span>'}</td>
+      <td style="${td}text-align:right;${mono}${priceColor}" ${priceTitle}>${item.price > 0 ? item.price.toLocaleString() : '—'}</td>
+      <td style="${td}text-align:right;${mono}">${(item.qty * item.price).toLocaleString()}</td>
+      <td style="${td}text-align:right;${mono}${bukColor}" ${bukTitle}>${item.bukariki > 0 ? item.bukariki.toFixed(3) : '<span style="color:#ccc;">―</span>'}</td>
       <td style="${td}text-align:right;${mono}color:#6366f1;">${kosu > 0 ? kosu.toFixed(3) : ''}</td>
     </tr>`;
   });
@@ -359,14 +410,13 @@ function applyAiDraft() {
     }
 
     (cat.items || []).forEach(item => {
-      const qty   = parseFloat(item.qty)   || 0;
-      const price = parseFloat(item.price) || 0;
-      const buk   = _resolveItemBukariki(item);
-      const unit  = _resolveItemUnit(item);
+      const qty      = parseFloat(item.qty) || 0;
+      const resolved = _resolveItemFromDB(item);
       items[targetCat.id].push(createBlankItem({
         name: item.name || '', spec: item.spec || '',
-        qty, unit: unit || '式', price, amount: qty * price,
-        bukariki1: buk.value > 0 ? buk.value : '',
+        qty, unit: resolved.unit, price: resolved.price,
+        amount: qty * resolved.price,
+        bukariki1: resolved.bukariki > 0 ? resolved.bukariki : '',
       }));
       addedItems++;
     });
