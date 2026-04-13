@@ -625,9 +625,7 @@
             <button class="btn btn-sm" onclick="tmImportSupplierFile()" title="仕入れ業者の見積書をAI解析してTridgeに保存" style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;">📋 仕入れ取込</button>
             <input type="file" id="tm-supplierFileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="tmHandleSupplierFile(event)">
             <button class="btn btn-secondary btn-sm" id="tm-btnExport" disabled onclick="tmExportCurrentDb()">📤 Excelエクスポート</button>
-            <button class="btn btn-sm" id="tm-btnApplyKoshu" disabled onclick="tmApplyAsKoshu()" title="工種マスタ・労務・キーワードを適用" style="background:#dcfce7;color:#16a34a;border:1px solid #86efac;">▶ 工種適用</button>
-            <button class="btn btn-sm" id="tm-btnApplyZairyo" disabled onclick="tmApplyAsZairyo()" title="資材マスタ・カテゴリ・分類を適用" style="background:#dbeafe;color:#2563eb;border:1px solid #93c5fd;">▶ 資材適用</button>
-            <button class="btn btn-success btn-sm" id="tm-btnApply" disabled onclick="tmLoadToEstimate()" title="工種+資材を一括適用">▶ 一括適用</button>
+            <button class="btn btn-success btn-sm" id="tm-btnApply" disabled onclick="tmApplyAsZairyo()" title="資材マスタを見積に適用">▶ 適用</button>
           </div>
         </div>
 
@@ -636,13 +634,8 @@
           <div style="font-size:11px;color:#94a3b8;padding:4px;">適用中のTridgeはありません</div>
         </div>
 
-        <!-- Tab Bar -->
-        <div style="background:#fff;border-bottom:1px solid var(--border);display:flex;gap:0;flex-shrink:0;">
-          <button class="tm-tab-btn active" data-tab="material" onclick="tmSwitchTab('material')" style="padding:8px 18px;font-size:12px;font-weight:500;color:var(--text-sub);cursor:pointer;border:none;border-bottom:2px solid transparent;background:transparent;">資材マスタ</button>
-          <button class="tm-tab-btn" data-tab="koshu" onclick="tmSwitchTab('koshu')" style="padding:8px 18px;font-size:12px;font-weight:500;color:var(--text-sub);cursor:pointer;border:none;border-bottom:2px solid transparent;background:transparent;">工種マスタ</button>
-          <button class="tm-tab-btn" data-tab="settings" onclick="tmSwitchTab('settings')" style="padding:8px 18px;font-size:12px;font-weight:500;color:var(--text-sub);cursor:pointer;border:none;border-bottom:2px solid transparent;background:transparent;">労務設定</button>
-          <button class="tm-tab-btn" data-tab="keywords" onclick="tmSwitchTab('keywords')" style="padding:8px 18px;font-size:12px;font-weight:500;color:var(--text-sub);cursor:pointer;border:none;border-bottom:2px solid transparent;background:transparent;">キーワードマスタ</button>
-          <button class="tm-tab-btn" data-tab="bunrui" onclick="tmSwitchTab('bunrui')" style="padding:8px 18px;font-size:12px;font-weight:500;color:var(--text-sub);cursor:pointer;border:none;border-bottom:2px solid transparent;background:transparent;">分類マスタ</button>
+        <!-- Tridge Status Bar -->
+        <div style="background:#fff;border-bottom:1px solid var(--border);display:flex;gap:0;flex-shrink:0;padding:0 12px;">
           <div style="margin-left:auto;padding:4px 12px;display:flex;align-items:center;gap:8px;">
             <span id="tm-unsavedBadge" style="display:none;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">未保存</span>
             <span id="tm-statusMsg" style="font-size:11px;color:var(--text-sub);"></span>
@@ -691,98 +684,7 @@
               </div>
             </div>
 
-            <!-- Tab: 工種マスタ -->
-            <div id="tm-tab-koshu" class="tm-tab-content" style="flex:1;overflow:hidden;display:none;flex-direction:column;">
-              <div style="padding:8px 16px;border-bottom:1px solid var(--border);background:#fff;flex-shrink:0;">
-                <button class="btn btn-secondary btn-sm" onclick="tmAddKoshuRow()">＋ 工種追加</button>
-              </div>
-              <div style="flex:1;overflow:auto;">
-                <table style="width:100%;border-collapse:collapse;font-size:12px;">
-                  <thead>
-                    <tr>
-                      <th style="width:50px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">順序</th>
-                      <th style="width:110px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">工種ID</th>
-                      <th style="width:180px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">工種名</th>
-                      <th style="width:130px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">略称</th>
-                      <th style="width:75px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;text-align:center;">割合モード</th>
-                      <th style="width:75px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">雑材料率%</th>
-                      <th style="background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">自動計算行</th>
-                      <th style="width:36px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);position:sticky;top:0;"></th>
-                    </tr>
-                  </thead>
-                  <tbody id="tm-koshuBody"></tbody>
-                </table>
-                <div id="tm-koshuEmpty" style="display:none;padding:32px;text-align:center;color:var(--text-sub);font-size:13px;">工種が登録されていません。「＋ 工種追加」から追加してください。</div>
-              </div>
-            </div>
-
-            <!-- Tab: 労務設定 -->
-            <div id="tm-tab-settings" class="tm-tab-content" style="display:none;padding:24px;">
-              <div style="max-width:400px;">
-                <p style="font-size:12px;color:var(--text-sub);margin-bottom:16px;">「Tridgeとして適用」時に見積アプリの労務単価に反映されます。</p>
-                <div style="display:flex;flex-direction:column;gap:12px;">
-                  <div>
-                    <label class="form-label">労務売単価（円/人工）</label>
-                    <input id="tm-settLaborSell" type="number" class="form-input" style="width:200px;" value="33000" onchange="tmOnSettingsChange()">
-                  </div>
-                  <div>
-                    <label class="form-label">労務原価単価（円/人工）</label>
-                    <input id="tm-settLaborCost" type="number" class="form-input" style="width:200px;" value="12000" onchange="tmOnSettingsChange()">
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Tab: キーワードマスタ -->
-            <div id="tm-tab-keywords" class="tm-tab-content" style="flex:1;overflow:hidden;display:none;flex-direction:column;">
-              <div style="padding:8px 16px;border-bottom:1px solid var(--border);background:#fff;flex-shrink:0;">
-                <button class="btn btn-secondary btn-sm" onclick="tmAddKeywordRow()">＋ キーワード追加</button>
-              </div>
-              <div style="flex:1;overflow:auto;">
-                <table style="width:100%;border-collapse:collapse;font-size:12px;">
-                  <thead>
-                    <tr>
-                      <th style="width:36px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;"></th>
-                      <th style="background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">キーワード</th>
-                      <th style="width:110px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">分類</th>
-                      <th style="width:70px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">歩掛</th>
-                      <th style="width:70px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;text-align:center;">銅連動</th>
-                      <th style="width:70px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;text-align:center;">天井開口</th>
-                      <th style="width:36px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);position:sticky;top:0;"></th>
-                    </tr>
-                  </thead>
-                  <tbody id="tm-keywordBody"></tbody>
-                </table>
-                <div id="tm-keywordEmpty" style="display:none;padding:32px;text-align:center;color:var(--text-sub);font-size:13px;">キーワードが登録されていません。「＋ キーワード追加」から追加してください。</div>
-              </div>
-            </div>
-
-            <!-- Tab: 分類マスタ -->
-            <div id="tm-tab-bunrui" class="tm-tab-content" style="flex:1;overflow:hidden;display:none;flex-direction:column;">
-              <div style="padding:8px 16px;border-bottom:1px solid var(--border);background:#fff;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
-                <span id="tm-bunruiSummary" style="font-size:12px;color:var(--text-sub);"></span>
-                <input id="tm-bunruiSearch" type="text" placeholder="中分類・小分類で絞込..."
-                  oninput="tmFilterBunrui()"
-                  style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;width:240px;">
-              </div>
-              <div style="flex:1;overflow:auto;">
-                <table id="tm-bunruiTable" style="display:none;width:100%;border-collapse:collapse;font-size:12px;">
-                  <thead>
-                    <tr>
-                      <th style="width:70px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">大分類ID</th>
-                      <th style="width:120px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">大分類名</th>
-                      <th style="width:70px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">中分類ID</th>
-                      <th style="width:180px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">中分類名</th>
-                      <th style="width:70px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">小分類ID</th>
-                      <th style="background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;">小分類名</th>
-                      <th style="width:60px;background:var(--bg);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;color:var(--text-sub);position:sticky;top:0;text-align:right;">品目数</th>
-                    </tr>
-                  </thead>
-                  <tbody id="tm-bunruiBody"></tbody>
-                </table>
-                <div id="tm-bunruiEmpty" style="padding:32px;text-align:center;color:var(--text-sub);font-size:13px;">分類マスタが読み込まれていません。Excelインポート時に自動登録されます。</div>
-              </div>
-            </div>
+            <!-- 工種マスタ・労務設定・キーワード・分類タブは廃止済み -->
 
           </div><!-- /右ペイン -->
         </div><!-- /split -->

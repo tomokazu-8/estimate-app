@@ -131,8 +131,8 @@ const tmYn = v => ['true','1','yes','有効','割合','はい','○'].includes(S
 function _tmTypeLabel(type) {
   switch (type) {
     case 'koshu':    return { text: '工種', style: 'background:#dcfce7;color:#16a34a;' };
-    case 'zairyo':   return { text: '資材', style: 'background:#dbeafe;color:#2563eb;' };
-    case 'supplier': return { text: '仕入', style: 'background:#fef3c7;color:#92400e;' };
+    case 'zairyo':
+    case 'supplier': return { text: '資材', style: 'background:#dbeafe;color:#2563eb;' };
     case 'mixed':    return { text: '統合', style: 'background:#f3e8ff;color:#7c3aed;' };
     default:         return { text: '他',   style: 'background:#f1f5f9;color:#64748b;' };
   }
@@ -147,17 +147,8 @@ function tmInit() {
   if (tmDbList.length > 0) tmSelectDb(tmDbList[0].id);
 }
 
-// ===== TAB SWITCHING =====
-function tmSwitchTab(tab) {
-  tmCurrentTab = tab;
-  document.querySelectorAll('.tm-tab-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.tab === tab);
-  });
-  document.querySelectorAll('.tm-tab-content').forEach(el => {
-    el.classList.toggle('active', el.id === 'tm-tab-' + tab);
-  });
-  document.getElementById('tm-toolbarRight').style.display = tab === 'material' ? 'flex' : 'none';
-}
+// ===== TAB SWITCHING（廃止: 資材マスタ1画面のみ）=====
+function tmSwitchTab(_tab) { /* no-op */ }
 
 // ===== SIDEBAR =====
 function tmRenderSidebar() {
@@ -428,194 +419,12 @@ function tmSetStatus(msg) {
   setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 3000);
 }
 
-// ===== 工種マスタ =====
-function tmRenderKoshuTable() {
-  const tbody = document.getElementById('tm-koshuBody');
-  const empty = document.getElementById('tm-koshuEmpty');
-  if (!tbody) return;
-  if (!tmCurrentDbId || tmCurrentKoshu.length === 0) {
-    tbody.innerHTML = '';
-    if (empty) empty.style.display = 'block';
-    return;
-  }
-  if (empty) empty.style.display = 'none';
-  tbody.innerHTML = tmCurrentKoshu.map((k, idx) => `
-    <tr>
-      <td><input class="tm-cell-input num" type="number" min="1" value="${k.order}" style="width:44px;"
-        onchange="tmOnKoshuChange(${idx},'order',this.value)"></td>
-      <td><input class="tm-cell-input" value="${esc(k.id)}" placeholder="trunk"
-        onchange="tmOnKoshuChange(${idx},'id',this.value)"></td>
-      <td><input class="tm-cell-input" value="${esc(k.name)}" placeholder="幹線・分電盤工事"
-        onchange="tmOnKoshuChange(${idx},'name',this.value)"></td>
-      <td><input class="tm-cell-input" value="${esc(k.short)}" placeholder="幹線・分電盤"
-        onchange="tmOnKoshuChange(${idx},'short',this.value)"></td>
-      <td style="text-align:center;">
-        <input type="checkbox" ${k.rateMode ? 'checked' : ''}
-          onchange="tmOnKoshuChange(${idx},'rateMode',this.checked)">
-      </td>
-      <td><input class="tm-cell-input num" type="number" min="0" max="100" value="${k.miscRate}" style="width:60px;"
-        onchange="tmOnKoshuChange(${idx},'miscRate',this.value)"></td>
-      <td><input class="tm-cell-input" value="${esc(k.autoRows || '')}" placeholder="雑材料消耗品|電工労務費|運搬費"
-        onchange="tmOnKoshuChange(${idx},'autoRows',this.value)"></td>
-      <td><button class="row-delete" title="削除" onclick="tmDeleteKoshuRow(${idx})">✕</button></td>
-    </tr>
-  `).join('');
-}
-
-function tmAddKoshuRow() {
-  if (!tmCurrentDbId) { showToast('先にトリッジを選択してください'); return; }
-  const order = tmCurrentKoshu.length > 0 ? Math.max(...tmCurrentKoshu.map(k => k.order)) + 1 : 1;
-  tmCurrentKoshu.push(tmNewKoshuRow(order));
-  tmMarkDirty();
-  tmRenderKoshuTable();
-}
-
-function tmDeleteKoshuRow(idx) {
-  tmCurrentKoshu.splice(idx, 1);
-  tmUpdateCategoriesFromKoshu();
-  tmMarkDirty();
-  tmRenderKoshuTable();
-  tmUpdateCatFilterOptions();
-  tmRenderTable();
-}
-
-function tmOnKoshuChange(idx, field, value) {
-  if (field === 'order' || field === 'miscRate') {
-    tmCurrentKoshu[idx][field] = parseFloat(value) || 0;
-  } else {
-    tmCurrentKoshu[idx][field] = value;
-  }
-  tmUpdateCategoriesFromKoshu();
-  tmMarkDirty();
-  if (field === 'id' || field === 'name') {
-    tmUpdateCatFilterOptions();
-    tmRenderTable();
-  }
-}
-
-// ===== 設定マスタ（労務単価のみ）=====
-function tmRenderSettingsPanel() {
-  if (!tmCurrentSettings) tmCurrentSettings = tmDefaultSettings();
-  const sell = document.getElementById('tm-settLaborSell');
-  const cost = document.getElementById('tm-settLaborCost');
-  if (sell) sell.value = tmCurrentSettings.laborSell || 33000;
-  if (cost) cost.value = tmCurrentSettings.laborCost || 12000;
-}
-
-function tmOnSettingsChange() {
-  if (!tmCurrentDbId) return;
-  tmCurrentSettings = {
-    laborSell: parseFloat(document.getElementById('tm-settLaborSell').value) || 33000,
-    laborCost: parseFloat(document.getElementById('tm-settLaborCost').value) || 12000,
-  };
-  tmMarkDirty();
-}
-
-// ===== キーワードマスタ =====
-function tmRenderKeywordTable() {
-  const tbody = document.getElementById('tm-keywordBody');
-  const empty = document.getElementById('tm-keywordEmpty');
-  if (!tbody) return;
-  if (!tmCurrentDbId || tmCurrentKeywords.length === 0) {
-    tbody.innerHTML = '';
-    if (empty) empty.style.display = 'block';
-    return;
-  }
-  if (empty) empty.style.display = 'none';
-  tbody.innerHTML = tmCurrentKeywords.map((k, idx) => `
-    <tr>
-      <td class="td-center" style="font-size:11px;color:var(--text-dim);">${idx + 1}</td>
-      <td><input class="tm-cell-input" value="${esc(k.keyword)}" placeholder="ケーブル"
-        onchange="tmOnKeywordChange(${idx},'keyword',this.value)"></td>
-      <td>
-        <select class="tm-cell-select" onchange="tmOnKeywordChange(${idx},'laborType',this.value)">
-          <option value="wiring" ${k.laborType==='wiring'?'selected':''}>wiring</option>
-          <option value="fixture" ${k.laborType==='fixture'?'selected':''}>fixture</option>
-          <option value="equipment" ${k.laborType==='equipment'?'selected':''}>equipment</option>
-        </select>
-      </td>
-      <td><input class="tm-cell-input num" type="number" step="0.001" min="0" value="${k.bukariki}" style="width:60px;"
-        onchange="tmOnKeywordChange(${idx},'bukariki',this.value)"></td>
-      <td style="text-align:center;">
-        <input type="checkbox" ${k.copperLinked?'checked':''} onchange="tmOnKeywordChange(${idx},'copperLinked',this.checked)">
-      </td>
-      <td style="text-align:center;">
-        <input type="checkbox" ${k.ceilingOpening?'checked':''} onchange="tmOnKeywordChange(${idx},'ceilingOpening',this.checked)">
-      </td>
-      <td><button class="row-delete" title="削除" onclick="tmDeleteKeywordRow(${idx})">✕</button></td>
-    </tr>
-  `).join('');
-}
-
-function tmAddKeywordRow() {
-  if (!tmCurrentDbId) { showToast('先にトリッジを選択してください'); return; }
-  tmCurrentKeywords.push(tmNewKeywordRow());
-  tmMarkDirty();
-  tmRenderKeywordTable();
-}
-
-function tmDeleteKeywordRow(idx) {
-  tmCurrentKeywords.splice(idx, 1);
-  tmMarkDirty();
-  tmRenderKeywordTable();
-}
-
-function tmOnKeywordChange(idx, field, value) {
-  tmCurrentKeywords[idx][field] = field === 'bukariki' ? parseFloat(value) || 0 : value;
-  tmMarkDirty();
-}
-
-// ===== 分類マスタ表示 =====
-function tmRenderBunruiPanel() {
-  const rows    = tmCurrentBunrui?.rows || [];
-  const kwCount = tmCurrentBunrui?.keywords?.length || 0;
-  const summary = document.getElementById('tm-bunruiSummary');
-  const empty   = document.getElementById('tm-bunruiEmpty');
-  const table   = document.getElementById('tm-bunruiTable');
-  if (rows.length === 0) {
-    if (summary) summary.textContent = '';
-    if (empty) empty.style.display = 'block';
-    if (table) table.style.display = 'none';
-    return;
-  }
-  const daiSet = new Set(rows.map(r => r.daiId));
-  const chuSet = new Set(rows.map(r => r.chuId));
-  if (summary) summary.textContent = `大分類: ${daiSet.size}件 / 中分類: ${chuSet.size}件 / 小分類: ${rows.length}件 / キーワード: ${kwCount}件`;
-  if (empty) empty.style.display = 'none';
-  if (table) table.style.display = '';
-  tm_bunruiFiltered = rows;
-  tmRenderBunruiTable(tm_bunruiFiltered);
-}
-
-function tmFilterBunrui() {
-  const searchEl = document.getElementById('tm-bunruiSearch');
-  const q = norm(searchEl ? searchEl.value : '').trim();
-  const rows = tmCurrentBunrui?.rows || [];
-  tm_bunruiFiltered = !q ? rows : rows.filter(r =>
-    norm(r.chuName).includes(q) || norm(r.shoName).includes(q) || norm(r.daiName).includes(q)
-  );
-  tmRenderBunruiTable(tm_bunruiFiltered);
-}
-
-function tmRenderBunruiTable(rows) {
-  const tbody = document.getElementById('tm-bunruiBody');
-  if (!tbody) return;
-  const display = rows.slice(0, 200);
-  tbody.innerHTML = display.map(r => `
-    <tr>
-      <td style="font-size:11px;color:var(--text-sub);">${esc(r.daiId)}</td>
-      <td style="font-size:11px;">${esc(r.daiName)}</td>
-      <td style="font-size:11px;color:var(--text-sub);">${esc(r.chuId)}</td>
-      <td style="font-size:11px;">${esc(r.chuName)}</td>
-      <td style="font-size:11px;color:var(--text-sub);">${esc(r.shoId)}</td>
-      <td style="font-size:11px;">${esc(r.shoName)}</td>
-      <td style="font-size:11px;text-align:right;">${r.count || 0}</td>
-    </tr>
-  `).join('');
-  if (rows.length > 200) {
-    tbody.innerHTML += `<tr><td colspan="7" style="text-align:center;color:var(--text-sub);font-size:11px;">...他 ${rows.length - 200}件（検索で絞り込んでください）</td></tr>`;
-  }
-}
+// ===== 工種マスタ・労務設定・キーワード・分類は廃止 =====
+// スタブ関数（旧コード参照時のエラー防止）
+function tmRenderKoshuTable() {}
+function tmRenderSettingsPanel() {}
+function tmRenderKeywordTable() {}
+function tmRenderBunruiPanel() {}
 
 // ===== CREATE MODAL =====
 function tmShowCreateModal() {
@@ -1386,7 +1195,7 @@ async function tmHandleSupplierFile(event) {
     const name = `${supplierName} ${date}`;
     const memo = `AI解析 ${rows.length}品目`;
 
-    tmSaveImportedTridge(name, memo, rows, 0, [], { v2: [], v3: [] }, [], tmDefaultSettings(), 'supplier');
+    tmSaveImportedTridge(name, memo, rows, 0, [], { v2: [], v3: [] }, [], tmDefaultSettings(), 'zairyo');
 
     showToast(`「${name}」を仕入れTridgeとして保存しました（${rows.length}品目）`);
 
