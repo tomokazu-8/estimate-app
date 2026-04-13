@@ -9,6 +9,61 @@ let BUKARIKI_DB = [];  // Loaded in init
 let BUNRUI_DB = { rows: [], keywords: [] };  // 分類マスタ（Tridgeから読み込み）
 let LABOR_RATES = { sell: 19000, cost: 12000 };
 
+// ===== 物件タイプ別 工種プリセット =====
+const KOSHU_PRESETS = {
+  '新築_住宅_木造':    ['trunk','power','outlet','lighting','tv','tel','intercom','fire','security'],
+  '新築_住宅_S造':     ['trunk','power','outlet','lighting','tv','tel','intercom','fire','security'],
+  '新築_住宅_RC造':    ['trunk','power','panel','outlet','lighting','tv','tel','intercom','fire','security'],
+  '新築_事務所':       ['trunk','power','panel','outlet','lighting','tv','tel','intercom','fire','security','camera'],
+  '新築_倉庫':         ['trunk','power','outlet','lighting','fire'],
+  '新築_店舗':         ['trunk','power','outlet','lighting','tel','fire','security'],
+  '新築_集合住宅':     ['trunk','power','panel','outlet','lighting','tv','tel','intercom','fire','security'],
+  '改修_住宅':         ['outlet','lighting'],
+  '改修_住宅_大規模':  ['trunk','outlet','lighting','demolish'],
+  '改修_事務所':       ['trunk','outlet','lighting','tel','demolish'],
+  '改修_倉庫':         ['trunk','outlet','lighting','demolish'],
+};
+
+// 工種IDと名称・略称のマスタ（プリセット用）
+const KOSHU_MASTER = [
+  { id: 'trunk',     name: '幹線・分電盤設備工事',       short: '幹線・分電盤',   miscRate: 0.05 },
+  { id: 'power',     name: '幹線・動力設備工事',         short: '幹線・動力',     miscRate: 0.05 },
+  { id: 'panel',     name: '分電盤設備工事',             short: '分電盤',         miscRate: 0.05 },
+  { id: 'outlet',    name: '電灯コンセント設備工事',     short: '電灯コンセント', miscRate: 0.05 },
+  { id: 'lighting',  name: '照明器具取付工事',           short: '照明器具',       miscRate: 0.03 },
+  { id: 'tv',        name: 'テレビ共聴設備工事',         short: 'テレビ共聴',     miscRate: 0.05 },
+  { id: 'tel',       name: '電話・情報設備工事',         short: '電話・情報',     miscRate: 0.05 },
+  { id: 'intercom',  name: 'インターホン設備工事',       short: 'インターホン',   miscRate: 0.05 },
+  { id: 'fire',      name: '住宅用火災警報設備工事',     short: '火災警報',       miscRate: 0.05 },
+  { id: 'camera',    name: '防犯カメラ設備工事',         short: '防犯カメラ',     miscRate: 0.05 },
+  { id: 'security',  name: 'セキュリティ設備工事',       short: 'セキュリティ',   miscRate: 0.05 },
+  { id: 'demolish',  name: '既設撤去工事',               short: '撤去',           miscRate: 0.03 },
+  { id: 'aircon',    name: 'エアコン設備工事',           short: 'エアコン',       miscRate: 0.05 },
+  { id: 'solar',     name: '太陽光発電設備工事',         short: '太陽光',         miscRate: 0.05 },
+  { id: 'ev',        name: 'EV充電設備工事',             short: 'EV充電',         miscRate: 0.05 },
+];
+
+/** 構造×新築/改修×用途からプリセットキーを生成 */
+function _buildPresetKey(type, usage, struct) {
+  if (type === '新築' && (usage === '住宅' || usage === '集合住宅')) {
+    if (usage === '集合住宅') return '新築_集合住宅';
+    return `新築_住宅_${struct || '木造'}`;
+  }
+  if (type === '新築') return `新築_${usage || '事務所'}`;
+  if (type === '改修') {
+    if (usage === '住宅') return '改修_住宅';
+    return `改修_${usage || '事務所'}`;
+  }
+  return '';
+}
+
+/** プリセットキーから工種リストを生成 */
+function getKoshuPreset(type, usage, struct) {
+  const key = _buildPresetKey(type, usage, struct);
+  const ids = KOSHU_PRESETS[key] || KOSHU_PRESETS['新築_住宅_木造'];
+  return ids.map(id => KOSHU_MASTER.find(m => m.id === id)).filter(Boolean);
+}
+
 // 自動計算行の名称リスト（labor.js / calc-engine.js / app.js で共有）
 // 自動計算行の判定（LABOR_ROW_NAMESの現在値も含める）
 function isAutoName(name) {

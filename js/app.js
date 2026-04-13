@@ -195,6 +195,35 @@ function updateProject() {
   project.tax = parseFloat(document.getElementById('pj-tax').value) || 10;
   // LABOR_RATES を project 値と同期
   setLaborRates(project.laborSell, Math.round(project.laborSell * project.laborRate / 100));
+  // プリセットラベル更新
+  _updatePresetLabel();
+}
+
+function _updatePresetLabel() {
+  const label = document.getElementById('presetLabel');
+  if (!label) return;
+  const preset = getKoshuPreset(project.type, project.usage, project.struct);
+  if (project.type && project.usage) {
+    label.textContent = `${project.type}・${project.usage}（${project.struct || '—'}）→ ${preset.length}工種`;
+  } else {
+    label.textContent = '— 構造・新築/改修・用途を選択すると自動で工種を設定します';
+  }
+}
+
+function applyKoshuPreset() {
+  if (!project.type) {
+    showToast('「新築/改修」を選択してください');
+    return;
+  }
+  const preset = getKoshuPreset(project.type, project.usage, project.struct);
+  if (activeCategories.length > 0) {
+    const existingItems = activeCategories.some(c => (items[c.id] || []).filter(i => i.name).length > 0);
+    if (existingItems && !confirm('既存の工種を置き換えます。品目データは保持されますが、工種構成が変わります。\nよろしいですか？')) return;
+  }
+  applyTridgeCategories(preset);
+  koshuTridgeLoaded = true;
+  if (typeof updateKoshuBadge === 'function') updateKoshuBadge();
+  showToast(`工種プリセットを適用しました（${preset.length}工種）`);
 }
 
 function syncArea(from) {
