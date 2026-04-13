@@ -627,7 +627,7 @@ function tmHandleImportFile(event) {
 
   const isCsv = /\.csv$/i.test(file.name);
   const reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = async function(e) {
     try {
       const wb = isCsv
         ? XLSX.read(e.target.result.replace(/^\uFEFF/,''), { type:'string', codepage:65001 })
@@ -647,41 +647,16 @@ function tmHandleImportFile(event) {
       // 工種・キーワード・分類マスタ
       const { koshu, kw, bunrui } = tmParseAllSheets(wb.Sheets);
 
-      // 資材も工種もなければエラー
-      if (rows.length === 0 && koshu.length === 0) {
-        alert('取り込めるデータが見つかりませんでした。\n「資材マスタ」または「工種マスタ」シートが必要です。\n検出シート: ' + wb.SheetNames.join(', '));
+      // 列名マッチで取り込めた場合 → そのまま保存
+      if (rows.length > 0) {
+        const name = file.name.replace(/\.(xlsx?|csv)$/i, '');
+        tmSaveImportedTridge(name, `インポート (${rows.length}品目)`, rows, skipped, [], { v2:[], v3:[] }, [], tmDefaultSettings());
         return;
       }
 
-      // 設定（労務単価マスタ）
-      let settings = tmDefaultSettings();
-      const wsLabor = wb.Sheets['労務単価マスタ'] ? XLSX.utils.sheet_to_json(wb.Sheets['労務単価マスタ']) : null;
-      if (wsLabor && wsLabor.length > 0) {
-        const first = wsLabor[0];
-        const sell = parseFloat(getCol(first,'見積単価（円/人工）','見積単価','売単価')||0);
-        const cost = parseFloat(getCol(first,'原価単価（円/人工）','原価単価','原価')||0);
-        if (sell > 0) { settings.laborSell = sell; settings.laborCost = cost; }
-      }
-
-      // 設定マスタ
-      const wsSettei = wb.Sheets['設定マスタ'] ? XLSX.utils.sheet_to_json(wb.Sheets['設定マスタ']) : null;
-      if (wsSettei) {
-        wsSettei.forEach(r => {
-          const pName = String(getCol(r, 'パラメーター名', 'パラメータ名') || '').trim();
-          const pVal  = getCol(r, '値');
-          if (pName === '労務売単価（円/人工）' && parseFloat(pVal) > 0) settings.laborSell = parseFloat(pVal);
-          if (pName === '労務原価単価（円/人工）' && parseFloat(pVal) > 0) settings.laborCost = parseFloat(pVal);
-        });
-      }
-
-      // 得意先マスタ
-      const wsClients = wb.Sheets['得意先マスタ'] ? XLSX.utils.sheet_to_json(wb.Sheets['得意先マスタ']) : null;
-
-      const name = file.name.replace(/\.(xlsx?|csv)$/i, '');
-      const memo = rows.length > 0
-        ? `インポート (${rows.length}品目)`
-        : `インポート (${koshu.length}工種)`;
-      tmSaveImportedTridge(name, memo, rows, skipped, koshu, kw, bunrui, settings);
+      // 列名マッチで0件 → AIフォールバック
+      showToast('列名が一致しないためAI解析を開始します...');
+      await _tmAiParseExcel(wb, file.name);
     } catch(err) {
       alert('読み込みエラー: ' + err.message);
       console.error(err);
@@ -1236,6 +1211,103 @@ ${csvText}
 }
 
 // ===== キーボードショートカット（Tridgeパネル用）=====
+// ===== Excel取込のAIフォールバック =====
+
+/** 列名マッチで取り込めなかったExcelをAIで解析して資材トリッジに変換 */
+async function _tmAiParseExcel(wb, filename) {
+  if (typeof callClaude !== 'function') {
+    alert('AI解析にはAPIキーの設定が必要です。サイドバー下部の「AI設定」からAPIキーを入力してください。');
+    return;
+  }
+
+  _showAiLoadingOverlay();
+  try {
+    // 全シートをCSVテキスト化
+    let csvText = '';
+    wb.SheetNames.forEach(sheetName => {
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: '' });
+      csvText += `\n[シート: ${sheetName}]\n`;
+      rows.slice(0, 150).forEach(row => {
+        const line = row.map(c => String(c).replace(/\r\n|\n/g, '/')).join('\t');
+        if (line.trim()) csvText += line + '\n';
+      });
+    });
+
+    const prompt = _tmBuildExcelParsePrompt(csvText, filename);
+    const responseText = await callClaude(prompt, 8192);
+
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('AIの回答からJSONを取り出せませんでした');
+    const result = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(result.items) || result.items.length === 0) {
+      throw new Error('品目が検出できませんでした。ファイルの内容を確認してください。');
+    }
+
+    // Tridge行に変換
+    const rows = result.items.map(item => {
+      const name = String(item.name || '').trim();
+      const spec = String(item.spec || item.partNo || '').trim();
+      if (!name) return null;
+
+      const buk = typeof resolveBukariki === 'function'
+        ? resolveBukariki(name, spec, '').value : 0;
+      const catId = tmDetectCategory(name, spec, '');
+
+      return {
+        id: genId(), n: name, s: spec,
+        u: item.unit || '式',
+        ep: parseFloat(item.price) || parseFloat(item.listPrice) || 0,
+        cp: parseFloat(item.costPrice) || 0,
+        r: 0.75, b: buk, c: catId,
+        daiId: '', chuId: '', shoId: '', shoName: '',
+      };
+    }).filter(Boolean);
+
+    if (rows.length === 0) throw new Error('変換可能な品目がありませんでした');
+
+    const tridgeName = filename.replace(/\.(xlsx?|csv)$/i, '');
+    tmSaveImportedTridge(tridgeName, `AI解析 (${rows.length}品目)`, rows, 0, [], { v2:[], v3:[] }, [], tmDefaultSettings());
+    showToast(`AI解析完了: 「${tridgeName}」${rows.length}品目を取り込みました`);
+
+  } catch(e) {
+    alert('AI解析エラー: ' + e.message);
+    console.error(e);
+  } finally {
+    _hideAiLoadingOverlay();
+  }
+}
+
+function _tmBuildExcelParsePrompt(csvText, filename) {
+  return `あなたは電気工事会社の積算担当者です。以下のExcelデータから資材・機器の品目情報を抽出してJSONで返してください。
+
+ファイル名: ${filename}
+
+【Excelデータ（タブ区切り）】
+${csvText}
+
+以下のJSON形式のみで回答してください（前後の説明文不要）:
+{
+  "items": [
+    {
+      "name": "品目名称（商品名）",
+      "spec": "規格・型番・仕様",
+      "qty": 数量の数値（不明なら1）,
+      "unit": "単位（m/個/台/巻/式等）",
+      "price": 単価の数値（定価またはメーカー希望小売価格。不明なら0）,
+      "costPrice": 原価・仕入れ単価の数値（不明なら0）
+    }
+  ]
+}
+
+【注意事項】
+- 合計行・小計行・空行・ヘッダ行は除外すること
+- 数値はカンマなしの整数（文字列不可）
+- 品名と型番は分離すること（品名に型番を含めない）
+- 定価が「オープン」「OP」「―」の場合は price=0
+- 単位が不明の場合は「式」
+- できるだけ多くの品目を抽出すること（ヘッダや説明行以外は全て対象）`;
+}
+
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     tmCloseCreateModal();
