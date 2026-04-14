@@ -900,16 +900,16 @@ function _tmApplyZairyo(db) {
   const seen = new Set();
 
   tmCurrentRows.forEach(r => {
+    if (!r.n) return; // 品名なしはスキップ
     const ep = parseFloat(r.ep) || 0;
-    if (ep > 0) {
-      const cp  = parseFloat(r.cp) > 0 ? parseFloat(r.cp) : Math.round(ep * 0.75);
-      const rat = parseFloat(r.cp) > 0 ? Math.round(parseFloat(r.cp) / ep * 100) / 100 : 0.75;
-      newMaterials.push({
-        n: r.n, s: r.s, u: r.u, c: r.c,
-        ep, cp, r: rat, a: 1,
-        daiId: r.daiId||'', chuId: r.chuId||'', shoId: r.shoId||'', shoName: r.shoName||'',
-      });
-    }
+    const cp = parseFloat(r.cp) || (ep > 0 ? Math.round(ep * 0.75) : 0);
+    const rat = (ep > 0 && cp > 0) ? Math.round(cp / ep * 100) / 100 : 0.75;
+    newMaterials.push({
+      n: r.n, s: r.s, u: r.u, c: r.c,
+      ep: ep || cp, cp, r: rat, a: 1,
+      daiId: r.daiId||'', chuId: r.chuId||'', shoId: r.shoId||'', shoName: r.shoName||'',
+      _source: r._source || '',
+    });
     const b = parseFloat(r.b) || 0;
     if (b > 0) {
       const key = r.n + '|' + r.s;
@@ -917,7 +917,7 @@ function _tmApplyZairyo(db) {
     }
   });
 
-  if (newMaterials.length === 0) return '';
+  if (newMaterials.length === 0) return '資材データがありません（品名のある行が0件です）';
 
   MATERIAL_DB.length = 0;
   newMaterials.forEach(m => MATERIAL_DB.push(m));
