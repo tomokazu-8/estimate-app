@@ -260,44 +260,15 @@ function loadZairyoSheets(wb, fileName) {
   const seen = new Set();
   let skippedNoName = 0, skippedNoPrice = 0;
 
-  // カテゴリ判定: CATEGORY_MASTERがあればそれを使う、なければ旧ハードコード
+  // カテゴリ判定: Excel列の明示値を優先 → detectMaterialCategory（data.js）でキーワード判定
   function detectCatId(hinmei, kikaku, chuName, existingCatCol) {
-    const n = norm(hinmei + ' ' + kikaku + ' ' + chuName);
-
-    // 1. 資材マスタのカテゴリ列を優先（カテゴリID形式 or 英語キー形式）
+    // 1. Excelのカテゴリ列に明示値があればそのまま使用
     if (existingCatCol) {
       const cv = String(existingCatCol).trim();
-      // カテゴリID形式（C001...）
-      if (/^C\d{3}$/.test(cv)) return cv;
-      // 英語キー → CATEGORY_MASTERでカテゴリIDに変換
-      if (CATEGORY_MASTER.length > 0) {
-        const found = CATEGORY_MASTER.find(c => c.engKey === cv);
-        if (found) return found.catId;
-      }
-      // 英語キーのままも許容（後方互換）
       if (cv) return cv;
     }
-
-    // 2. CATEGORY_MASTERのキーワードで自動判定（デフォルト以外を先に評価）
-    if (CATEGORY_MASTER.length > 0) {
-      for (const cat of CATEGORY_MASTER) {
-        if (cat.isDefault) continue;
-        if (cat.keywords.some(k => n.includes(norm(k)))) return cat.catId;
-      }
-      // デフォルトカテゴリ
-      const def = CATEGORY_MASTER.find(c => c.isDefault);
-      return def ? def.catId : 'C008';
-    }
-
-    // 3. 旧ハードコードフォールバック（カテゴリマスタ未読込時）
-    if (['電線管','pf-','ve ','fep','ねじなし','プルボックス','ダクト','ボックス'].some(k => n.includes(norm(k)))) return 'conduit';
-    if (['電線','ケーブル','cv ','cvt','vv-f','iv ','cpev','同軸','utp','ae ','hp ','toev','fcpev'].some(k => n.includes(norm(k)))) return 'cable';
-    if (['コンセント','スイッチ','プレート','配線器具'].some(k => n.includes(norm(k)))) return 'device';
-    if (['分電盤','開閉器','制御盤'].some(k => n.includes(norm(k)))) return 'panel';
-    if (['火災','感知','報知','自火報'].some(k => n.includes(norm(k)))) return 'fire';
-    if (['接地'].some(k => n.includes(norm(k)))) return 'ground';
-    if (['調光','ディマ'].some(k => n.includes(norm(k)))) return 'dimmer';
-    return 'fixture';
+    // 2. MATERIAL_CATEGORIESのキーワードで自動判定（data.jsの共通関数）
+    return detectMaterialCategory(hinmei + ' ' + (kikaku || '') + ' ' + (chuName || ''), '');
   }
 
   for (const row of data1) {

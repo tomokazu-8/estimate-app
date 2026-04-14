@@ -40,16 +40,9 @@ function tmDeleteDbData(id) {
 }
 
 // ===== CONSTANTS =====
-const TM_DEFAULT_CATEGORIES = [
-  { id: 'C001', label: '電線管・ダクト' },
-  { id: 'C002', label: '電線・ケーブル' },
-  { id: 'C003', label: '配線器具' },
-  { id: 'C004', label: '分電盤・制御盤' },
-  { id: 'C005', label: '火災報知設備' },
-  { id: 'C006', label: '接地・避雷' },
-  { id: 'C007', label: '副材・消耗品' },
-  { id: 'C008', label: '照明・その他' },
-];
+// MATERIAL_CATEGORIES（data.js）から動的生成
+const TM_DEFAULT_CATEGORIES = (typeof MATERIAL_CATEGORIES !== 'undefined' ? MATERIAL_CATEGORIES : [])
+  .map(c => ({ id: c.id, label: c.name }));
 let TM_CATEGORIES = [...TM_DEFAULT_CATEGORIES];
 let TM_CAT_MAP = Object.fromEntries(TM_CATEGORIES.map(c => [c.id, c.label]));
 
@@ -106,18 +99,10 @@ function tmDefaultSettings() {
   return { laborSell: 33000, laborCost: 12000 };
 }
 function tmDetectCategory(hinmei, kikaku, chuName) {
-  const n = norm((hinmei || '') + ' ' + (kikaku || '') + ' ' + (chuName || ''));
-  if (['電線管','pf-','ve ','fep','ねじなし','プルボックス','ダクト','ボックス'].some(k => n.includes(norm(k)))) return 'C001';
-  if (['電線','ケーブル','cv ','cvt','vv-f','iv ','cpev','同軸','utp','ae ','toev','fcpev'].some(k => n.includes(norm(k)))) return 'C002';
-  if (['コンセント','スイッチ','プレート','配線器具'].some(k => n.includes(norm(k)))) return 'C003';
-  if (['分電盤','開閉器','制御盤'].some(k => n.includes(norm(k)))) return 'C004';
-  if (['火災','感知','報知','自火報'].some(k => n.includes(norm(k)))) return 'C005';
-  if (['接地','アース','避雷'].some(k => n.includes(norm(k)))) return 'C006';
-  if (['サドル','バインド','テープ','キャップ','副材','消耗品'].some(k => n.includes(norm(k)))) return 'C007';
-  return 'C008';
+  return detectMaterialCategory((hinmei || '') + ' ' + (kikaku || '') + ' ' + (chuName || ''), '');
 }
 function tmNewRow() {
-  return { id: genId(), n:'', s:'', u:'', ep:'', cp:'', r:'', b:'', c:'C008', daiId:'', chuId:'', shoId:'', shoName:'' };
+  return { id: genId(), n:'', s:'', u:'', ep:'', cp:'', r:'', b:'', c:'misc', daiId:'', chuId:'', shoId:'', shoName:'' };
 }
 function tmNewKoshuRow(order) {
   return { id:'cat'+String(order||1).padStart(3,'0'), name:'', short:'', rateMode:false, miscRate:5, order:order||1, autoRows:'' };

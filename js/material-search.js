@@ -1,25 +1,26 @@
 // ===== MATERIAL SEARCH =====
-const CAT_LABELS = {cable:'電線',conduit:'管',device:'器具',box:'BOX',panel:'盤',fixture:'照明',dimmer:'調光',fire:'火報',ground:'接地',accessories:'付属'};
+// CAT_LABELSはMATERIAL_CATEGORIESから動的生成
+const CAT_LABELS = {};
+(typeof MATERIAL_CATEGORIES !== 'undefined' ? MATERIAL_CATEGORIES : []).forEach(c => { CAT_LABELS[c.id] = c.name; });
 
 let searchTargetItemId = null;
 let _searchResults = [];
 let _suggestMatches = [];
 
-// カテゴリフィルタを CATEGORY_MASTER から動的生成
+// カテゴリフィルタを MATERIAL_CATEGORIES から動的生成
 function initCatFilter() {
   const sel = document.getElementById('searchCatFilter');
   if (!sel) return;
   const current = sel.value;
   sel.innerHTML = '<option value="">全カテゴリ</option>';
-  if (CATEGORY_MASTER && CATEGORY_MASTER.length > 0) {
-    CATEGORY_MASTER.forEach(cat => {
+  if (typeof MATERIAL_CATEGORIES !== 'undefined') {
+    MATERIAL_CATEGORIES.forEach(cat => {
       const opt = document.createElement('option');
-      opt.value = cat.catId;
-      opt.textContent = cat.catName;
+      opt.value = cat.id;
+      opt.textContent = cat.name;
       sel.appendChild(opt);
     });
   }
-  // 値を復元（あれば）
   if (current) sel.value = current;
 }
 

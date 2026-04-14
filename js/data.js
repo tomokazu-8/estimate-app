@@ -9,6 +9,36 @@ let BUKARIKI_DB = [];  // Loaded in init
 let BUNRUI_DB = { rows: [], keywords: [] };  // 分類マスタ（Tridgeから読み込み）
 let LABOR_RATES = { sell: 19000, cost: 12000 };
 
+// ===== 資材カテゴリマスタ（17分類） =====
+const MATERIAL_CATEGORIES = [
+  { id: 'cable-lv',   name: '電線（低圧）',         keywords: ['vvf','vvr','cv ','cv-','iv線','iv ','hiv','em-ce','vct','vctf','vsf','600v'] },
+  { id: 'cable-hv',   name: '電線（高圧）',         keywords: ['cvt','高圧','6600v','22sq','38sq','60sq','100sq','150sq','200sq','250sq','325sq'] },
+  { id: 'cable-weak', name: '電線（弱電）',         keywords: ['utp','cat5','cat6','lan','同軸','cpev','ae線','ae ','fcpev','警報','hpf','電話線','aev'] },
+  { id: 'conduit',    name: '配管',                 keywords: ['pf管','cd管','ve管','電線管','ねじなし','薄鋼','厚鋼','金属管','フレキ','コネクタ','カップリング','ノーマル'] },
+  { id: 'raceway',    name: 'ラック・レースウェイ',   keywords: ['ケーブルラック','レースウェイ','配線ダクト','ラック','ワイヤーラック'] },
+  { id: 'box',        name: 'ボックス',             keywords: ['プルボックス','アウトレットボックス','スイッチボックス','ジョイントボックス','pb ','sb ','vvfボックス'] },
+  { id: 'device',     name: '配線器具',             keywords: ['コンセント','スイッチ','プレート','タンブラ','配線器具','モジュラジャック','情報コンセント'] },
+  { id: 'panel',      name: '分電盤・制御盤',       keywords: ['分電盤','開閉器','ブレーカ','elb','mccb','漏電','制御盤','キャビネット'] },
+  { id: 'lighting',   name: '照明器具',             keywords: ['ダウンライト','ベースライト','シーリング','ブラケット','スポットライト','照明','ランプ','蛍光','led照明','非常灯','誘導灯','ペンダント'] },
+  { id: 'fire',       name: '火災報知設備',         keywords: ['感知器','発信機','火災','報知','自火報','受信機','総合盤','ベル','光警報'] },
+  { id: 'intercom',   name: 'インターホン',         keywords: ['インターホン','ドアホン','チャイム','呼出','テレビドアホン'] },
+  { id: 'camera',     name: '防犯カメラ',           keywords: ['防犯カメラ','監視カメラ','nvr','dvr','レコーダー','防犯'] },
+  { id: 'tel',        name: '通信・情報機器',       keywords: ['hub','ハブ','ルーター','情報盤','mdf','idf','lan機器','スイッチングハブ','光ファイバ','otb'] },
+  { id: 'ground',     name: '接地・避雷',           keywords: ['接地','アース','避雷','接地棒','接地板','接地線'] },
+  { id: 'equipment',  name: '電気機器',             keywords: ['エアコン','換気扇','給湯','ev充電','室外機','パワコン','太陽光','蓄電池','電気温水'] },
+  { id: 'intake',     name: '引込み部材',           keywords: ['引込','引留','引き込み','引込みポール','引込み金物','引込管','ウェザーキャップ','メーターボックス'] },
+  { id: 'misc',       name: '副材・消耗品',         keywords: ['サドル','バインド','テープ','ステップル','キャップ','ブッシング','消耗品','ビス','ボルト','ナット','ワッシャ'] },
+];
+
+/** カテゴリIDから品名+規格で判定する共通関数 */
+function detectMaterialCategory(name, spec) {
+  const n = norm((name || '') + ' ' + (spec || ''));
+  for (const cat of MATERIAL_CATEGORIES) {
+    if (cat.keywords.some(k => n.includes(norm(k)))) return cat.id;
+  }
+  return 'misc'; // デフォルト
+}
+
 // ===== 物件タイプ別 工種プリセット =====
 const KOSHU_PRESETS = {
   '新築_住宅_木造':    ['trunk','power','outlet','lighting','tv','tel','intercom','fire','security'],
