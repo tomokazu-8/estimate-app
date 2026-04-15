@@ -1,7 +1,5 @@
 // ===== MATERIAL SEARCH =====
-// CAT_LABELSはMATERIAL_CATEGORIESから動的生成
-const CAT_LABELS = {};
-(typeof MATERIAL_CATEGORIES !== 'undefined' ? MATERIAL_CATEGORIES : []).forEach(c => { CAT_LABELS[c.id] = c.name; });
+// CAT_LABELS は data.js で MATERIAL_CATEGORIES から一元定義済み
 
 let searchTargetItemId = null;
 let _searchResults = [];

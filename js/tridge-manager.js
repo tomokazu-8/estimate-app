@@ -40,42 +40,14 @@ function tmDeleteDbData(id) {
 }
 
 // ===== CONSTANTS =====
-// MATERIAL_CATEGORIES（data.js）から動的生成
-const TM_DEFAULT_CATEGORIES = (typeof MATERIAL_CATEGORIES !== 'undefined' ? MATERIAL_CATEGORIES : [])
-  .map(c => ({ id: c.id, label: c.name }));
-let TM_CATEGORIES = [...TM_DEFAULT_CATEGORIES];
-let TM_CAT_MAP = Object.fromEntries(TM_CATEGORIES.map(c => [c.id, c.label]));
-
-function tmRebuildCatMap() {
-  TM_CAT_MAP = Object.fromEntries(TM_CATEGORIES.map(c => [c.id, c.label]));
-}
+// カテゴリ参照はdata.jsのMATERIAL_CATEGORIES / CAT_LABELSを使用
+// 後方互換エイリアス
+const TM_CAT_MAP = typeof CAT_LABELS !== 'undefined' ? CAT_LABELS : {};
 
 const TM_EXCEL_HEADERS = ['品目名称','規格名称','単位','基準単価','原価単価','原価率','歩掛1','中分類名','カテゴリ','大分類ID','中分類ID','小分類ID','小分類名'];
 
-const TM_ENG_TO_CAT = {
-  conduit:     { id: 'C001', name: '電線管・ダクト' },
-  cable:       { id: 'C002', name: '電線・ケーブル' },
-  device:      { id: 'C003', name: '配線器具' },
-  panel:       { id: 'C004', name: '分電盤・制御盤' },
-  fire:        { id: 'C005', name: '火災報知設備' },
-  ground:      { id: 'C006', name: '接地・避雷' },
-  accessories: { id: 'C007', name: '副材・消耗品' },
-  fixture:     { id: 'C008', name: '照明・その他' },
-  box:         { id: 'C001', name: '電線管・ダクト' },
-  dimmer:      { id: 'C008', name: '照明・その他' },
-};
-
-const TM_STANDARD_CATEGORY_MASTER = [
-  ['カテゴリID','カテゴリ名','英語キー','自動判定キーワード','備考'],
-  ['C001','電線管・ダクト',   'conduit',     '電線管|PF管|VE管|FEP管|ねじなし管|プルボックス|ダクト|ボックス','管路材・収納'],
-  ['C002','電線・ケーブル',   'cable',       '電線|ケーブル|CV|CVT|VVF|VVR|IV線|CPEV|同軸|UTP|AE線|光ファイバ','導体・線材'],
-  ['C003','配線器具',         'device',      'コンセント|スイッチ|プレート|配線器具','壁面器具・プレート類'],
-  ['C004','分電盤・制御盤',   'panel',       '分電盤|開閉器|制御盤|配電盤','盤類'],
-  ['C005','火災報知設備',     'fire',        '感知器|発信機|受信機|音響|自火報|火災報知|火災警報','自火報・警報設備'],
-  ['C006','接地・避雷',       'ground',      '接地|アース|避雷','接地工事材'],
-  ['C007','副材・消耗品',     'accessories', 'サドル|バインド|コネクタ|ブッシング|テープ|キャップ|副材|消耗品','小物・固定材'],
-  ['C008','照明・その他',     'fixture',     '（上記以外すべて）','デフォルトカテゴリ'],
-];
+// 旧カテゴリ体系（TM_ENG_TO_CAT, TM_STANDARD_CATEGORY_MASTER）は廃止
+// → MATERIAL_CATEGORIES（data.js）に統合済み
 
 // ===== STATE =====
 let tmDbList = [];
@@ -83,14 +55,10 @@ let tmCurrentDbId = null;
 let tmCurrentRows = [];
 let tmFilteredRows = [];
 let tmIsDirty = false;
-let tmCurrentKoshu = [];
-let tmCurrentSettings = null;
-let tmCurrentKeywords = [];
-let tmCurrentBunrui = { rows: [], keywords: [] };
-let tmCurrentTab = 'material';
+let tmCurrentKoshu = [];      // 後方互換（工種エクスポート用に保持）
+let tmCurrentSettings = null; // 後方互換（労務設定エクスポート用に保持）
 let tmRenameTargetId = null;
 let tmDeleteTargetId = null;
-let tm_bunruiFiltered = [];
 let tmInitialized = false;
 
 // ===== HELPERS =====
@@ -191,19 +159,14 @@ function tmSelectDb(id) {
 }
 
 function tmUpdateCategoriesFromKoshu() {
-  if (tmCurrentKoshu.length > 0) {
-    TM_CATEGORIES = tmCurrentKoshu.map(k => ({ id: k.id, label: k.name }));
-  } else {
-    TM_CATEGORIES = [...TM_DEFAULT_CATEGORIES];
-  }
-  tmRebuildCatMap();
+  // 工種タブ廃止のためno-op。カテゴリはMATERIAL_CATEGORIESで固定。
 }
 
 function tmUpdateCatFilterOptions() {
   const sel = document.getElementById('tm-catFilter');
   if (!sel) return;
   sel.innerHTML = '<option value="">全カテゴリ</option>' +
-    TM_CATEGORIES.map(c => `<option value="${c.id}">${esc(c.label)}</option>`).join('');
+    MATERIAL_CATEGORIES.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
 }
 
 function tmUpdateToolbar() {
@@ -280,7 +243,7 @@ function tmRenderTable() {
         onchange="tmOnCellChange('${row.id}','b',this.value)"></td>
       <td>
         <select class="tm-cell-select" onchange="tmOnCellChange('${row.id}','c',this.value)">
-          ${TM_CATEGORIES.map(c => `<option value="${c.id}" ${row.c === c.id ? 'selected' : ''}>${c.label}</option>`).join('')}
+          ${MATERIAL_CATEGORIES.map(c => `<option value="${c.id}" ${row.c === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
         </select>
       </td>
       <td><button class="row-delete" title="行を削除" onclick="tmDeleteRow('${row.id}')">✕</button></td>
@@ -506,8 +469,6 @@ function tmConfirmDeleteDb() {
     tmCurrentKeywords = [];
     tmCurrentBunrui = { rows: [], keywords: [] };
     tmIsDirty = false;
-    TM_CATEGORIES = [...TM_DEFAULT_CATEGORIES];
-    tmRebuildCatMap();
     tmUpdateToolbar();
     tmUpdateUnsavedBadge();
     tmUpdateCatFilterOptions();
@@ -536,14 +497,14 @@ function tmExportCurrentDb() {
   // Sheet 1: 資材マスタ
   const sheetRows = [TM_EXCEL_HEADERS];
   rows.forEach(r => {
-    const catInfo = TM_ENG_TO_CAT[r.c] || { id: r.c || 'C008', name: TM_CAT_MAP[r.c] || '照明・その他' };
+    const catName = TM_CAT_MAP[r.c] || r.c || '';
     sheetRows.push([
       r.n || '', r.s || '', r.u || '',
       r.ep !== '' ? parseFloat(r.ep) || 0 : '',
       r.cp !== '' ? parseFloat(r.cp) || 0 : '',
       r.r  !== '' ? parseFloat(r.r)  || 0 : '',
       r.b  !== '' ? parseFloat(r.b)  || 0 : '',
-      catInfo.name, catInfo.id,
+      catName, r.c || '',
       r.daiId || '', r.chuId || '', r.shoId || '', r.shoName || '',
     ]);
   });
@@ -551,9 +512,11 @@ function tmExportCurrentDb() {
   ws1['!cols'] = [{wch:30},{wch:28},{wch:6},{wch:10},{wch:10},{wch:7},{wch:7},{wch:16},{wch:8},{wch:8},{wch:8},{wch:8},{wch:24}];
   XLSX.utils.book_append_sheet(wb, ws1, '資材マスタ');
 
-  // Sheet 2: カテゴリマスタ
-  const wsCat = XLSX.utils.aoa_to_sheet(TM_STANDARD_CATEGORY_MASTER);
-  wsCat['!cols'] = [{wch:12},{wch:18},{wch:14},{wch:60},{wch:22}];
+  // Sheet 2: カテゴリマスタ（MATERIAL_CATEGORIESから動的生成）
+  const catRows = [['カテゴリID','カテゴリ名','キーワード']];
+  MATERIAL_CATEGORIES.forEach(c => catRows.push([c.id, c.name, c.keywords.join('|')]));
+  const wsCat = XLSX.utils.aoa_to_sheet(catRows);
+  wsCat['!cols'] = [{wch:14},{wch:20},{wch:60}];
   XLSX.utils.book_append_sheet(wb, wsCat, 'カテゴリマスタ');
 
   // Sheet 3: 工種マスタ（データがある場合）
@@ -928,14 +891,10 @@ function _tmApplyZairyo(db) {
     newBukariki.forEach(b => BUKARIKI_DB.push(b));
   }
 
-  // 分類・カテゴリマスタ
-  BUNRUI_DB.rows     = [...(tmCurrentBunrui.rows || [])];
-  BUNRUI_DB.keywords = [...(tmCurrentBunrui.keywords || [])];
+  // カテゴリマスタをMATERIAL_CATEGORIESから再構築
   CATEGORY_MASTER.length = 0;
-  TM_STANDARD_CATEGORY_MASTER.slice(1).forEach(r => {
-    const kwStr = r[3];
-    const keywords = kwStr === '（上記以外すべて）' ? [] : kwStr.split('|').map(k => k.trim()).filter(Boolean);
-    CATEGORY_MASTER.push({ catId: r[0], catName: r[1], engKey: r[2], keywords, isDefault: keywords.length === 0 });
+  MATERIAL_CATEGORIES.forEach(c => {
+    CATEGORY_MASTER.push({ catId: c.id, catName: c.name, keywords: c.keywords, isDefault: false });
   });
 
   zairyoTridgeLoaded = true;

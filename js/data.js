@@ -37,6 +37,9 @@ const MATERIAL_CATEGORIES = [
   { id: 'misc',       name: '副材・消耗品',         keywords: ['サドル','バインド線','ビニルテープ','ステップル','ブッシング','消耗品','ビス','ボルト','ナット','ワッシャ','インシュロック'] },
 ];
 
+/** カテゴリID→名称マップ（検索UI・テーブル表示用） */
+const CAT_LABELS = Object.fromEntries(MATERIAL_CATEGORIES.map(c => [c.id, c.name]));
+
 /** カテゴリIDから品名+規格で判定する共通関数 */
 function detectMaterialCategory(name, spec) {
   const n = norm((name || '') + ' ' + (spec || ''));
