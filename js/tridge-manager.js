@@ -543,14 +543,25 @@ function tmExportCurrentDb() {
 }
 
 // ===== IMPORT =====
-function tmImportExcelAsNewDb() {
+// 後方互換エイリアス
+function tmImportExcelAsNewDb() { tmImportFile(); }
+
+function tmImportFile() {
   document.getElementById('tm-importFileInput').click();
 }
 
 function tmHandleImportFile(event) {
   const file = event.target.files[0];
   event.target.value = '';
-  if (!file || !window.XLSX) return;
+  if (!file) return;
+
+  // PDF・画像ファイル → AI解析に直接送る
+  if (/\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(file.name)) {
+    _tmAiParseNonExcel(file);
+    return;
+  }
+
+  if (!window.XLSX) { showToast('SheetJSが読み込まれていません'); return; }
   if (/\.zip$/i.test(file.name)) { tmHandleZipImport(file); return; }
 
   const isCsv = /\.csv$/i.test(file.name);
@@ -961,8 +972,93 @@ function _tmRenderAppliedBadges() {
   el.innerHTML = html || '<div style="font-size:11px;color:#94a3b8;padding:4px;">適用中のTridgeはありません</div>';
 }
 
-// （仕入れ取込機能はExcel取込に統合済み）
-// ===== Excel取込のAIフォールバック =====
+// ===== 外部ファイル取込のAI解析 =====
+
+/** PDF・画像ファイルをAIで解析して資材トリッジに変換 */
+async function _tmAiParseNonExcel(file) {
+  if (typeof callClaude !== 'function') {
+    alert('AI解析にはAPIキーの設定が必要です。サイドバー下部の「AI設定」からAPIキーを入力してください。');
+    return;
+  }
+
+  _showAiLoadingOverlay();
+  try {
+    // ファイルをBase64に変換
+    const buf = await file.arrayBuffer();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+
+    // Claude API（Vision対応）で解析
+    const apiKey = getApiKey();
+    if (!apiKey) throw new Error('APIキーが設定されていません');
+
+    const mediaType = file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+    const sourceType = mediaType === 'application/pdf' ? 'base64' : 'base64';
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 8192,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: mediaType.startsWith('image/') ? 'image' : 'document',
+              source: { type: sourceType, media_type: mediaType, data: base64 } },
+            { type: 'text', text: _tmBuildExcelParsePrompt('', file.name) },
+          ],
+        }],
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `APIエラー (${res.status})`);
+    }
+    const data = await res.json();
+    const responseText = data.content[0].text;
+
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('AIの回答からJSONを取り出せませんでした');
+    const result = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(result.items) || result.items.length === 0) {
+      throw new Error('品目が検出できませんでした。ファイルの内容を確認してください。');
+    }
+
+    // Tridge行に変換（_tmAiParseExcelと同じロジック）
+    const rows = result.items.map(item => {
+      const name = String(item.name || '').trim();
+      const spec = String(item.spec || item.partNo || '').trim();
+      if (!name) return null;
+      const buk = typeof resolveBukariki === 'function' ? resolveBukariki(name, spec, '').value : 0;
+      const catId = tmDetectCategory(name, spec, '');
+      return {
+        id: genId(), n: name, s: spec,
+        u: item.unit || '式',
+        ep: parseFloat(item.price) || parseFloat(item.listPrice) || 0,
+        cp: parseFloat(item.costPrice) || 0,
+        r: 0.75, b: buk, c: catId,
+        daiId: '', chuId: '', shoId: '', shoName: '',
+      };
+    }).filter(Boolean);
+
+    if (rows.length === 0) throw new Error('変換可能な品目がありませんでした');
+
+    const tridgeName = file.name.replace(/\.[^.]+$/, '');
+    tmSaveImportedTridge(tridgeName, `AI解析 (${rows.length}品目)`, rows, 0, [], { v2:[], v3:[] }, [], tmDefaultSettings());
+    showToast(`AI解析完了: 「${tridgeName}」${rows.length}品目を取り込みました`);
+
+  } catch(e) {
+    alert('AI解析エラー: ' + e.message);
+  } finally {
+    _hideAiLoadingOverlay();
+  }
+}
 
 /** 列名マッチで取り込めなかったExcelをAIで解析して資材トリッジに変換 */
 async function _tmAiParseExcel(wb, filename) {
