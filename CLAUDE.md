@@ -73,15 +73,19 @@
 - テンプレート方式Excel出力（excel-template-export.js）
 - ナレッジDB（knowledge-db.js）
 - 見積自動作成（ナレッジDBの類似物件から品目を面積比スケーリングで自動投入）
-- **Tridgeマスタ管理UI**（tridge-manager.js）— db-manager の全機能を Deck 内に統合
-- **AI機能**（ai-features.js）— AI提案作成（仕入れ取込はTridgeマスタ内。単価調査・掛率チェックは廃止済み）
-- **保存済み見積管理**（saved-estimates.js）— バージョン管理・上書き保存・版上げ保存・本見積フラグ
+- **Tridgeマスタ管理UI**（tridge-manager.js）— 資材マスタ1画面に簡素化。Excel取込AIフォールバック対応
+- **AI機能**（ai-features.js）— AI提案作成（単価はトリッジDB優先、AI推定値はオレンジ表示）
+- **保存済み見積管理**（saved-estimates.js）— バージョン管理・上書き/別名保存・本見積フラグ
+- **物件タイププリセット**（data.js）— 構造×新築/改修×用途から工種を自動セット
 - **法定福利費・値引き** — 内訳書パネルで有効/無効切り替え、法定福利費は値引き後に加算
 - **自動計算行の完全自動化** — 品目入力と同時に雑材料・労務費・運搬費が自動追加・更新（ボタン不要）
 
 ### 重要なグローバル変数（data.js）
 - `TRIDGE_SETTINGS`: 設定マスタの値（copperEnabled/copperBase/copperFraction/laborSell/laborCost）
-- `TRIDGE_KEYWORDS`: キーワードマスタの配列（keyword/laborType/bukariki/copperLinked/ceilingOpening）
+- `MATERIAL_CATEGORIES`: 資材カテゴリマスタ（17分類、キーワード判定用）
+- `CAT_LABELS`: カテゴリID→名称マップ（検索UI表示用）
+- `KOSHU_PRESETS`: 物件タイプ別の工種プリセット
+- `KOSHU_MASTER`: 工種IDと名称・略称のマスタ
 - `koshuTridgeLoaded`: 工種Tridge装着フラグ
 - `zairyoTridgeLoaded`: 資材Tridge装着フラグ
 - `activeCategories`: 工種マスタから動的ロード（Tridge未装着時は[]）。各工種に `laborNames` を保持

@@ -101,9 +101,8 @@ function getSavedEstimates() {
 }
 
 function _persistEstimates(list) {
-  localStorage.setItem(SAVED_ESTIMATES_KEY, JSON.stringify(list));
-  // auto-restore 用スロットも更新
-  localStorage.setItem('hachitomo_estimate', JSON.stringify({ project, items, itemIdCounter }));
+  safeLocalStorageSet(SAVED_ESTIMATES_KEY, JSON.stringify(list));
+  safeLocalStorageSet('hachitomo_estimate', JSON.stringify({ project, items, itemIdCounter }));
 }
 
 // ===== 現在の見積の金額合計を算出 =====
@@ -580,7 +579,7 @@ function importSavedEstimates(fileInput, mode) {
         result = [...newEntries, ...existing].slice(0, MAX_SAVED_ESTIMATES);
         showToast(`${newEntries.length}件を追加しました（既存: ${existing.length}件、重複スキップ: ${incoming.length - newEntries.length}件）`);
       }
-      localStorage.setItem(SAVED_ESTIMATES_KEY, JSON.stringify(result));
+      safeLocalStorageSet(SAVED_ESTIMATES_KEY, JSON.stringify(result));
       renderSavedEstimatesList();
     } catch(err) {
       showToast('復元に失敗しました: ' + err.message);

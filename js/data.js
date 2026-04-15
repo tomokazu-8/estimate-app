@@ -1,8 +1,19 @@
 // ===== 見積データベース =====
-// DB are loaded from JSON files or Excel, these are defaults
 
 // 全角/半角カナ・英数字を統一して比較するための正規化（NFKC: 半角カナ→全角、全角英数→半角）
 function norm(s) { return (s || '').normalize('NFKC').toLowerCase(); }
+
+/** localStorage安全書き込み（容量超過時にユーザーに通知） */
+function safeLocalStorageSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch (e) {
+    if (e.name === 'QuotaExceededError' || e.code === 22) {
+      showToast('ストレージ容量が不足しています。不要なトリッジを削除してください。');
+    }
+    throw e;
+  }
+}
 
 let MATERIAL_DB = [];  // Loaded in init
 let BUKARIKI_DB = [];  // Loaded in init
@@ -227,7 +238,7 @@ let activeCategories = (function() {
         ...c,
       }));
     }
-  } catch(e) {}
+  } catch(e) { console.warn('activeCategories復元失敗:', e.message); }
   return []; // Tridge未装着時は空
 })();
 

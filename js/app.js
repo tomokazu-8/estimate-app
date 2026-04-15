@@ -46,7 +46,6 @@ async function loadDefaultDB() {
       BUKARIKI_DB.length = 0;
       bukData.forEach(b => BUKARIKI_DB.push(b));
     }
-    console.log('DB loaded: ' + MATERIAL_DB.length + ' materials, ' + BUKARIKI_DB.length + ' bukariki');
     updateDbStatus();
   } catch(e) {
     console.warn('DB load failed, using empty DB:', e);
@@ -1557,7 +1556,7 @@ function loadFromLocalStorage() {
     if (data.itemIdCounter) itemIdCounter = data.itemIdCounter;
     renderCatTabs();
     showToast('前回のデータを復元しました');
-  } catch(e) {}
+  } catch(e) { console.warn('前回データの復元に失敗:', e.message); }
 }
 
 // ===== EXPORT =====

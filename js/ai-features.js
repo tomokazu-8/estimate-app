@@ -460,8 +460,6 @@ function applyAiDraft() {
     c => c.active && !c.rateMode && items[c.id] && items[c.id].filter(i => i.name).length > 0
   );
   if (firstCat) currentCat = firstCat.id;
-  console.log('[AI Draft] Applied:', addedItems, 'items, currentCat:', currentCat, 'skipped:', skippedCats);
-
   // navigate('items') 内部で renderCatTabs() + renderItems() が呼ばれる
   navigate('items');
   updateSummaryBar();

@@ -155,7 +155,6 @@ function loadKoshuSheets(wb) {
       order:    parseInt(getCol(r, '順序') || 0),
       autoRows: String(getCol(r, '自動計算行') || '').trim().split('|').filter(Boolean),
     })).filter(c => c.id && c.name);
-    console.log('[工種Tridge] 工種マスタ:', newCategories.length, '件');
     msgs.push('工種: ' + newCategories.length + '件');
   }
 
@@ -169,7 +168,6 @@ function loadKoshuSheets(wb) {
       const cost = parseFloat(getCol(first, '原価単価（円/人工）', '原価単価', '原価') || 0);
       if (sell > 0) setLaborRates(sell, cost);
     }
-    console.log('[工種Tridge] 労務単価マスタ:', dataLabor.length, '件 → LABOR_RATES:', LABOR_RATES);
     msgs.push('労務: ' + dataLabor.length + '区分');
   }
 
@@ -195,7 +193,6 @@ function loadKoshuSheets(wb) {
         personMemo: String(getCol(r, '担当者メモ') || '').trim(),
       });
     });
-    console.log('[工種Tridge] 得意先マスタ:', TRIDGE_CLIENTS.length, '件');
     msgs.push('得意先: ' + TRIDGE_CLIENTS.length + '社');
   }
 
@@ -226,7 +223,6 @@ function loadZairyoSheets(wb, fileName) {
       const keywords = kwStr === '（上記以外すべて）' ? [] : kwStr.split('|').map(k => k.trim()).filter(Boolean);
       CATEGORY_MASTER.push({ catId, catName, engKey, keywords, isDefault: keywords.length === 0 });
     });
-    console.log('[資材Tridge] カテゴリマスタ:', CATEGORY_MASTER.length, '件');
     msgs.push('カテゴリ: ' + CATEGORY_MASTER.length + '件');
   }
 
@@ -243,7 +239,6 @@ function loadZairyoSheets(wb, fileName) {
       shoName: String(getCol(r, '小分類名') || '').trim(),
       count:   parseInt(getCol(r, '品目数') || 0),
     })).filter(r => r.shoId);
-    console.log('[資材Tridge] 分類マスタ:', BUNRUI_DB.rows.length, '件');
   }
 
   // ----- 資材マスタ -----
@@ -253,7 +248,6 @@ function loadZairyoSheets(wb, fileName) {
   const data1 = XLSX.utils.sheet_to_json(ws1);
   if (data1.length === 0) return '<b>資材Tridge</b>: ❌ 資材マスタにデータなし';
 
-  console.log('[資材Tridge] 検出した列名:', Object.keys(data1[0]));
 
   const newMaterials = [];
   const newBukariki  = [];
@@ -315,8 +309,6 @@ function loadZairyoSheets(wb, fileName) {
   // カテゴリ別内訳
   const catCount = {};
   newMaterials.forEach(m => catCount[m.c] = (catCount[m.c] || 0) + 1);
-  console.log('[資材Tridge] カテゴリ別件数:', catCount);
-  console.log('[資材Tridge] 品名なしスキップ:', skippedNoName, '/ 単価なしスキップ:', skippedNoPrice);
 
   if (newMaterials.length === 0) {
     return '<b>資材Tridge</b>: ⚠️ 資材が0件（列名を確認してください）';

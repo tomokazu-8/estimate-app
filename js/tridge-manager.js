@@ -24,17 +24,17 @@ function tmLoadDbList() {
   });
   return list;
 }
-function tmSaveDbList(list)        { localStorage.setItem(TM_LS_LIST, JSON.stringify(list)); }
+function tmSaveDbList(list)        { safeLocalStorageSet(TM_LS_LIST, JSON.stringify(list)); }
 function tmLoadDbData(id)          { return tmLoadLocal(TM_LS_DATA     + id, []); }
-function tmSaveDbData(id, rows)    { localStorage.setItem(TM_LS_DATA     + id, JSON.stringify(rows)); }
+function tmSaveDbData(id, rows)    { safeLocalStorageSet(TM_LS_DATA     + id, JSON.stringify(rows)); }
 function tmLoadKoshuData(id)       { return tmLoadLocal(TM_LS_KOSHU    + id, []); }
-function tmSaveKoshuData(id, rows) { localStorage.setItem(TM_LS_KOSHU    + id, JSON.stringify(rows)); }
+function tmSaveKoshuData(id, rows) { safeLocalStorageSet(TM_LS_KOSHU    + id, JSON.stringify(rows)); }
 function tmLoadSettingsData(id)    { return tmLoadLocal(TM_LS_SETTINGS + id, null); }
-function tmSaveSettingsData(id, s) { localStorage.setItem(TM_LS_SETTINGS + id, JSON.stringify(s)); }
+function tmSaveSettingsData(id, s) { safeLocalStorageSet(TM_LS_SETTINGS + id, JSON.stringify(s)); }
 function tmLoadKeywordsData(id)    { return tmLoadLocal(TM_LS_KEYWORDS + id, []); }
-function tmSaveKeywordsData(id, r) { localStorage.setItem(TM_LS_KEYWORDS + id, JSON.stringify(r)); }
+function tmSaveKeywordsData(id, r) { safeLocalStorageSet(TM_LS_KEYWORDS + id, JSON.stringify(r)); }
 function tmLoadBunruiData(id)      { return tmLoadLocal(TM_LS_BUNRUI   + id, { rows: [], keywords: [] }); }
-function tmSaveBunruiData(id, d)   { localStorage.setItem(TM_LS_BUNRUI   + id, JSON.stringify(d)); }
+function tmSaveBunruiData(id, d)   { safeLocalStorageSet(TM_LS_BUNRUI   + id, JSON.stringify(d)); }
 function tmDeleteDbData(id) {
   [TM_LS_DATA, TM_LS_KOSHU, TM_LS_SETTINGS, TM_LS_KEYWORDS, TM_LS_BUNRUI].forEach(k => localStorage.removeItem(k + id));
 }
@@ -100,8 +100,6 @@ function tmInit() {
   if (tmDbList.length > 0) tmSelectDb(tmDbList[0].id);
 }
 
-// ===== TAB SWITCHING（廃止: 資材マスタ1画面のみ）=====
-function tmSwitchTab(_tab) { /* no-op */ }
 
 // ===== SIDEBAR =====
 function tmRenderSidebar() {
@@ -146,21 +144,13 @@ function tmSelectDb(id) {
   tmCurrentBunrui   = tmLoadBunruiData(id);
   tmIsDirty = false;
 
-  tmUpdateCategoriesFromKoshu();
   tmApplyFilter();
   tmRenderSidebar();
   tmUpdateToolbar();
   tmUpdateUnsavedBadge();
-  tmRenderKoshuTable();
-  tmRenderSettingsPanel();
-  tmRenderKeywordTable();
-  tmRenderBunruiPanel();
   tmUpdateCatFilterOptions();
 }
 
-function tmUpdateCategoriesFromKoshu() {
-  // 工種タブ廃止のためno-op。カテゴリはMATERIAL_CATEGORIESで固定。
-}
 
 function tmUpdateCatFilterOptions() {
   const sel = document.getElementById('tm-catFilter');
@@ -367,12 +357,6 @@ function tmSetStatus(msg) {
   setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 3000);
 }
 
-// ===== 工種マスタ・労務設定・キーワード・分類は廃止 =====
-// スタブ関数（旧コード参照時のエラー防止）
-function tmRenderKoshuTable() {}
-function tmRenderSettingsPanel() {}
-function tmRenderKeywordTable() {}
-function tmRenderBunruiPanel() {}
 
 // ===== CREATE MODAL =====
 function tmShowCreateModal() {
@@ -476,10 +460,6 @@ function tmConfirmDeleteDb() {
     const rc = document.getElementById('tm-rowCount');
     if (tb) tb.innerHTML = '';
     if (rc) rc.textContent = '';
-    tmRenderKoshuTable();
-    tmRenderSettingsPanel();
-    tmRenderKeywordTable();
-    tmRenderBunruiPanel();
   }
   tmRenderSidebar();
   showToast('トリッジを削除しました');
