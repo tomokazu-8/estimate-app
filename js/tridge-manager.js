@@ -766,12 +766,29 @@ function tmParseBunruiSheet(data) {
 }
 
 function tmSaveImportedTridge(name, memo, rows, skipped, koshu, kw, bunruiRows, settings, overrideType) {
-  const id = genId();
+  // 同名トリッジの重複チェック
+  const existing = tmDbList.find(d => d.name === name);
+  let id;
+  if (existing) {
+    const choice = confirm(`「${name}」は既に存在します。\nOK: 上書き更新 / キャンセル: 取込中止`);
+    if (!choice) return;
+    id = existing.id;
+    // 既存データを上書き
+    existing.memo = memo;
+    existing.rowCount = rows.length;
+    existing.updatedAt = new Date().toISOString();
+  } else {
+    id = genId();
+  }
   // type 自動判定: 資材あり+工種あり→mixed、資材のみ→zairyo、工種のみ→koshu
   const type = overrideType || (rows.length > 0 && koshu.length > 0 ? 'mixed'
     : rows.length > 0 ? 'zairyo'
     : koshu.length > 0 ? 'koshu' : 'mixed');
-  tmDbList.push({ id, name, type, memo, rowCount: rows.length, updatedAt: new Date().toISOString() });
+  if (!existing) {
+    tmDbList.push({ id, name, type, memo, rowCount: rows.length, updatedAt: new Date().toISOString() });
+  } else {
+    existing.type = type;
+  }
   tmSaveDbList(tmDbList);
   tmSaveDbData(id, rows);
   tmSaveKoshuData(id, koshu);
