@@ -71,10 +71,8 @@ function searchMaterial() {
   document.getElementById('searchCount').textContent = `${results.length}件表示（全${MATERIAL_DB.length}品目）`;
   document.getElementById('searchBody').innerHTML = results.map((m, i) => {
     const catLabel = CAT_LABELS[m.c] || m.c;
-    const isSupplier = m._source === 'supplier';
     return `<tr>
       <td style="font-size:11px;">
-        ${isSupplier ? '<span class="tag" style="background:#dbeafe;color:#1e40af;margin-right:3px;font-size:9px;">仕入</span>' : ''}
         <span class="tag tag-blue" style="margin-right:4px;font-size:9px;">${esc(catLabel)}</span>${esc(m.n)}
       </td>
       <td style="font-size:11px;color:var(--text-sub);" title="${esc(m.s)}">${esc(m.s)}</td>

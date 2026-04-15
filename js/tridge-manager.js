@@ -761,11 +761,8 @@ function tmLoadToEstimate() {
   if (type === 'koshu' || type === 'mixed') {
     msgs.push(_tmApplyKoshu(db));
   }
-  if (type === 'zairyo' || type === 'mixed') {
+  if (type === 'zairyo' || type === 'mixed' || type === 'supplier') {
     msgs.push(_tmApplyZairyo(db));
-  }
-  if (type === 'supplier') {
-    msgs.push(_tmApplySupplier(db));
   }
 
   _tmRenderAppliedBadges();
@@ -793,17 +790,6 @@ function tmApplyAsZairyo() {
   const msg = _tmApplyZairyo(db);
   _tmRenderAppliedBadges();
   showToast(msg || '資材データがありません');
-}
-
-// 仕入れとして追加適用
-function tmApplyAsSupplier() {
-  if (!tmCurrentDbId) { showToast('先にトリッジを選択してください'); return; }
-  const db = tmDbList.find(d => d.id === tmCurrentDbId);
-  if (!db) return;
-  tmAutoSave();
-  const msg = _tmApplySupplier(db);
-  _tmRenderAppliedBadges();
-  showToast(msg || '品目データがありません');
 }
 
 // --- 内部: 工種データの適用 ---
@@ -838,87 +824,67 @@ function _tmApplyKoshu(db) {
   return `工種: ${tmCurrentKoshu.length}工種`;
 }
 
-// --- 内部: 資材データの適用 ---
+// --- 内部: 資材データの適用（マージ方式: 同名品目は後から適用したもので上書き） ---
 function _tmApplyZairyo(db) {
-  const newMaterials = [];
-  const newBukariki  = [];
+  const rows = tmCurrentRows;
   const seen = new Set();
+  let added = 0;
 
-  tmCurrentRows.forEach(r => {
-    if (!r.n) return; // 品名なしはスキップ
+  rows.forEach(r => {
+    if (!r.n) return;
     const ep = parseFloat(r.ep) || 0;
     const cp = parseFloat(r.cp) || (ep > 0 ? Math.round(ep * 0.75) : 0);
     const rat = (ep > 0 && cp > 0) ? Math.round(cp / ep * 100) / 100 : 0.75;
-    newMaterials.push({
+
+    // 既存品目（品名+規格が同じ）があれば上書き
+    const existIdx = MATERIAL_DB.findIndex(m => m.n === r.n && m.s === r.s);
+    if (existIdx >= 0) MATERIAL_DB.splice(existIdx, 1);
+
+    MATERIAL_DB.push({
       n: r.n, s: r.s, u: r.u, c: r.c,
       ep: ep || cp, cp, r: rat, a: 1,
       daiId: r.daiId||'', chuId: r.chuId||'', shoId: r.shoId||'', shoName: r.shoName||'',
-      _source: r._source || '',
     });
+    added++;
+
     const b = parseFloat(r.b) || 0;
     if (b > 0) {
       const key = r.n + '|' + r.s;
-      if (!seen.has(key)) { seen.add(key); newBukariki.push({ n: r.n, s: r.s, u: r.u, b, c: r.c }); }
+      if (!seen.has(key)) {
+        // 歩掛も既存を上書き
+        const bukIdx = BUKARIKI_DB.findIndex(bk => bk.n === r.n && bk.s === r.s);
+        if (bukIdx >= 0) BUKARIKI_DB.splice(bukIdx, 1);
+        BUKARIKI_DB.push({ n: r.n, s: r.s, u: r.u, b, c: r.c });
+        seen.add(key);
+      }
     }
   });
 
-  if (newMaterials.length === 0) return '資材データがありません（品名のある行が0件です）';
-
-  MATERIAL_DB.length = 0;
-  newMaterials.forEach(m => MATERIAL_DB.push(m));
-  if (newBukariki.length > 0) {
-    BUKARIKI_DB.length = 0;
-    newBukariki.forEach(b => BUKARIKI_DB.push(b));
-  }
-
-  // カテゴリマスタをMATERIAL_CATEGORIESから再構築
-  CATEGORY_MASTER.length = 0;
-  MATERIAL_CATEGORIES.forEach(c => {
-    CATEGORY_MASTER.push({ catId: c.id, catName: c.name, keywords: c.keywords, isDefault: false });
-  });
+  if (added === 0) return '資材データがありません（品名のある行が0件です）';
 
   zairyoTridgeLoaded = true;
   if (typeof updateZairyoBadge === 'function') updateZairyoBadge();
   if (typeof initCatFilter === 'function') initCatFilter();
 
-  TRIDGE_APPLIED.zairyo = { tridgeId: db.id, tridgeName: db.name };
-  return `資材: ${newMaterials.length}品目`;
-}
-
-// --- 内部: 仕入れデータの追加適用（MATERIAL_DBに追記） ---
-function _tmApplySupplier(db) {
-  const rows = tmLoadDbData(db.id);
-  if (!rows || rows.length === 0) return '';
-
-  let added = 0;
-
-  rows.forEach(r => {
-    const ep = parseFloat(r.ep) || 0;
-    if (ep <= 0) return;
-    // 既存品目があれば上書き（仕入れ単価が最優先）
-    const existIdx = MATERIAL_DB.findIndex(m => m.n === r.n && m.s === r.s);
-    if (existIdx >= 0) { MATERIAL_DB.splice(existIdx, 1); }
-    const cp  = parseFloat(r.cp) > 0 ? parseFloat(r.cp) : Math.round(ep * 0.75);
-    const rat = parseFloat(r.cp) > 0 ? Math.round(parseFloat(r.cp) / ep * 100) / 100 : 0.75;
-    MATERIAL_DB.push({
-      n: r.n, s: r.s, u: r.u, c: r.c,
-      ep, cp, r: rat, a: 1,
-      daiId: r.daiId||'', chuId: r.chuId||'', shoId: r.shoId||'', shoName: r.shoName||'',
-      _source: 'supplier',
-    });
-    const b = parseFloat(r.b) || 0;
-    if (b > 0) BUKARIKI_DB.push({ n: r.n, s: r.s, u: r.u, b, c: r.c });
-    added++;
-  });
-
-  // 仕入れスロットに追加（重複チェック）
-  if (!TRIDGE_APPLIED.suppliers.find(s => s.tridgeId === db.id)) {
-    TRIDGE_APPLIED.suppliers.push({ tridgeId: db.id, tridgeName: db.name, itemCount: added });
+  // 適用スロットに追加（重複チェック）
+  if (!TRIDGE_APPLIED.zairyo.find(s => s.tridgeId === db.id)) {
+    TRIDGE_APPLIED.zairyo.push({ tridgeId: db.id, tridgeName: db.name, itemCount: added });
   }
-  return `仕入れ: ${added}品目を追加`;
+  return `資材: ${added}品目を適用`;
 }
 
 // --- イジェクト ---
+
+/** 特定の資材トリッジを取り外してMATERIAL_DBを再構築 */
+function tmEjectZairyoById(tridgeId) {
+  const idx = TRIDGE_APPLIED.zairyo.findIndex(s => s.tridgeId === tridgeId);
+  if (idx < 0) return;
+  TRIDGE_APPLIED.zairyo.splice(idx, 1);
+  _tmRebuildMaterialDB();
+  _tmRenderAppliedBadges();
+  showToast('資材トリッジを取り外しました');
+}
+
 function tmEjectKoshu() {
   if (!TRIDGE_APPLIED.koshu) return;
   TRIDGE_APPLIED.koshu = null;
@@ -931,67 +897,46 @@ function tmEjectKoshu() {
   showToast('工種Tridgeを取り外しました');
 }
 
+/** 全資材トリッジを取り外し */
 function tmEjectZairyo() {
-  if (!TRIDGE_APPLIED.zairyo) return;
-  TRIDGE_APPLIED.zairyo = null;
+  TRIDGE_APPLIED.zairyo = [];
   MATERIAL_DB.length = 0;
   BUKARIKI_DB.length = 0;
-  BUNRUI_DB.rows = []; BUNRUI_DB.keywords = [];
-  CATEGORY_MASTER.length = 0;
   zairyoTridgeLoaded = false;
   if (typeof updateZairyoBadge === 'function') updateZairyoBadge();
   if (typeof initCatFilter === 'function') initCatFilter();
   _tmRenderAppliedBadges();
-  showToast('資材Tridgeを取り外しました');
+  showToast('全ての資材トリッジを取り外しました');
 }
 
-function tmEjectSupplier(tridgeId) {
-  const idx = TRIDGE_APPLIED.suppliers.findIndex(s => s.tridgeId === tridgeId);
-  if (idx < 0) return;
-  // 該当仕入れの品目をMATERIAL_DBから除去（再構築が安全）
-  TRIDGE_APPLIED.suppliers.splice(idx, 1);
-  // MATERIAL_DB を資材Tridge + 残りの仕入れから再構築
-  _tmRebuildMaterialDB();
-  _tmRenderAppliedBadges();
-  showToast('仕入れTridgeを取り外しました');
-}
-
-// 資材Tridge + 全仕入れからMATERIAL_DBを再構築
+/** 適用中の全資材トリッジからMATERIAL_DB/BUKARIKI_DBを再構築 */
 function _tmRebuildMaterialDB() {
   MATERIAL_DB.length = 0;
   BUKARIKI_DB.length = 0;
-  // 資材Tridgeを再適用
-  if (TRIDGE_APPLIED.zairyo) {
-    const rows = tmLoadDbData(TRIDGE_APPLIED.zairyo.tridgeId);
+  TRIDGE_APPLIED.zairyo.forEach(slot => {
+    const rows = tmLoadDbData(slot.tridgeId);
     const seen = new Set();
     rows.forEach(r => {
+      if (!r.n) return;
       const ep = parseFloat(r.ep) || 0;
-      if (ep > 0) {
-        const cp  = parseFloat(r.cp) > 0 ? parseFloat(r.cp) : Math.round(ep * 0.75);
-        const rat = parseFloat(r.cp) > 0 ? Math.round(parseFloat(r.cp) / ep * 100) / 100 : 0.75;
-        MATERIAL_DB.push({ n: r.n, s: r.s, u: r.u, c: r.c, ep, cp, r: rat, a: 1,
-          daiId: r.daiId||'', chuId: r.chuId||'', shoId: r.shoId||'', shoName: r.shoName||'' });
-      }
+      const cp = parseFloat(r.cp) || (ep > 0 ? Math.round(ep * 0.75) : 0);
+      const rat = (ep > 0 && cp > 0) ? Math.round(cp / ep * 100) / 100 : 0.75;
+      const existIdx = MATERIAL_DB.findIndex(m => m.n === r.n && m.s === r.s);
+      if (existIdx >= 0) MATERIAL_DB.splice(existIdx, 1);
+      MATERIAL_DB.push({ n: r.n, s: r.s, u: r.u, c: r.c, ep: ep || cp, cp, r: rat, a: 1,
+        daiId: r.daiId||'', chuId: r.chuId||'', shoId: r.shoId||'', shoName: r.shoName||'' });
       const b = parseFloat(r.b) || 0;
       const key = r.n + '|' + r.s;
-      if (b > 0 && !seen.has(key)) { seen.add(key); BUKARIKI_DB.push({ n: r.n, s: r.s, u: r.u, b, c: r.c }); }
-    });
-  }
-  // 仕入れを追加
-  TRIDGE_APPLIED.suppliers.forEach(sup => {
-    const rows = tmLoadDbData(sup.tridgeId);
-    rows.forEach(r => {
-      const ep = parseFloat(r.ep) || 0;
-      if (ep > 0) {
-        const cp  = parseFloat(r.cp) > 0 ? parseFloat(r.cp) : Math.round(ep * 0.75);
-        const rat = parseFloat(r.cp) > 0 ? Math.round(parseFloat(r.cp) / ep * 100) / 100 : 0.75;
-        MATERIAL_DB.push({ n: r.n, s: r.s, u: r.u, c: r.c, ep, cp, r: rat, a: 1,
-          daiId: r.daiId||'', chuId: r.chuId||'', shoId: r.shoId||'', shoName: r.shoName||'' });
+      if (b > 0 && !seen.has(key)) {
+        const bukIdx = BUKARIKI_DB.findIndex(bk => bk.n === r.n && bk.s === r.s);
+        if (bukIdx >= 0) BUKARIKI_DB.splice(bukIdx, 1);
+        BUKARIKI_DB.push({ n: r.n, s: r.s, u: r.u, b, c: r.c });
+        seen.add(key);
       }
-      const b = parseFloat(r.b) || 0;
-      if (b > 0) BUKARIKI_DB.push({ n: r.n, s: r.s, u: r.u, b, c: r.c });
     });
   });
+  zairyoTridgeLoaded = MATERIAL_DB.length > 0;
+  if (typeof updateZairyoBadge === 'function') updateZairyoBadge();
 }
 
 // --- 適用中バッジの表示 ---
@@ -1006,152 +951,17 @@ function _tmRenderAppliedBadges() {
       <button onclick="tmEjectKoshu()" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:12px;padding:0 2px;" title="取り外す">✕</button>
     </div>`;
   }
-  if (TRIDGE_APPLIED.zairyo) {
+  TRIDGE_APPLIED.zairyo.forEach(s => {
     html += `<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:#dbeafe;border-radius:6px;font-size:11px;">
       <span style="font-weight:600;color:#2563eb;">資材:</span>
-      <span>${esc(TRIDGE_APPLIED.zairyo.tridgeName)}</span>
-      <button onclick="tmEjectZairyo()" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:12px;padding:0 2px;" title="取り外す">✕</button>
-    </div>`;
-  }
-  TRIDGE_APPLIED.suppliers.forEach(s => {
-    html += `<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:#fef3c7;border-radius:6px;font-size:11px;">
-      <span style="font-weight:600;color:#92400e;">仕入:</span>
       <span>${esc(s.tridgeName)}(${s.itemCount}品目)</span>
-      <button onclick="tmEjectSupplier('${s.tridgeId}')" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:12px;padding:0 2px;" title="取り外す">✕</button>
+      <button onclick="tmEjectZairyoById('${s.tridgeId}')" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:12px;padding:0 2px;" title="取り外す">✕</button>
     </div>`;
   });
   el.innerHTML = html || '<div style="font-size:11px;color:#94a3b8;padding:4px;">適用中のTridgeはありません</div>';
 }
 
-// ===== 仕入れ見積 → Tridgeとして保存 =====
-
-function tmImportSupplierFile() {
-  document.getElementById('tm-supplierFileInput').click();
-}
-
-async function tmHandleSupplierFile(event) {
-  const file = event.target.files[0];
-  event.target.value = '';
-  if (!file) return;
-
-  showToast('⏳ 仕入れ見積をAI解析中...');
-
-  try {
-    // Excel → CSV テキスト化（既存ロジック流用）
-    const buf = await file.arrayBuffer();
-    const wb  = XLSX.read(buf, { type: 'array' });
-    let csvText = '';
-    wb.SheetNames.forEach(sheetName => {
-      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: '' });
-      csvText += `\n[シート: ${sheetName}]\n`;
-      rows.slice(0, 120).forEach(row => {
-        const line = row.map(c => String(c).replace(/\r\n|\n/g, '/')).join('\t');
-        if (line.trim()) csvText += line + '\n';
-      });
-    });
-
-    // AI解析
-    const prompt = _tmBuildSupplierPrompt(csvText, file.name);
-    const responseText = await callClaude(prompt, 8192);
-
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('AIの回答からJSONを取り出せませんでした');
-    const result = JSON.parse(jsonMatch[0]);
-    if (!Array.isArray(result.items) || result.items.length === 0) {
-      throw new Error('品目が検出できませんでした');
-    }
-
-    // Tridge形式に変換（カテゴリ・歩掛・単位を自動補完）
-    const rows = result.items.map(item => {
-      const itemName = (item.symbol ? `[${item.symbol}]` : '') + (item.name || '');
-      const spec = item.partNo || '';
-
-      // カテゴリ自動判定
-      let catId = '';
-      if (CATEGORY_MASTER.length > 0) {
-        const n = norm(itemName + ' ' + spec);
-        for (const cat of CATEGORY_MASTER) {
-          if (cat.isDefault) continue;
-          if (cat.keywords.some(k => n.includes(norm(k)))) { catId = cat.catId; break; }
-        }
-        if (!catId) { const def = CATEGORY_MASTER.find(c => c.isDefault); catId = def ? def.catId : ''; }
-      }
-
-      // 歩掛をDBから補完
-      const buk = typeof resolveBukariki === 'function'
-        ? resolveBukariki(itemName, spec, '').value : 0;
-
-      // 単位をDBから補完
-      let unit = item.unit || '';
-      if (!unit || unit === '台') {
-        const nName = norm(itemName);
-        const match = MATERIAL_DB.find(m => norm(m.n) === nName)
-          || MATERIAL_DB.find(m => nName.includes(norm(m.n)) && norm(m.n).length >= 3);
-        if (match && match.u) unit = match.u;
-      }
-
-      return {
-        id: genId(),
-        n: itemName,
-        s: spec,
-        u: unit || item.unit || '台',
-        ep: item.listPrice > 0 ? item.listPrice : item.costPrice || 0,
-        cp: item.costPrice || 0,
-        r: item.listPrice > 0 && item.costPrice > 0
-          ? Math.round(item.costPrice / item.listPrice * 100) / 100 : 0.75,
-        b: buk,
-        c: catId,
-        daiId: '', chuId: '', shoId: '', shoName: '',
-      };
-    }).filter(r => r.n);
-
-    // Tridgeとして保存
-    const supplierName = result.supplier || file.name.replace(/\.(xlsx?|csv|pdf)$/i, '');
-    const date = new Date().toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit' });
-    const name = `${supplierName} ${date}`;
-    const memo = `AI解析 ${rows.length}品目`;
-
-    tmSaveImportedTridge(name, memo, rows, 0, [], { v2: [], v3: [] }, [], tmDefaultSettings(), 'zairyo');
-
-    showToast(`「${name}」を仕入れTridgeとして保存しました（${rows.length}品目）`);
-
-  } catch(e) {
-    showToast('仕入れ見積の解析に失敗しました: ' + e.message);
-    console.error(e);
-  }
-}
-
-function _tmBuildSupplierPrompt(csvText, filename) {
-  return `あなたは電気工事会社の積算担当者です。以下は仕入れ業者から届いた見積書（Excel）のデータです。品目情報を抽出してJSONで返してください。
-
-ファイル名: ${filename}
-
-【見積書データ（タブ区切り）】
-${csvText}
-
-以下のJSON形式のみで回答してください（前後の説明文不要）:
-{
-  "supplier": "仕入れ業者名",
-  "items": [
-    {
-      "symbol": "記号（F1/A5等。なければ空文字）",
-      "name": "品名（商品名のみ。型番は含めない）",
-      "partNo": "品番・型番",
-      "qty": 数量の数値,
-      "unit": "単位（台/個/m/式等）",
-      "listPrice": 定価の数値（オープン価格は0）,
-      "costPrice": 仕入れ単価の数値
-    }
-  ]
-}
-
-【注意事項】
-- 合計行・小計行・送料・役務行は除外
-- 数値はカンマなしの数値型（文字列不可）
-- qty・listPrice・costPrice は数値型`;
-}
-
-// ===== キーボードショートカット（Tridgeパネル用）=====
+// （仕入れ取込機能はExcel取込に統合済み）
 // ===== Excel取込のAIフォールバック =====
 
 /** 列名マッチで取り込めなかったExcelをAIで解析して資材トリッジに変換 */
