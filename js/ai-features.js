@@ -341,9 +341,25 @@ function _showAiDraftPreview(draft, similarCount) {
     <span style="font-weight:700;color:var(--accent);">材料合計: <span style="font-family:'JetBrains Mono';">¥${totalAmount.toLocaleString()}</span></span>
   </div>`;
 
-  body.innerHTML = html;
-  body._draft = draft;
-  document.getElementById('aiDraftModal').classList.add('show');
+  // panel-ai がアクティブならインライン表示
+  _currentAiDraft = draft;
+  const panelAi = document.getElementById('panel-ai');
+  if (panelAi && panelAi.classList.contains('active')) {
+    const resultsArea = document.getElementById('aiResultsArea');
+    if (resultsArea) {
+      resultsArea.innerHTML = html + `
+        <div style="text-align:center;padding:16px;">
+          <button onclick="applyAiDraft()" class="btn btn-primary" style="font-size:14px;padding:10px 28px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;">見積に取り込む</button>
+        </div>`;
+      resultsArea.style.display = 'block';
+      document.getElementById('aiGoToItems').style.display = 'none';
+    }
+  } else {
+    // 従来のモーダル表示
+    body.innerHTML = html;
+    body._draft = draft;
+    document.getElementById('aiDraftModal').classList.add('show');
+  }
 }
 
 /** プレビュー: 1工種分のHTML生成（resolvedItems = _resolveItemFromDB適用済み） */
@@ -398,8 +414,10 @@ function _renderPreviewCategory(catName, resolvedItems, catTotal, catKosu) {
   return html;
 }
 
+let _currentAiDraft = null; // panel-ai / modal 共用
+
 function applyAiDraft() {
-  const draft = document.getElementById('aiDraftBody')._draft;
+  const draft = _currentAiDraft || document.getElementById('aiDraftBody')._draft;
   if (!draft) { showToast('データがありません'); return; }
 
   saveUndoState();
@@ -430,7 +448,10 @@ function applyAiDraft() {
     });
   });
 
-  document.getElementById('aiDraftModal').classList.remove('show');
+  // モーダルを閉じる（panel-ai からの場合はモーダルは未使用）
+  const aiModal = document.getElementById('aiDraftModal');
+  if (aiModal) aiModal.classList.remove('show');
+  _currentAiDraft = null;
 
   if (addedItems === 0) {
     const msg = skippedCats.length > 0

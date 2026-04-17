@@ -63,6 +63,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // カスタム工種の items を初期化（localStorage から復元した場合に必要）
   activeCategories.filter(c => c.custom).forEach(c => { if (!items[c.id]) items[c.id] = []; });
   renderCatTabs();
+  _updateProjectBar();
+  _updateStepIndicator('project');
   showDbOverlay();
   loadDefaultDB().then(async () => {
     loadFromLocalStorage(); updateDbStatus(); recalcAll();
@@ -85,6 +87,9 @@ document.addEventListener('keydown', (e) => {
 
 // ===== NAVIGATION =====
 function navigate(panel, el) {
+  // summary → confirm へのエイリアス（後方互換）
+  if (panel === 'summary') panel = 'confirm';
+
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.sidebar-item').forEach(s => s.classList.remove('active'));
   document.getElementById('panel-' + panel).classList.add('active');
@@ -96,13 +101,84 @@ function navigate(panel, el) {
     });
   }
 
-  const titles = { project:'物件情報', items:'明細入力', summary:'内訳書', reference:'類似物件参照', check:'妥当性チェック', database:'ナレッジDB', tridge:'Tridgeマスタ' };
-  document.getElementById('topbarTitle').textContent = titles[panel] || '';
-  document.getElementById('topbarBread').textContent = project.name || '新規見積作成';
+  _updateStepIndicator(panel);
+  _updateProjectBar();
 
-  if (panel === 'summary') { renderCategoryManager(); renderSummary(); }
+  if (panel === 'confirm') { renderCategoryManager(); renderSummary(); _updateConfirmSummary(); }
   if (panel === 'reference') searchSimilar();
   if (panel === 'items') { renderCatTabs(); renderItems(); }
+  if (panel === 'ai') _populateAiProjectSummary();
+}
+
+// ===== STEP INDICATOR =====
+const _stepPanels = ['project', 'ai', 'items', 'confirm'];
+function _updateStepIndicator(activePanel) {
+  const items = document.querySelectorAll('#stepIndicator .step-item');
+  const lines = document.querySelectorAll('#stepIndicator .step-line');
+  const activeIdx = _stepPanels.indexOf(activePanel);
+  items.forEach((item, i) => {
+    item.classList.remove('step-active', 'step-completed');
+    if (i === activeIdx) item.classList.add('step-active');
+    else if (i < activeIdx) item.classList.add('step-completed');
+  });
+  lines.forEach((line, i) => {
+    line.classList.toggle('step-line-done', i < activeIdx);
+  });
+}
+
+// ===== PROJECT BAR =====
+function _updateProjectBar() {
+  const name = project.name || '新規見積';
+  document.getElementById('pbarName').textContent = name;
+  const parts = [];
+  if (project.client) parts.push(project.client);
+  if (project.struct) parts.push(project.struct);
+  if (project.usage) parts.push(project.usage);
+  if (project.type) parts.push(project.type);
+  const tsubo = parseFloat(project.areaTsubo) || 0;
+  if (tsubo > 0) parts.push(tsubo.toFixed(1) + '坪');
+  document.getElementById('pbarMeta').textContent = parts.join(' / ');
+}
+
+// ===== AI PROJECT SUMMARY (panel-ai) =====
+function _populateAiProjectSummary() {
+  const el = document.getElementById('aiProjectSummary');
+  if (!el) return;
+  const p = project;
+  if (!p.name && !p.struct) {
+    el.innerHTML = '<span style="color:var(--text-dim);">物件情報を入力してからAI作成を実行してください。</span>';
+    return;
+  }
+  const rows = [];
+  if (p.name) rows.push(`<strong>${esc(p.name)}</strong>`);
+  const meta = [];
+  if (p.client) meta.push(esc(p.client));
+  if (p.struct) meta.push(esc(p.struct));
+  if (p.type) meta.push(esc(p.type));
+  if (p.usage) meta.push(esc(p.usage));
+  const tsubo = parseFloat(p.areaTsubo) || 0;
+  const sqm = parseFloat(p.areaSqm) || 0;
+  if (sqm > 0) meta.push(sqm + '㎡ / ' + tsubo.toFixed(1) + '坪');
+  if (p.floors) meta.push(p.floors + '階');
+  if (meta.length) rows.push(meta.join(' / '));
+  if (p.memo) rows.push('<span style="color:var(--text-dim);font-size:12px;">' + esc(p.memo) + '</span>');
+  el.innerHTML = rows.join('<br>');
+}
+
+// ===== CONFIRM SUMMARY (panel-confirm) =====
+function _updateConfirmSummary() {
+  let grandTotal = 0;
+  activeCategories.filter(c => c.active).forEach(c => { grandTotal += getCatAmount(c.id); });
+  grandTotal += _laborSellTotal;
+  const tsubo = parseFloat(project.areaTsubo) || 0;
+  const laborRate = (project.laborRate || 72) / 100;
+  const estimatedCost = Math.round(grandTotal * laborRate);
+  const profitRate = grandTotal > 0 ? ((grandTotal - estimatedCost) / grandTotal * 100).toFixed(1) : 0;
+
+  const el = (id) => document.getElementById(id);
+  if (el('confirmTotal')) el('confirmTotal').textContent = '¥' + formatNum(Math.round(grandTotal));
+  if (el('confirmProfit')) el('confirmProfit').textContent = profitRate + '%';
+  if (el('confirmTsubo')) el('confirmTsubo').textContent = tsubo > 0 ? '¥' + formatNum(Math.round(grandTotal / tsubo)) : '—';
 }
 
 // ===== UNDO / REDO =====
@@ -196,6 +272,8 @@ function updateProject() {
   setLaborRates(project.laborSell, Math.round(project.laborSell * project.laborRate / 100));
   // プリセットラベル更新
   _updatePresetLabel();
+  // プロジェクトバー更新
+  _updateProjectBar();
 }
 
 function _updatePresetLabel() {
@@ -245,10 +323,18 @@ function renderCatTabs() {
   if (!activeCats.find(c => c.id === currentCat) && activeCats.length > 0) {
     currentCat = activeCats[0].id;
   }
+  // 縦リスト形式（3カラムレイアウト用）
   el.innerHTML = activeCats.map(c => {
     const total = getCatTotal(c.id);
-    const amountStr = total > 0 ? ` ¥${formatNum(total)}` : '';
-    return `<div class="cat-tab${c.id===currentCat?' active':''}" onclick="switchCat('${c.id}')">${c.short}<span class="cat-amount">${amountStr}</span></div>`;
+    const count = (items[c.id] || []).filter(i => !isAutoName(i.name)).length;
+    const amountStr = total > 0 ? '¥' + formatNum(total) : '';
+    return `<div class="cat-nav-item${c.id===currentCat?' active':''}" onclick="switchCat('${c.id}')">
+      <div>
+        <div>${esc(c.short)}</div>
+        <span class="cat-nav-amount">${amountStr}</span>
+      </div>
+      <span class="cat-nav-count">${count}件</span>
+    </div>`;
   }).join('');
 }
 
@@ -784,19 +870,19 @@ function renderItems() {
       <td class="spec-wrap"><input value="${esc(item.spec)}" title="${esc(item.spec)}" onchange="updateItem(${item.id},'spec',this.value)" placeholder="規格"></td>
       <td><input class="num" value="${item.qty||''}" onchange="updateItem(${item.id},'qty',this.value)" type="number" step="any"></td>
       <td><select onchange="updateItem(${item.id},'unit',this.value)">${UNITS.map(u=>`<option${u===_normalizeUnit(item.unit)?' selected':''}>${u}</option>`).join('')}</select></td>
-      <td><input class="num" value="${item.listPrice||''}" onchange="updateItem(${item.id},'listPrice',this.value)" type="number" step="any" placeholder="定価" ${disabledAuto}></td>
-      <td><input class="num" value="${item.basePrice||''}" onchange="updateItem(${item.id},'basePrice',this.value)" type="number" step="any" placeholder="基準価格" ${disabledAuto}></td>
-      <td><input class="num" value="${item.costRate||''}" onchange="updateItem(${item.id},'costRate',this.value)" type="number" step="0.01" placeholder="掛率" ${disabledAuto}></td>
-      <td><input class="num" value="${item.sellRate||''}" onchange="updateItem(${item.id},'sellRate',this.value)" type="number" step="0.01" placeholder="掛率" ${disabledAuto}></td>
-      <td class="td-right" ${dimCell}>${costPr !== null ? formatNum(costPr) : ''}</td>
-      <td class="td-right" ${dimCell}>${costAm !== null ? '¥'+formatNum(costAm) : ''}</td>
-      <td class="col-buk1"><input class="num" value="${buk1Raw !== '' ? buk1Raw : ''}" onchange="updateItem(${item.id},'bukariki1',this.value)" type="number" step="0.001"
+      <td class="col-detail"><input class="num" value="${item.listPrice||''}" onchange="updateItem(${item.id},'listPrice',this.value)" type="number" step="any" placeholder="定価" ${disabledAuto}></td>
+      <td class="col-detail"><input class="num" value="${item.basePrice||''}" onchange="updateItem(${item.id},'basePrice',this.value)" type="number" step="any" placeholder="基準価格" ${disabledAuto}></td>
+      <td class="col-detail"><input class="num" value="${item.costRate||''}" onchange="updateItem(${item.id},'costRate',this.value)" type="number" step="0.01" placeholder="掛率" ${disabledAuto}></td>
+      <td class="col-detail"><input class="num" value="${item.sellRate||''}" onchange="updateItem(${item.id},'sellRate',this.value)" type="number" step="0.01" placeholder="掛率" ${disabledAuto}></td>
+      <td class="col-detail td-right" ${dimCell}>${costPr !== null ? formatNum(costPr) : ''}</td>
+      <td class="col-detail td-right" ${dimCell}>${costAm !== null ? '¥'+formatNum(costAm) : ''}</td>
+      <td class="col-detail col-buk1"><input class="num" value="${buk1Raw !== '' ? buk1Raw : ''}" onchange="updateItem(${item.id},'bukariki1',this.value)" type="number" step="0.001"
         placeholder="${buk1IsAuto ? (buk1Resolved.value > 0 ? buk1Resolved.value.toFixed(3) : '―') : ''}"
         title="${buk1Resolved ? (buk1IsAuto ? (buk1Resolved.value > 0 ? 'DB自動検出（'+buk1Resolved.source+'）: '+buk1Resolved.value.toFixed(3)+'人工/単位' : 'DB未登録') : '手入力値') : ''}"
         style="${buk1IsAuto && buk1Resolved.value === 0 && item.name ? 'border-color:#f59e0b;' : ''}"
         ${disabledAuto}></td>
-      <td class="col-buk2"><input class="num" value="${item.bukariki2||''}" onchange="updateItem(${item.id},'bukariki2',this.value)" type="number" step="0.001" placeholder="" ${disabledAuto}></td>
-      <td class="col-buk3"><input class="num" value="${item.bukariki3||''}" onchange="updateItem(${item.id},'bukariki3',this.value)" type="number" step="0.001" placeholder="" ${disabledAuto}></td>
+      <td class="col-detail col-buk2"><input class="num" value="${item.bukariki2||''}" onchange="updateItem(${item.id},'bukariki2',this.value)" type="number" step="0.001" placeholder="" ${disabledAuto}></td>
+      <td class="col-detail col-buk3"><input class="num" value="${item.bukariki3||''}" onchange="updateItem(${item.id},'bukariki3',this.value)" type="number" step="0.001" placeholder="" ${disabledAuto}></td>
       <td><input class="num" value="${item.price||''}" onchange="updateItem(${item.id},'price',this.value)" type="number" step="any" ${isLaborLockedRow ? 'disabled style="background:var(--bg-alt);color:var(--text-sub);"' : ''}></td>
       <td class="td-right" style="font-weight:500;">${item.amount ? '¥'+formatNum(Math.round(item.amount)) : ''}</td>
       <td><input value="${esc(item.note)}" onchange="updateItem(${item.id},'note',this.value)" placeholder="${isLaborLockedRow ? '自動計算' : isAutoName(item.name) ? '例: 5.0%' : '備考'}" style="font-size:11px;color:var(--text-sub);" ${isLaborLockedRow ? 'readonly' : ''}></td>
@@ -828,7 +914,128 @@ function renderItems() {
   _updateBatchToolbar();
   renderLaborSection();
   updateSummaryBar();
+  _updateRightSummary();
+  // 詳細ペイン再描画（選択中の行があれば）
+  if (_selectedDetailId) renderDetailPane(_selectedDetailId);
 }
+
+// ===== RIGHT SUMMARY (3-column layout) =====
+function _updateRightSummary() {
+  let grandTotal = 0;
+  activeCategories.filter(c => c.active).forEach(c => { grandTotal += getCatAmount(c.id); });
+  grandTotal += _laborSellTotal;
+  const tsubo = parseFloat(project.areaTsubo) || 0;
+  const laborRate = (project.laborRate || 72) / 100;
+  const estimatedCost = Math.round(grandTotal * laborRate);
+  const profitRate = grandTotal > 0 ? ((grandTotal - estimatedCost) / grandTotal * 100).toFixed(1) : 0;
+  const el = (id) => document.getElementById(id);
+  if (el('rsum-total')) el('rsum-total').textContent = '¥' + formatNum(Math.round(grandTotal));
+  if (el('rsum-cost')) el('rsum-cost').textContent = '¥' + formatNum(estimatedCost);
+  if (el('rsum-profit')) el('rsum-profit').textContent = profitRate + '%';
+  if (el('rsum-tsubo')) el('rsum-tsubo').textContent = tsubo > 0 ? '¥' + formatNum(Math.round(grandTotal / tsubo)) : '—';
+}
+
+// ===== DETAIL PANE (right column) =====
+let _selectedDetailId = null;
+
+function selectDetailRow(id) {
+  _selectedDetailId = id;
+  // ハイライト更新
+  document.querySelectorAll('#itemBody tr').forEach(tr => tr.classList.remove('detail-selected'));
+  const row = document.querySelector(`#itemBody tr[data-id="${id}"]`);
+  if (row) row.classList.add('detail-selected');
+  renderDetailPane(id);
+}
+
+function renderDetailPane(itemId) {
+  const pane = document.getElementById('detailPane');
+  if (!pane) return;
+  const list = items[currentCat] || [];
+  const item = list.find(i => i.id === itemId);
+  if (!item) {
+    pane.innerHTML = '<div style="color:var(--text-dim);font-size:12px;text-align:center;padding:20px 0;">行をクリックすると<br>詳細編集ができます</div>';
+    _selectedDetailId = null;
+    return;
+  }
+  const isAuto = isAutoName(item.name);
+  const dis = isAuto ? 'disabled style="background:var(--bg);color:var(--text-dim);"' : '';
+  // 原価計算（表示用）
+  const listP = parseFloat(item.listPrice) || 0;
+  const baseP = parseFloat(item.basePrice) || 0;
+  const effBase = listP > 0 ? listP : baseP;
+  const cRate = parseFloat(item.costRate) || 0;
+  const costPr = (effBase > 0 && cRate > 0) ? Math.round(effBase * cRate) : null;
+  const qty = parseFloat(item.qty) || 0;
+  const costAm = (costPr !== null && qty > 0) ? Math.round(costPr * qty) : null;
+
+  pane.innerHTML = `
+    <div style="font-size:10px;color:var(--text-sub);font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">詳細編集</div>
+    <div class="detail-item-name">${esc(item.name || '（品名なし）')}</div>
+    <div class="detail-form">
+      <div class="form-group">
+        <label class="form-label">定価</label>
+        <input class="form-input num" value="${item.listPrice||''}" onchange="updateDetailField(${itemId},'listPrice',this.value)" type="number" step="any" ${dis}>
+      </div>
+      <div class="form-group">
+        <label class="form-label">基準価格</label>
+        <input class="form-input num" value="${item.basePrice||''}" onchange="updateDetailField(${itemId},'basePrice',this.value)" type="number" step="any" ${dis}>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="form-group">
+          <label class="form-label">原価掛率</label>
+          <input class="form-input num" value="${item.costRate||''}" onchange="updateDetailField(${itemId},'costRate',this.value)" type="number" step="0.01" ${dis}>
+        </div>
+        <div class="form-group">
+          <label class="form-label">見積掛率</label>
+          <input class="form-input num" value="${item.sellRate||''}" onchange="updateDetailField(${itemId},'sellRate',this.value)" type="number" step="0.01" ${dis}>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="form-group">
+          <label class="form-label">原価単価</label>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-sub);padding:5px 0;">${costPr !== null ? '¥'+formatNum(costPr) : '—'}</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">原価金額</label>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-sub);padding:5px 0;">${costAm !== null ? '¥'+formatNum(costAm) : '—'}</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+        <div class="form-group">
+          <label class="form-label">歩掛1</label>
+          <input class="form-input num" value="${item.bukariki1||''}" onchange="updateDetailField(${itemId},'bukariki1',this.value)" type="number" step="0.001" ${dis}>
+        </div>
+        <div class="form-group">
+          <label class="form-label">歩掛2</label>
+          <input class="form-input num" value="${item.bukariki2||''}" onchange="updateDetailField(${itemId},'bukariki2',this.value)" type="number" step="0.001" ${dis}>
+        </div>
+        <div class="form-group">
+          <label class="form-label">歩掛3</label>
+          <input class="form-input num" value="${item.bukariki3||''}" onchange="updateDetailField(${itemId},'bukariki3',this.value)" type="number" step="0.001" ${dis}>
+        </div>
+      </div>
+    </div>`;
+}
+
+function updateDetailField(itemId, field, value) {
+  updateItem(itemId, field, value);
+  // renderItems() -> renderDetailPane() は自動で呼ばれる
+}
+
+// 行クリックイベント（テーブルボディに委譲）
+document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('click', (e) => {
+    const tbody = document.getElementById('itemBody');
+    if (!tbody) return;
+    // itemBody 内のクリックだけ処理
+    const tr = e.target.closest('#itemBody tr');
+    if (!tr) return;
+    // input, button, select, checkbox は除外
+    if (e.target.closest('input, button, select')) return;
+    const id = parseInt(tr.dataset.id, 10);
+    if (!isNaN(id)) selectDetailRow(id);
+  });
+});
 
 function addItem() {
   if (!currentCat) { showToast('工種タブを選択してください'); return; }

@@ -111,23 +111,27 @@
     </div>
 
     <div class="sidebar-section">
-      <div class="sidebar-section-title">メイン</div>
+      <div class="sidebar-section-title">ワークフロー</div>
       <div class="sidebar-item active" onclick="navigate('project', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
-        <span>物件情報</span>
+        <span>物件入力</span>
       </div>
-      <div class="sidebar-item" onclick="navigate('summary', this)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
-        <span>内訳書</span>
+      <div class="sidebar-item" onclick="navigate('ai', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 0 1 4 4v1a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><circle cx="12" cy="7" r="2" fill="currentColor" opacity="0.3"/></svg>
+        <span>AI作成</span>
       </div>
       <div class="sidebar-item" onclick="navigate('items', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
-        <span>明細入力</span>
+        <span>明細調整</span>
+      </div>
+      <div class="sidebar-item" onclick="navigate('confirm', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+        <span>確認・出力</span>
       </div>
     </div>
 
     <div class="sidebar-section">
-      <div class="sidebar-section-title">参照</div>
+      <div class="sidebar-section-title">設定・データ</div>
       <div class="sidebar-item" onclick="navigate('reference', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z"/></svg>
         <span>類似物件</span>
@@ -137,10 +141,6 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
         <span>妥当性チェック</span>
       </div>
-    </div>
-
-    <div class="sidebar-section">
-      <div class="sidebar-section-title">データ</div>
       <div class="sidebar-item" onclick="navigate('database', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
         <span>ナレッジDB</span>
@@ -152,8 +152,6 @@
       </div>
     </div>
 
-    <!-- 操作セクションは廃止 → 物件操作はトップバーに集約 -->
-
     <div class="sidebar-footer">
       <button onclick="openApiSettings()" style="width:100%;padding:7px;background:transparent;border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:rgba(255,255,255,0.7);font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;" title="Claude APIキーを設定してAI機能を有効にします">
         <span>⚙</span><span>AI設定（APIキー）</span>
@@ -163,23 +161,40 @@
 
   <!-- Main content -->
   <div class="main">
-    <div class="topbar" style="flex-wrap:wrap;gap:6px;">
-      <span class="topbar-title" id="topbarTitle">物件情報</span>
-      <span class="topbar-breadcrumb" id="topbarBread" style="flex:1;min-width:120px;">新規見積作成</span>
-      <span id="finalBadge" style="display:none;align-items:center;gap:3px;padding:2px 8px;background:#fffbeb;border:1px solid #fbbf24;border-radius:12px;font-size:11px;font-weight:600;color:#92400e;cursor:pointer;white-space:nowrap;" onclick="toggleCurrentFinal()" title="クリックで本見積を解除">★ 本見積</span>
-      <div class="topbar-actions" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;position:relative;">
+    <!-- Upper Project Bar -->
+    <div class="project-bar" id="projectBar">
+      <div class="project-bar-info">
+        <span class="project-bar-name" id="pbarName">新規見積</span>
+        <span class="project-bar-meta" id="pbarMeta"></span>
+        <span id="finalBadge" style="display:none;align-items:center;gap:3px;padding:2px 8px;background:#fffbeb;border:1px solid #fbbf24;border-radius:12px;font-size:11px;font-weight:600;color:#92400e;cursor:pointer;white-space:nowrap;" onclick="toggleCurrentFinal()" title="クリックで本見積を解除">★ 本見積</span>
+      </div>
+      <div class="step-indicator" id="stepIndicator">
+        <div class="step-item step-active" data-panel="project" onclick="navigate('project')">
+          <span class="step-num">1</span><span class="step-label">物件入力</span>
+        </div>
+        <div class="step-line"></div>
+        <div class="step-item" data-panel="ai" onclick="navigate('ai')">
+          <span class="step-num">2</span><span class="step-label">AI作成</span>
+        </div>
+        <div class="step-line"></div>
+        <div class="step-item" data-panel="items" onclick="navigate('items')">
+          <span class="step-num">3</span><span class="step-label">明細調整</span>
+        </div>
+        <div class="step-line"></div>
+        <div class="step-item" data-panel="confirm" onclick="navigate('confirm')">
+          <span class="step-num">4</span><span class="step-label">確認・出力</span>
+        </div>
+      </div>
+      <div class="project-bar-actions" style="position:relative;">
         <button id="backBtn" class="btn btn-secondary btn-sm" onclick="undoAction()" style="display:none;" title="元に戻す (Ctrl+Z)">↩</button>
         <button id="redoBtn" class="btn btn-secondary btn-sm" onclick="redoAction()" style="display:none;" title="やり直し (Ctrl+Y)">↪</button>
-        <span style="width:1px;height:16px;background:rgba(255,255,255,0.2);"></span>
         <button onclick="smartSave()" class="topbar-btn" style="background:#3b82f6;" title="見積を保存">💾 保存</button>
         <button onclick="openSavedEstimatesModal()" class="topbar-btn" style="background:#f59e0b;" title="保存済み見積一覧">📂 保存済み</button>
-        <button onclick="exportEstimate()" class="topbar-btn" style="background:#16a34a;font-weight:600;" title="Excel見積書を出力">📊 Excel出力</button>
         <button onclick="toggleTopbarHelp()" class="topbar-btn" style="background:#64748b;font-size:13px;padding:4px 10px;min-width:auto;border-radius:50%;" title="ボタンの説明">?</button>
         <div id="topbarHelpCard" style="display:none;position:absolute;top:100%;right:0;margin-top:6px;background:#fff;border:1px solid #d1d5db;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.15);padding:16px 20px;width:340px;z-index:1000;color:#1e293b;font-size:13px;line-height:1.7;">
           <div style="font-weight:700;font-size:14px;margin-bottom:10px;color:#334155;">ボタンの説明</div>
-          <div style="margin-bottom:6px;"><span style="color:#3b82f6;font-weight:600;">💾 保存</span> — 見積を保存します。初回は自動採番。保存済みの場合は「上書き」か「別名で保存（新しい版として残す）」を選べます。</div>
+          <div style="margin-bottom:6px;"><span style="color:#3b82f6;font-weight:600;">💾 保存</span> — 見積を保存します。初回は自動採番。保存済みの場合は「上書き」か「別名で保存」を選べます。</div>
           <div style="margin-bottom:6px;"><span style="color:#d97706;font-weight:600;">📂 保存済み</span> — 過去に保存した見積の一覧。開く・コピーして新規作成・削除ができます。</div>
-          <div><span style="color:#16a34a;font-weight:600;">📊 Excel出力</span> — 見積書をExcelファイルで出力します。同時に自動保存とナレッジDB登録も行います。</div>
           <div style="margin-top:10px;text-align:right;"><button onclick="toggleTopbarHelp()" style="padding:4px 14px;font-size:12px;border:1px solid #d1d5db;border-radius:4px;background:#f8fafc;cursor:pointer;">閉じる</button></div>
         </div>
       </div>
@@ -330,132 +345,205 @@
         </div>
       </div>
 
-      <!-- ===== Panel: Item Entry ===== -->
+      <!-- ===== Panel: Item Entry (3-column layout) ===== -->
       <div class="panel" id="panel-items">
-        <!-- Summary -->
-        
-          <!-- 労務費セクション (本丸EX準拠) -->
-          <div class="card" id="laborSection" style="margin-top:16px;display:none;">
-            <div style="padding:10px 16px;background:linear-gradient(135deg,#f0fdf4,#dcfce7);display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #d1d5db;">
-              <span style="font-weight:700;color:#16a34a;font-size:14px;">👷 労務費・経費</span>
-              <div style="display:flex;gap:6px;">
-                <button class="btn btn-sm" style="background:#fff;color:#16a34a;border:1px solid #16a34a;font-size:11px;" onclick="editLaborRowNames()" title="労務費の項目名を変更">✏ 項目名</button>
-                <button class="btn btn-sm" style="background:#16a34a;color:#fff;font-size:11px;" onclick="showLaborDetail()">📋 内訳詳細</button>
+        <div class="items-layout">
+
+          <!-- Left: Category Navigation -->
+          <div class="items-left">
+            <div style="font-size:10px;color:var(--text-sub);font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;padding:0 4px;">工種ナビ</div>
+            <div id="catTabs"></div>
+          </div>
+
+          <!-- Center: Summary bar + Table + Labor -->
+          <div class="items-center">
+            <div class="summary-bar">
+              <div class="summary-item highlight">
+                <div class="summary-label">見積合計（税抜）</div>
+                <div class="summary-value" id="sum-total">¥0</div>
+              </div>
+              <div class="summary-item">
+                <div class="summary-label">原価合計</div>
+                <div class="summary-value" id="sum-cost">¥0</div>
+              </div>
+              <div class="summary-item ok">
+                <div class="summary-label">利益率</div>
+                <div class="summary-value" id="sum-profit">0%</div>
+              </div>
+              <div class="summary-item">
+                <div class="summary-label">坪単価</div>
+                <div class="summary-value" id="sum-tsubo">—</div>
+              </div>
+              <div class="summary-item">
+                <div class="summary-label">㎡単価</div>
+                <div class="summary-value" id="sum-sqm">—</div>
               </div>
             </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr style="background:#f0fdf4;">
-                    <th style="width:24px">No</th>
-                    <th style="width:220px">項目名</th>
-                    <th style="width:160px">算出根拠</th>
-                    <th style="width:90px;text-align:right">見積金額</th>
-                    <th style="width:90px;text-align:right">原価金額</th>
-                    <th style="width:50px;text-align:right">率</th>
-                  </tr>
-                </thead>
-                <tbody id="laborBody"></tbody>
-                <tfoot>
-                  <tr style="font-weight:700;background:#dcfce7;">
-                    <td colspan="3" style="text-align:right;padding-right:8px;">労務費・経費 小計</td>
-                    <td class="td-right" id="laborSellTotal">-</td>
-                    <td class="td-right" id="laborCostTotal">-</td>
-                    <td class="td-right" id="laborRatioTotal">-</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
 
-          <div class="summary-bar">
-          <div class="summary-item highlight">
-            <div class="summary-label">見積合計（税抜）</div>
-            <div class="summary-value" id="sum-total">¥0</div>
+            <!-- Item table per category -->
+            <div class="card" id="itemTableCard">
+              <div class="card-header">
+                <span class="card-title" id="catTitle">工種を選択してください</span>
+                <div style="display:flex;gap:6px;">
+                  <button class="btn btn-primary btn-sm" onclick="addItem()">＋ 行追加</button>
+                  <button class="btn btn-secondary btn-sm" onclick="openSearchModal(null)">🔍 検索</button>
+                </div>
+              </div>
+              <!-- 一括操作ツールバー（選択時のみ表示） -->
+              <div id="batchToolbar" style="display:none;align-items:center;gap:8px;padding:6px 12px;background:#f0f9ff;border-top:1px solid #bae6fd;border-bottom:1px solid #bae6fd;flex-wrap:wrap;">
+                <span class="batch-count" style="font-size:13px;color:#0369a1;font-weight:600;min-width:70px;"></span>
+                <button class="btn btn-secondary btn-sm" onclick="batchSetRate('sellRate')" style="font-size:12px;">見積掛率を一括設定</button>
+                <button class="btn btn-secondary btn-sm" onclick="batchSetRate('costRate')" style="font-size:12px;">原価掛率を一括設定</button>
+                <button class="btn btn-sm" onclick="deleteSelectedItems()" style="font-size:12px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:6px;padding:3px 10px;cursor:pointer;">一括削除</button>
+                <button class="btn btn-secondary btn-sm" onclick="clearSelection()" style="font-size:12px;">選択解除</button>
+              </div>
+              <div class="card-body" style="padding:0;">
+                <div class="table-wrap" style="overflow-y:auto; overflow-x:auto;">
+                  <table id="itemTable">
+                    <thead>
+                      <tr>
+                        <th style="width:28px;text-align:center;">
+                          <input type="checkbox" id="selectAllChk" title="全選択/解除"
+                            onchange="this.checked ? selectAllItems() : clearSelection()"
+                            style="cursor:pointer;width:14px;height:14px;">
+                        </th>
+                        <th style="min-width:180px">品名</th>
+                        <th style="min-width:120px">規格</th>
+                        <th style="width:62px">数量</th>
+                        <th style="width:48px">単位</th>
+                        <th class="col-detail" style="width:100px">定価</th>
+                        <th class="col-detail" style="width:100px">基準価格</th>
+                        <th class="col-detail" style="width:68px" title="原価掛率">原価掛</th>
+                        <th class="col-detail" style="width:68px" title="見積掛率">見積掛</th>
+                        <th class="col-detail" style="width:96px" title="原価単価（自動計算）">原価単価</th>
+                        <th class="col-detail" style="width:104px" title="原価金額（自動計算）">原価金額</th>
+                        <th class="col-detail col-buk1" style="width:64px" title="歩掛1：電工労務費">歩掛1</th>
+                        <th class="col-detail col-buk2" style="width:64px" title="歩掛2：既設器具撤去処分費">歩掛2</th>
+                        <th class="col-detail col-buk3" style="width:64px" title="歩掛3：天井及び壁材開口費">歩掛3</th>
+                        <th style="width:96px">見積単価</th>
+                        <th style="width:104px">見積金額</th>
+                        <th style="width:100px">備考</th>
+                        <th style="width:28px"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="itemBody"></tbody>
+                    <tfoot>
+                      <tr style="background:var(--bg); font-weight:600;">
+                        <td colspan="15" style="text-align:right; padding-right:12px;">合　計</td>
+                        <td class="td-right" id="catTotal" style="font-weight:700;">¥0</td>
+                        <td colspan="2"></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- 労務費セクション -->
+            <div class="card" id="laborSection" style="display:none;">
+              <div style="padding:10px 16px;background:linear-gradient(135deg,#f0fdf4,#dcfce7);display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #d1d5db;">
+                <span style="font-weight:700;color:#16a34a;font-size:14px;">👷 労務費・経費</span>
+                <div style="display:flex;gap:6px;">
+                  <button class="btn btn-sm" style="background:#fff;color:#16a34a;border:1px solid #16a34a;font-size:11px;" onclick="editLaborRowNames()" title="労務費の項目名を変更">✏ 項目名</button>
+                  <button class="btn btn-sm" style="background:#16a34a;color:#fff;font-size:11px;" onclick="showLaborDetail()">📋 内訳詳細</button>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr style="background:#f0fdf4;">
+                      <th style="width:24px">No</th>
+                      <th style="width:220px">項目名</th>
+                      <th style="width:160px">算出根拠</th>
+                      <th style="width:90px;text-align:right">見積金額</th>
+                      <th style="width:90px;text-align:right">原価金額</th>
+                      <th style="width:50px;text-align:right">率</th>
+                    </tr>
+                  </thead>
+                  <tbody id="laborBody"></tbody>
+                  <tfoot>
+                    <tr style="font-weight:700;background:#dcfce7;">
+                      <td colspan="3" style="text-align:right;padding-right:8px;">労務費・経費 小計</td>
+                      <td class="td-right" id="laborSellTotal">-</td>
+                      <td class="td-right" id="laborCostTotal">-</td>
+                      <td class="td-right" id="laborRatioTotal">-</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </div><!-- /items-center -->
+
+          <!-- Right: Summary + Detail pane -->
+          <div class="items-right">
+            <div style="margin-bottom:16px;">
+              <div style="font-size:10px;color:var(--text-sub);font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">サマリー</div>
+              <div class="right-summary-item">
+                <span>見積合計</span>
+                <span class="right-summary-val" id="rsum-total">¥0</span>
+              </div>
+              <div class="right-summary-item">
+                <span>原価合計</span>
+                <span class="right-summary-val" id="rsum-cost">¥0</span>
+              </div>
+              <div class="right-summary-item">
+                <span>利益率</span>
+                <span class="right-summary-val" id="rsum-profit" style="color:var(--green);">0%</span>
+              </div>
+              <div class="right-summary-item">
+                <span>坪単価</span>
+                <span class="right-summary-val" id="rsum-tsubo">—</span>
+              </div>
+            </div>
+            <div id="detailPane">
+              <div style="color:var(--text-dim);font-size:12px;text-align:center;padding:20px 0;">行をクリックすると<br>詳細編集ができます</div>
+            </div>
+          </div><!-- /items-right -->
+
+        </div><!-- /items-layout -->
+      </div>
+
+      <!-- ===== Panel: AI Creation ===== -->
+      <div class="panel" id="panel-ai">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <span class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 2a4 4 0 0 1 4 4v1a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg>
+              物件条件
+            </span>
           </div>
-          <div class="summary-item">
-            <div class="summary-label">原価合計</div>
-            <div class="summary-value" id="sum-cost">¥0</div>
-          </div>
-          <div class="summary-item ok">
-            <div class="summary-label">利益率</div>
-            <div class="summary-value" id="sum-profit">0%</div>
-          </div>
-          <div class="summary-item">
-            <div class="summary-label">坪単価</div>
-            <div class="summary-value" id="sum-tsubo">—</div>
-          </div>
-          <div class="summary-item">
-            <div class="summary-label">㎡単価</div>
-            <div class="summary-value" id="sum-sqm">—</div>
+          <div class="card-body" id="aiProjectSummary" style="font-size:13px;color:var(--text-sub);">
+            物件情報を入力してからAI作成を実行してください。
           </div>
         </div>
-
-        <!-- Category tabs -->
-        <div class="category-tabs" id="catTabs"></div>
-
-        <!-- Item table per category -->
-        <div class="card" id="itemTableCard">
-          <div class="card-header">
-            <span class="card-title" id="catTitle">工種を選択してください</span>
-            <div style="display:flex;gap:6px;">
-              <button class="btn btn-primary btn-sm" onclick="addItem()">＋ 行追加</button>
-              <button class="btn btn-secondary btn-sm" onclick="openSearchModal(null)">🔍 検索</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+          <div class="card" style="margin-bottom:0;">
+            <div class="card-body" style="text-align:center;padding:28px 20px;">
+              <div style="font-size:32px;margin-bottom:8px;">✨</div>
+              <div style="font-size:15px;font-weight:700;margin-bottom:6px;">AI提案作成</div>
+              <div style="font-size:12px;color:var(--text-sub);margin-bottom:16px;">Claude AIが物件条件に基づき<br>品目・数量・歩掛を提案します</div>
+              <button onclick="aiDraftEstimate()" class="btn btn-primary" style="font-size:14px;padding:10px 28px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;">AI提案作成（30秒〜1分）</button>
             </div>
           </div>
-          <!-- 一括操作ツールバー（選択時のみ表示） -->
-          <div id="batchToolbar" style="display:none;align-items:center;gap:8px;padding:6px 12px;background:#f0f9ff;border-top:1px solid #bae6fd;border-bottom:1px solid #bae6fd;flex-wrap:wrap;">
-            <span class="batch-count" style="font-size:13px;color:#0369a1;font-weight:600;min-width:70px;"></span>
-            <button class="btn btn-secondary btn-sm" onclick="batchSetRate('sellRate')" style="font-size:12px;">見積掛率を一括設定</button>
-            <button class="btn btn-secondary btn-sm" onclick="batchSetRate('costRate')" style="font-size:12px;">原価掛率を一括設定</button>
-            <button class="btn btn-sm" onclick="deleteSelectedItems()" style="font-size:12px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:6px;padding:3px 10px;cursor:pointer;">一括削除</button>
-            <button class="btn btn-secondary btn-sm" onclick="clearSelection()" style="font-size:12px;">選択解除</button>
-          </div>
-          <div class="card-body" style="padding:0;">
-            <div class="table-wrap" style="max-height:calc(100vh - 340px); overflow-y:auto; overflow-x:auto;">
-              <table id="itemTable">
-                <thead>
-                  <tr>
-                    <th style="width:28px;text-align:center;">
-                      <input type="checkbox" id="selectAllChk" title="全選択/解除"
-                        onchange="this.checked ? selectAllItems() : clearSelection()"
-                        style="cursor:pointer;width:14px;height:14px;">
-                    </th>
-                    <th style="min-width:180px">品名</th>
-                    <th style="min-width:120px">規格</th>
-                    <th style="width:62px">数量</th>
-                    <th style="width:48px">単位</th>
-                    <th style="width:100px">定価</th>
-                    <th style="width:100px">基準価格</th>
-                    <th style="width:68px" title="原価掛率">原価掛</th>
-                    <th style="width:68px" title="見積掛率">見積掛</th>
-                    <th style="width:96px" title="原価単価（自動計算）">原価単価</th>
-                    <th style="width:104px" title="原価金額（自動計算）">原価金額</th>
-                    <th class="col-buk1" style="width:64px" title="歩掛1：電工労務費">歩掛1</th>
-                    <th class="col-buk2" style="width:64px" title="歩掛2：既設器具撤去処分費">歩掛2</th>
-                    <th class="col-buk3" style="width:64px" title="歩掛3：天井及び壁材開口費">歩掛3</th>
-                    <th style="width:96px">見積単価</th>
-                    <th style="width:104px">見積金額</th>
-                    <th style="width:100px">備考</th>
-                    <th style="width:28px"></th>
-                  </tr>
-                </thead>
-                <tbody id="itemBody"></tbody>
-                <tfoot>
-                  <tr style="background:var(--bg); font-weight:600;">
-                    <td colspan="15" style="text-align:right; padding-right:12px;">合　計</td>
-                    <td class="td-right" id="catTotal" style="font-weight:700;">¥0</td>
-                    <td colspan="2"></td>
-                  </tr>
-                </tfoot>
-              </table>
+          <div class="card" style="margin-bottom:0;">
+            <div class="card-body" style="text-align:center;padding:28px 20px;">
+              <div style="font-size:32px;margin-bottom:8px;">🗄️</div>
+              <div style="font-size:15px;font-weight:700;margin-bottom:6px;">実績データから作成</div>
+              <div style="font-size:12px;color:var(--text-sub);margin-bottom:16px;">ナレッジDBの類似物件を<br>面積比スケーリングで流用</div>
+              <button onclick="autoCreateEstimate()" class="btn btn-secondary" style="font-size:14px;padding:10px 28px;">実績データから作成</button>
             </div>
           </div>
+        </div>
+        <div id="aiResultsArea" style="display:none;">
+          <!-- AI結果がここにインライン表示される -->
+        </div>
+        <div id="aiGoToItems" style="display:none;text-align:center;padding:16px;">
+          <button onclick="navigate('items')" class="btn btn-primary" style="font-size:14px;padding:10px 32px;">明細調整へ進む →</button>
         </div>
       </div>
 
-      <!-- ===== Panel: Summary (内訳書) ===== -->
-      <div class="panel" id="panel-summary">
+      <!-- ===== Panel: Confirm & Output (確認・出力) ===== -->
+      <div class="panel" id="panel-confirm">
         <!-- 工種設定カード -->
         <div class="card" style="margin-bottom:16px;">
           <div class="card-header">
@@ -539,6 +627,29 @@
                   </tr>
                 </tfoot>
               </table>
+            </div>
+          </div>
+        </div>
+        <!-- 確認・出力アクションバー -->
+        <div class="card">
+          <div class="card-body" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+            <div style="display:flex;gap:16px;align-items:center;">
+              <div style="text-align:center;">
+                <div style="font-size:10px;color:var(--text-sub);font-weight:500;">見積合計（税抜）</div>
+                <div id="confirmTotal" style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:var(--accent);">¥0</div>
+              </div>
+              <div style="text-align:center;">
+                <div style="font-size:10px;color:var(--text-sub);font-weight:500;">利益率</div>
+                <div id="confirmProfit" style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:var(--green);">0%</div>
+              </div>
+              <div style="text-align:center;">
+                <div style="font-size:10px;color:var(--text-sub);font-weight:500;">坪単価</div>
+                <div id="confirmTsubo" style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;color:var(--text);">—</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button onclick="smartSave()" class="btn btn-primary" style="font-size:13px;padding:10px 20px;">💾 保存</button>
+              <button onclick="exportEstimate()" class="btn btn-success" style="font-size:13px;padding:10px 20px;font-weight:600;">📊 Excel出力</button>
             </div>
           </div>
         </div>

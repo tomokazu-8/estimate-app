@@ -269,13 +269,8 @@ function _updateEstimateHeader() {
   if (badge) {
     badge.style.display = _currentIsFinal ? 'inline-flex' : 'none';
   }
-  // トップバーのパンくず更新
-  const bread = document.getElementById('topbarBread');
-  if (bread) {
-    const no = project.number || '';
-    const name = project.name || '新規見積作成';
-    bread.textContent = no ? `${no}　${name}` : name;
-  }
+  // プロジェクトバー更新
+  if (typeof _updateProjectBar === 'function') _updateProjectBar();
 }
 
 // ===== 一覧モーダル =====
