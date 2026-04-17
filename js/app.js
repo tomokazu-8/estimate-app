@@ -110,34 +110,41 @@ function navigate(panel, el) {
   if (panel === 'ai') _populateAiProjectSummary();
 }
 
-// ===== STEP INDICATOR =====
+// ===== STEP INDICATOR (sidebar flow cards) =====
 const _stepPanels = ['project', 'ai', 'items', 'confirm'];
 function _updateStepIndicator(activePanel) {
-  const items = document.querySelectorAll('#stepIndicator .step-item');
-  const lines = document.querySelectorAll('#stepIndicator .step-line');
+  const steps = document.querySelectorAll('#flowCards .flow-step');
   const activeIdx = _stepPanels.indexOf(activePanel);
-  items.forEach((item, i) => {
-    item.classList.remove('step-active', 'step-completed');
-    if (i === activeIdx) item.classList.add('step-active');
-    else if (i < activeIdx) item.classList.add('step-completed');
-  });
-  lines.forEach((line, i) => {
-    line.classList.toggle('step-line-done', i < activeIdx);
+  steps.forEach((step, i) => {
+    step.classList.remove('flow-active', 'flow-done');
+    if (i === activeIdx) step.classList.add('flow-active');
+    else if (i < activeIdx) step.classList.add('flow-done');
   });
 }
 
-// ===== PROJECT BAR =====
+// ===== PROJECT BAR (mockup style) =====
 function _updateProjectBar() {
   const name = project.name || '新規見積';
   document.getElementById('pbarName').textContent = name;
-  const parts = [];
-  if (project.client) parts.push(project.client);
-  if (project.struct) parts.push(project.struct);
-  if (project.usage) parts.push(project.usage);
-  if (project.type) parts.push(project.type);
-  const tsubo = parseFloat(project.areaTsubo) || 0;
-  if (tsubo > 0) parts.push(tsubo.toFixed(1) + '坪');
-  document.getElementById('pbarMeta').textContent = parts.join(' / ');
+  // 見積番号バッジ
+  const noEl = document.getElementById('pbarEstNo');
+  if (noEl) {
+    if (project.number) { noEl.textContent = project.number; noEl.style.display = 'inline-block'; }
+    else { noEl.style.display = 'none'; }
+  }
+  // タグ表示
+  const tagsEl = document.getElementById('pbarTags');
+  if (tagsEl) {
+    const tags = [];
+    if (project.client) tags.push('得意先：' + esc(project.client));
+    const structType = [project.struct, project.type].filter(Boolean).join(' / ');
+    if (structType) tags.push(structType);
+    const sqm = parseFloat(project.areaSqm) || 0;
+    const tsubo = parseFloat(project.areaTsubo) || 0;
+    if (sqm > 0) tags.push(sqm + '㎡ / ' + tsubo.toFixed(1) + '坪');
+    if (project.location) tags.push(esc(project.location));
+    tagsEl.innerHTML = tags.map(t => `<span class="pbar-tag">${t}</span>`).join('');
+  }
 }
 
 // ===== AI PROJECT SUMMARY (panel-ai) =====
@@ -323,17 +330,17 @@ function renderCatTabs() {
   if (!activeCats.find(c => c.id === currentCat) && activeCats.length > 0) {
     currentCat = activeCats[0].id;
   }
-  // 縦リスト形式（3カラムレイアウト用）
+  // サイドバー内の縦リスト形式
   el.innerHTML = activeCats.map(c => {
     const total = getCatTotal(c.id);
     const count = (items[c.id] || []).filter(i => !isAutoName(i.name)).length;
     const amountStr = total > 0 ? '¥' + formatNum(total) : '';
     return `<div class="cat-nav-item${c.id===currentCat?' active':''}" onclick="switchCat('${c.id}')">
       <div>
-        <div>${esc(c.short)}</div>
+        <span class="cat-nav-name">${esc(c.short)}</span>
         <span class="cat-nav-amount">${amountStr}</span>
       </div>
-      <span class="cat-nav-count">${count}件</span>
+      <span class="cat-nav-badge">${count}</span>
     </div>`;
   }).join('');
 }
@@ -919,7 +926,7 @@ function renderItems() {
   if (_selectedDetailId) renderDetailPane(_selectedDetailId);
 }
 
-// ===== RIGHT SUMMARY (3-column layout) =====
+// ===== RIGHT SUMMARY (mockup style) =====
 function _updateRightSummary() {
   let grandTotal = 0;
   activeCategories.filter(c => c.active).forEach(c => { grandTotal += getCatAmount(c.id); });
@@ -927,12 +934,39 @@ function _updateRightSummary() {
   const tsubo = parseFloat(project.areaTsubo) || 0;
   const laborRate = (project.laborRate || 72) / 100;
   const estimatedCost = Math.round(grandTotal * laborRate);
-  const profitRate = grandTotal > 0 ? ((grandTotal - estimatedCost) / grandTotal * 100).toFixed(1) : 0;
+  const gross = grandTotal - estimatedCost;
+  const profitRate = grandTotal > 0 ? ((gross) / grandTotal * 100).toFixed(1) : 0;
   const el = (id) => document.getElementById(id);
   if (el('rsum-total')) el('rsum-total').textContent = '¥' + formatNum(Math.round(grandTotal));
   if (el('rsum-cost')) el('rsum-cost').textContent = '¥' + formatNum(estimatedCost);
+  if (el('rsum-gross')) el('rsum-gross').textContent = '¥' + formatNum(Math.round(gross));
   if (el('rsum-profit')) el('rsum-profit').textContent = profitRate + '%';
   if (el('rsum-tsubo')) el('rsum-tsubo').textContent = tsubo > 0 ? '¥' + formatNum(Math.round(grandTotal / tsubo)) : '—';
+  // 件数ラベル
+  const countEl = document.getElementById('itemCountLabel');
+  if (countEl) {
+    const cat = activeCategories.find(c => c.id === currentCat);
+    const count = (items[currentCat] || []).filter(i => !isAutoName(i.name)).length;
+    countEl.textContent = count + '件 / ' + (cat ? cat.name : '');
+  }
+}
+
+// ===== VIEW MODE (基本/拡張 切替) =====
+let _itemViewMode = 'basic';
+function setItemViewMode(mode) {
+  _itemViewMode = mode;
+  const mainEl = document.querySelector('.items-main');
+  if (!mainEl) return;
+  if (mode === 'expand') {
+    mainEl.classList.add('show-detail-cols');
+  } else {
+    mainEl.classList.remove('show-detail-cols');
+  }
+  // ボタンのアクティブ表示
+  const btnBasic = document.getElementById('btnBasicView');
+  const btnExpand = document.getElementById('btnExpandView');
+  if (btnBasic) { btnBasic.className = mode === 'basic' ? 'pbar-action-btn pbar-btn-dark' : 'pbar-action-btn pbar-btn-outline'; }
+  if (btnExpand) { btnExpand.className = mode === 'expand' ? 'pbar-action-btn pbar-btn-dark' : 'pbar-action-btn pbar-btn-outline'; }
 }
 
 // ===== DETAIL PANE (right column) =====
