@@ -110,9 +110,10 @@ function navigate(panel, el) {
   if (panel === 'ai') _populateAiProjectSummary();
 }
 
-// ===== STEP INDICATOR (sidebar flow cards) =====
+// ===== STEP INDICATOR (sidebar flow cards + project bar pills) =====
 const _stepPanels = ['project', 'ai', 'items', 'confirm'];
 function _updateStepIndicator(activePanel) {
+  // Sidebar flow cards
   const steps = document.querySelectorAll('#flowCards .flow-step');
   const activeIdx = _stepPanels.indexOf(activePanel);
   steps.forEach((step, i) => {
@@ -120,6 +121,39 @@ function _updateStepIndicator(activePanel) {
     if (i === activeIdx) step.classList.add('flow-active');
     else if (i < activeIdx) step.classList.add('flow-done');
   });
+  // Project bar pills
+  const pills = document.querySelectorAll('#stepPills .step-pill');
+  pills.forEach((pill, i) => {
+    pill.classList.remove('step-pill-active', 'step-pill-done');
+    if (i === activeIdx) pill.classList.add('step-pill-active');
+    else if (i < activeIdx) pill.classList.add('step-pill-done');
+  });
+}
+
+// ===== PROJECT SUMMARY CARD (collapsible) =====
+let _projectSummaryOpen = false;
+function toggleProjectSummary() {
+  _projectSummaryOpen = !_projectSummaryOpen;
+  const body = document.getElementById('projectSummaryBody');
+  const btn = document.getElementById('projectSummaryToggle');
+  if (body) body.style.display = _projectSummaryOpen ? 'block' : 'none';
+  if (btn) btn.textContent = _projectSummaryOpen ? '閉じる' : '詳細を開く';
+  if (_projectSummaryOpen) _renderProjectSummary();
+}
+function _renderProjectSummary() {
+  const grid = document.getElementById('projectSummaryGrid');
+  if (!grid) return;
+  const fields = [
+    ['見積日', project.date || '未設定'],
+    ['用途', project.usage || '未設定'],
+    ['構造', project.struct || '未設定'],
+    ['新築/改修', project.type || '未設定'],
+    ['階数', project.floors ? project.floors + '階' : '未設定'],
+    ['担当者', project.person || '未設定'],
+  ];
+  grid.innerHTML = fields.map(([label, val]) =>
+    `<div class="psum-item"><div class="psum-item-label">${label}</div><div class="psum-item-value">${esc(val)}</div></div>`
+  ).join('');
 }
 
 // ===== PROJECT BAR (mockup style) =====

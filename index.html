@@ -150,22 +150,30 @@
   <div class="main">
     <!-- Upper Project Bar (mockup style) -->
     <div class="project-bar" id="projectBar">
-      <div class="project-bar-left">
-        <div class="project-bar-title-row">
-          <h1 class="project-bar-name" id="pbarName">新規見積</h1>
-          <span id="finalBadge" class="pbar-badge pbar-badge-amber" style="display:none;" onclick="toggleCurrentFinal()" title="クリックで本見積を解除">★ 本見積</span>
-          <span id="pbarEstNo" class="pbar-badge pbar-badge-slate" style="display:none;"></span>
+      <div class="project-bar-top">
+        <div class="project-bar-left">
+          <div class="project-bar-title-row">
+            <h1 class="project-bar-name" id="pbarName">新規見積</h1>
+            <span id="finalBadge" class="pbar-badge pbar-badge-amber" style="display:none;" onclick="toggleCurrentFinal()" title="クリックで本見積を解除">★ 本見積</span>
+            <span id="pbarEstNo" class="pbar-badge pbar-badge-slate" style="display:none;"></span>
+          </div>
+          <div class="project-bar-tags" id="pbarTags"></div>
         </div>
-        <div class="project-bar-tags" id="pbarTags"></div>
+        <div class="project-bar-actions">
+          <button id="backBtn" class="btn btn-secondary btn-sm" onclick="undoAction()" style="display:none;" title="元に戻す (Ctrl+Z)">↩</button>
+          <button id="redoBtn" class="btn btn-secondary btn-sm" onclick="redoAction()" style="display:none;" title="やり直し (Ctrl+Y)">↪</button>
+          <button onclick="aiDraftEstimate()" class="pbar-action-btn pbar-btn-violet">AIで見積作成</button>
+          <button onclick="autoCreateEstimate()" class="pbar-action-btn pbar-btn-outline">過去データから作成</button>
+          <button onclick="smartSave()" class="pbar-action-btn pbar-btn-outline">保存</button>
+          <button onclick="exportEstimate()" class="pbar-action-btn pbar-btn-green">Excel出力</button>
+        </div>
       </div>
-      <div class="project-bar-actions">
-        <button id="backBtn" class="btn btn-secondary btn-sm" onclick="undoAction()" style="display:none;" title="元に戻す (Ctrl+Z)">↩</button>
-        <button id="redoBtn" class="btn btn-secondary btn-sm" onclick="redoAction()" style="display:none;" title="やり直し (Ctrl+Y)">↪</button>
-        <button onclick="aiDraftEstimate()" class="pbar-action-btn pbar-btn-violet">AIで見積作成</button>
-        <button onclick="autoCreateEstimate()" class="pbar-action-btn pbar-btn-outline">過去データから作成</button>
-        <button onclick="smartSave()" class="pbar-action-btn pbar-btn-outline">保存</button>
-        <button onclick="exportEstimate()" class="pbar-action-btn pbar-btn-green">Excel出力</button>
-        </div>
+      <!-- Step pills -->
+      <div class="step-pills" id="stepPills">
+        <div class="step-pill step-pill-active" data-panel="project" onclick="navigate('project')">1. 物件入力</div>
+        <div class="step-pill" data-panel="ai" onclick="navigate('ai')">2. AI作成</div>
+        <div class="step-pill" data-panel="items" onclick="navigate('items')">3. 明細調整</div>
+        <div class="step-pill" data-panel="confirm" onclick="navigate('confirm')">4. 確認・出力</div>
       </div>
     </div>
 
@@ -320,6 +328,21 @@
 
           <!-- Left: Table area -->
           <div class="items-main">
+            <!-- 案件サマリー（折りたたみ） -->
+            <div class="card" id="projectSummaryCard" style="margin-bottom:12px;">
+              <div class="card-header" style="cursor:pointer;" onclick="toggleProjectSummary()">
+                <div>
+                  <span class="card-title">案件サマリー</span>
+                  <p style="font-size:12px;color:var(--text-sub);margin-top:2px;">必要な基本情報だけ上部に固定。詳細は折りたたみで管理。</p>
+                </div>
+                <button class="pbar-action-btn pbar-btn-outline" style="padding:6px 12px;font-size:12px;" id="projectSummaryToggle">詳細を開く</button>
+              </div>
+              <div id="projectSummaryBody" style="display:none;padding:14px 18px;">
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;" id="projectSummaryGrid">
+                </div>
+              </div>
+            </div>
+
             <!-- 明細テーブルカード -->
             <div class="card" id="itemTableCard" style="margin-bottom:0;">
               <div class="card-header" style="border-bottom:1px solid var(--border-light);">
