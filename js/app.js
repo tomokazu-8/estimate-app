@@ -1003,35 +1003,45 @@ function renderDetailPane(itemId) {
   const costAm = (costPr !== null && qty > 0) ? Math.round(costPr * qty) : null;
 
   pane.innerHTML = `
-    <div style="font-size:10px;color:var(--text-sub);font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">詳細編集</div>
-    <div class="detail-item-name">${esc(item.name || '（品名なし）')}</div>
     <div class="detail-form">
       <div class="form-group">
-        <label class="form-label">定価</label>
-        <input class="form-input num" value="${item.listPrice||''}" onchange="updateDetailField(${itemId},'listPrice',this.value)" type="number" step="any" ${dis}>
+        <label class="form-label">品名</label>
+        <input class="form-input" value="${esc(item.name)}" onchange="updateDetailField(${itemId},'name',this.value)">
       </div>
       <div class="form-group">
-        <label class="form-label">基準価格</label>
-        <input class="form-input num" value="${item.basePrice||''}" onchange="updateDetailField(${itemId},'basePrice',this.value)" type="number" step="any" ${dis}>
+        <label class="form-label">規格</label>
+        <input class="form-input" value="${esc(item.spec)}" onchange="updateDetailField(${itemId},'spec',this.value)">
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <div class="form-group">
-          <label class="form-label">原価掛率</label>
-          <input class="form-input num" value="${item.costRate||''}" onchange="updateDetailField(${itemId},'costRate',this.value)" type="number" step="0.01" ${dis}>
+          <label class="form-label">数量</label>
+          <input class="form-input num" value="${item.qty||''}" onchange="updateDetailField(${itemId},'qty',this.value)" type="number" step="any">
         </div>
         <div class="form-group">
-          <label class="form-label">見積掛率</label>
-          <input class="form-input num" value="${item.sellRate||''}" onchange="updateDetailField(${itemId},'sellRate',this.value)" type="number" step="0.01" ${dis}>
+          <label class="form-label">単位</label>
+          <select class="form-select" onchange="updateDetailField(${itemId},'unit',this.value)" style="border-radius:10px;padding:8px 10px;">
+            ${UNITS.map(u=>`<option${u===_normalizeUnit(item.unit)?' selected':''}>${u}</option>`).join('')}
+          </select>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <div class="form-group">
           <label class="form-label">原価単価</label>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-sub);padding:5px 0;">${costPr !== null ? '¥'+formatNum(costPr) : '—'}</div>
+          <input class="form-input num" value="${item.listPrice||''}" onchange="updateDetailField(${itemId},'listPrice',this.value)" type="number" step="any" placeholder="定価" ${dis}>
         </div>
         <div class="form-group">
-          <label class="form-label">原価金額</label>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-sub);padding:5px 0;">${costAm !== null ? '¥'+formatNum(costAm) : '—'}</div>
+          <label class="form-label">見積単価</label>
+          <input class="form-input num" value="${item.price||''}" onchange="updateDetailField(${itemId},'price',this.value)" type="number" step="any">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="form-group">
+          <label class="form-label">原価掛</label>
+          <input class="form-input num" value="${item.costRate||''}" onchange="updateDetailField(${itemId},'costRate',this.value)" type="number" step="0.01" ${dis}>
+        </div>
+        <div class="form-group">
+          <label class="form-label">見積掛</label>
+          <input class="form-input num" value="${item.sellRate||''}" onchange="updateDetailField(${itemId},'sellRate',this.value)" type="number" step="0.01" ${dis}>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
@@ -1047,6 +1057,14 @@ function renderDetailPane(itemId) {
           <label class="form-label">歩掛3</label>
           <input class="form-input num" value="${item.bukariki3||''}" onchange="updateDetailField(${itemId},'bukariki3',this.value)" type="number" step="0.001" ${dis}>
         </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">備考</label>
+        <textarea class="form-input" onchange="updateDetailField(${itemId},'note',this.value)" style="min-height:72px;resize:vertical;border-radius:10px;">${esc(item.note || '')}</textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-top:4px;">
+        <button class="pbar-action-btn pbar-btn-outline" style="padding:8px;font-size:12px;" onclick="openSearchModal(${itemId})">AI補完</button>
+        <button class="pbar-action-btn pbar-btn-dark" style="padding:8px;font-size:12px;background:var(--accent);border-color:var(--accent);color:#fff;" onclick="renderDetailPane(${itemId})">変更を反映</button>
       </div>
     </div>`;
 }
