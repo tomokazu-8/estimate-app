@@ -200,9 +200,9 @@ tr:hover .row-delete { opacity:0.6; }
 .items-main { min-width:0; overflow-y:scroll; display:flex; flex-direction:column; padding:16px 0 16px 16px; scrollbar-width:none; }
 .items-main::-webkit-scrollbar { display:none; }
 .items-main .table-wrap { overflow-x:hidden; overflow-y:auto; }
-.items-main table { table-layout:fixed; }
-.items-main .col-name { width:30%; }
-.items-main .col-spec { width:20%; }
+/* 基本表示で品名・規格列が残りスペースを埋めるよう強制 */
+.items-main .col-name { width:auto; min-width:180px; }
+.items-main .col-spec { width:auto; min-width:120px; }
 .items-main > .card { border-right:none; border-radius:var(--radius) 0 0 var(--radius); margin-right:0; }
 .items-right { overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; gap:0; border-left:1px solid var(--border); background:var(--card); padding:16px; }
 .items-right .card { margin-bottom:0; border:none; box-shadow:none; border-radius:0; border-bottom:1px solid var(--border-light); padding-bottom:12px; }
