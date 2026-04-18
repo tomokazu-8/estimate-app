@@ -9,6 +9,15 @@ let _currentBaseNo     = '';     // 基番号
 let _currentBranch     = 0;     // 枝番
 let _currentIsFinal    = false; // 本見積フラグ
 
+function _resetEstimateState() {
+  _currentEstimateId = null;
+  _currentBaseNo = '';
+  _currentBranch = 0;
+  _currentIsFinal = false;
+  const badge = document.getElementById('finalBadge');
+  if (badge) badge.style.display = 'none';
+}
+
 // 一覧UIの状態
 let _estListMode   = 'date';    // 'date' | 'client'
 let _estListQuery  = '';

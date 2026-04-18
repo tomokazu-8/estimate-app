@@ -197,9 +197,14 @@
               <button onclick="openSavedEstimatesModal()" class="pbar-action-btn pbar-btn-outline">保存済み</button>
             </div>
           </div>
+          <!-- アクションバー -->
+          <div style="display:flex;gap:10px;margin-bottom:20px;">
+            <button onclick="resetToNewEstimate()" class="pbar-action-btn pbar-btn-outline" style="padding:10px 20px;font-size:13px;">＋ 新規作成</button>
+            <button onclick="openSavedEstimatesModal()" class="pbar-action-btn pbar-btn-outline" style="padding:10px 20px;font-size:13px;">📂 過去の物件を参照</button>
+          </div>
           <div style="display:grid;grid-template-columns:65fr 35fr;gap:28px;align-items:start;">
 
-          <!-- Left: 案件基本情報 + 次のアクション -->
+          <!-- Left: 案件基本情報 -->
           <div style="display:flex;flex-direction:column;gap:24px;">
             <div class="card" style="margin-bottom:0;">
               <div class="card-header">

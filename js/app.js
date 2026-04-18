@@ -1908,6 +1908,43 @@ function recalcAll() {
   renderItems();
 }
 
+// 新規見積を作成（フォームをリセット）
+function resetToNewEstimate() {
+  if (!confirm('現在の入力内容をクリアして新規見積を作成しますか？\n（未保存のデータは失われます）')) return;
+  // project をリセット
+  Object.keys(project).forEach(k => { project[k] = ''; });
+  project.date = new Date().toISOString().split('T')[0];
+  project.person = '八木橋　友和';
+  project.laborRate = 72;
+  project.tax = 10;
+  // items をリセット
+  Object.keys(items).forEach(k => delete items[k]);
+  activeCategories.forEach(c => { items[c.id] = []; });
+  itemIdCounter = 1;
+  // 保存状態をリセット
+  if (typeof _resetEstimateState === 'function') _resetEstimateState();
+  // フォームに反映
+  document.getElementById('pj-name').value = '';
+  document.getElementById('pj-client').value = '';
+  document.getElementById('pj-date').value = project.date;
+  document.getElementById('pj-person').value = project.person;
+  document.getElementById('pj-number').value = '';
+  document.getElementById('pj-struct').value = '';
+  document.getElementById('pj-usage').value = '';
+  document.getElementById('pj-type').value = '';
+  document.getElementById('pj-floors').value = '';
+  document.getElementById('pj-area-sqm').value = '';
+  document.getElementById('pj-area-tsubo').value = '';
+  document.getElementById('pj-location').value = '';
+  const memo = document.getElementById('pj-memo');
+  if (memo) memo.value = '';
+  syncLaborSettingsToForm();
+  _updateProjectBar();
+  renderCatTabs();
+  renderItems();
+  showToast('新規見積を作成しました');
+}
+
 // 物件情報の労務設定フォームから LABOR_RATES を同期
 function syncLaborSettingsFromForm() {
   const sell = parseFloat(document.getElementById('pj-labor-sell').value) || 0;
