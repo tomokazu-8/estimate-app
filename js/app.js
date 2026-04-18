@@ -1335,11 +1335,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function addItem(rowType) {
   if (!currentCat) { showToast('工種タブを選択してください'); return; }
-  // タイプ未指定なら選択メニュー表示
-  if (!rowType) {
-    _showAddItemMenu();
-    return;
-  }
+  if (!rowType) rowType = 'material';
   try {
     saveUndoState();
     if (!items[currentCat]) items[currentCat] = [];
