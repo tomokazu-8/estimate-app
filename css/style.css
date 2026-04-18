@@ -195,7 +195,7 @@ tr:hover .row-delete { opacity:0.6; }
 /* ===== ITEMS PANEL: 2-column layout, single scroll ===== */
 #panel-items.active { display:block; }
 .content.content-no-scroll { overflow-x:hidden !important; }
-.items-layout { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:16px; align-content:start; }
+.items-layout { display:grid; grid-template-columns:minmax(0,2.5fr) minmax(320px,1fr); gap:16px; align-content:start; }
 .items-main { min-width:0; display:flex; flex-direction:column; }
 .items-right { overflow-x:hidden; display:flex; flex-direction:column; gap:12px; }
 .items-right .card { margin-bottom:0; }
@@ -269,7 +269,38 @@ tr:hover .drag-handle { opacity:0.7; }
 .toast { position:fixed; bottom:24px; right:24px; background:#1e293b; color:#fff; padding:10px 18px; border-radius:10px; font-size:12px; z-index:200; opacity:0; transform:translateY(10px); transition:all 0.3s; pointer-events:none; }
 .toast.show { opacity:1; transform:translateY(0); }
 
+/* ===== PROJECT PANEL: responsive 3-column layout ===== */
+.project-grid {
+  display:grid;
+  grid-template-columns:auto 6fr 4fr;
+  grid-template-areas:
+    ".       steps    actions"
+    "buttons form     side";
+  gap:20px;
+  align-items:start;
+  max-width:1100px;
+  margin:0 auto;
+}
+.pp-steps   { grid-area:steps; margin-bottom:12px; }
+.pp-actions { grid-area:actions; display:flex; gap:8px; justify-content:flex-end; margin-bottom:12px; }
+.pp-buttons { grid-area:buttons; display:flex; flex-direction:column; gap:12px; padding-top:4px; }
+.pp-form    { grid-area:form; display:flex; flex-direction:column; gap:24px; min-width:0; }
+.pp-side    { grid-area:side; display:flex; flex-direction:column; gap:24px; min-width:0; }
+.project-grid .form-input, .project-grid .form-select { width:100%; box-sizing:border-box; }
+
 /* ===== RESPONSIVE ===== */
+@media(max-width:1200px) {
+  .project-grid {
+    grid-template-columns:auto minmax(0, 1fr);
+    grid-template-areas:
+      "steps    steps"
+      "actions  actions"
+      "buttons  form"
+      "side     side";
+  }
+  .pp-side { flex-direction:row; gap:20px; }
+  .pp-side > * { flex:1; min-width:0; }
+}
 @media(max-width:900px) {
   .sidebar { width:56px; }
   .sidebar-brand h1, .sidebar-brand p, .sidebar-flow, .sidebar-catnav, .sidebar-data-status { display:none; }
@@ -277,6 +308,17 @@ tr:hover .drag-handle { opacity:0.7; }
   .items-right { display:none; }
   .items-main .col-detail { display:table-cell; }
   .project-bar-tags { display:none; }
+  .project-grid {
+    grid-template-columns:1fr;
+    grid-template-areas:
+      "steps"
+      "actions"
+      "buttons"
+      "form"
+      "side";
+  }
+  .pp-buttons { flex-direction:row; flex-wrap:wrap; }
+  .pp-side { flex-direction:column; }
 }
 
 /* ===== SUGGESTION DROPDOWN ===== */
