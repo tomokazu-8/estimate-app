@@ -193,25 +193,14 @@ tr:hover .row-delete { opacity:0.6; }
 .panel.active { display:block; }
 
 /* ===== ITEMS PANEL: 2-column layout ===== */
-/* panel-items: contentのpadding/scrollを無効化して全面使用 */
-#panel-items.active { display:block; height:100%; }
-.content.content-no-scroll { overflow:hidden !important; padding:0 !important; }
-.items-layout { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:0; height:100%; }
-.items-main { min-width:0; overflow-y:scroll; display:flex; flex-direction:column; padding:16px 0 16px 16px; scrollbar-width:none; }
-.items-main::-webkit-scrollbar { display:none; }
-.items-main .table-wrap { overflow-x:hidden; overflow-y:auto; width:100%; }
-.items-main table { width:100% !important; }
-/* 基本表示で品名・規格列が残りスペースを埋めるよう強制 */
-.items-main .col-name { width:auto; min-width:180px; }
-.items-main .col-spec { width:auto; min-width:120px; }
-.items-main > .card { border-right:none; border-radius:var(--radius) 0 0 var(--radius); margin-right:0; }
-.items-right { overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; gap:0; border-left:1px solid var(--border); background:var(--card); padding:16px; }
-.items-right .card { margin-bottom:0; border:none; box-shadow:none; border-radius:0; border-bottom:1px solid var(--border-light); padding-bottom:12px; }
-.items-right .card .card-header { padding:10px 0; border-bottom:none; }
-.items-right .card:last-child { border-bottom:none; }
+#panel-items.active { display:block; margin:-20px -24px; height:calc(100% + 40px); }
+.items-layout { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:16px; height:100%; padding:16px; }
+.items-main { min-width:0; overflow-y:auto; display:flex; flex-direction:column; }
+.items-right { overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; gap:12px; }
+.items-right .card { margin-bottom:0; }
 
 /* Right summary cards (mockup style) */
-.rsum-card { background:var(--bg); border:1px solid var(--border-light); border-radius:var(--radius); padding:12px 14px; }
+.rsum-card { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px; }
 .rsum-card.rsum-green .rsum-value { color:var(--green); }
 .rsum-label { font-size:12px; color:var(--text-sub); }
 .rsum-value { font-family:'JetBrains Mono',monospace; font-size:18px; font-weight:600; color:var(--text); margin-top:2px; letter-spacing:-0.5px; }

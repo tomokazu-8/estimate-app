@@ -366,7 +366,7 @@
                 <button class="btn btn-secondary btn-sm" onclick="clearSelection()" style="font-size:12px;">選択解除</button>
               </div>
               <div class="card-body" style="padding:0;">
-                <div class="table-wrap">
+                <div class="table-wrap" style="overflow-y:auto; overflow-x:auto;">
                   <table id="itemTable">
                     <thead>
                       <tr>
@@ -375,8 +375,8 @@
                             onchange="this.checked ? selectAllItems() : clearSelection()"
                             style="cursor:pointer;width:14px;height:14px;">
                         </th>
-                        <th class="col-name">品名</th>
-                        <th class="col-spec">規格</th>
+                        <th style="min-width:180px">品名</th>
+                        <th style="min-width:120px">規格</th>
                         <th style="width:62px">数量</th>
                         <th style="width:48px">単位</th>
                         <th class="col-detail" style="width:100px">定価</th>
