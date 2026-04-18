@@ -958,13 +958,14 @@ function renderItems() {
   renderLaborSection();
   updateSummaryBar();
   _updateRightSummary();
-  _runValidationChecks();
   // 詳細ペイン再描画（選択中の行があれば）
   if (_selectedDetailId) renderDetailPane(_selectedDetailId);
 }
 
 // ===== 妥当性チェック =====
-function _runValidationChecks() {
+
+// 工種別チェック（ボタン押下で実行）
+function runCategoryValidation() {
   const el = document.getElementById('validationHints');
   if (!el) return;
   const hints = [];
@@ -972,8 +973,6 @@ function _runValidationChecks() {
   const materialRows = list.filter(i => (i.rowType || 'material') === 'material' && i.name);
   const expenseRows = list.filter(i => i.rowType === 'expense');
   const laborRows = list.filter(i => i.rowType === 'labor');
-
-  // --- 工種別チェック ---
 
   // 1. 見積金額が定価を超えている
   materialRows.forEach(i => {
@@ -1013,7 +1012,7 @@ function _runValidationChecks() {
     hints.push({ type: 'warn', text: `${noPrice.length}品目の見積単価が未入力です` });
   }
 
-  // 5. 単位の不一致（電線類にm以外、器具類に個/台以外など）
+  // 5. 単位の不一致
   const wireKeywords = ['ケーブル', 'VVF', 'IV', 'CV', 'EM-', '電線', 'UTP', 'CPEV', 'AE'];
   materialRows.forEach(i => {
     const n = norm(i.name);
@@ -1037,62 +1036,16 @@ function _runValidationChecks() {
     hints.push({ type: 'warn', text: '労務費行がありません' });
   }
 
-  // --- 全体チェック ---
-
-  // 8. 同じ資材が工種間で金額・歩掛が異なる
-  const allMaterials = {};
-  activeCategories.filter(c => c.active).forEach(c => {
-    (items[c.id] || []).forEach(i => {
-      if ((i.rowType || 'material') !== 'material' || !i.name) return;
-      const key = norm(i.name + (i.spec || ''));
-      if (!allMaterials[key]) allMaterials[key] = [];
-      allMaterials[key].push({ cat: c.short, price: parseFloat(i.price) || 0, buk: parseFloat(i.bukariki1) || 0 });
-    });
-  });
-  Object.entries(allMaterials).forEach(([, entries]) => {
-    if (entries.length < 2) return;
-    const prices = [...new Set(entries.map(e => e.price))];
-    const buks = [...new Set(entries.map(e => e.buk))];
-    if (prices.length > 1) {
-      const cats = entries.map(e => e.cat).join('・');
-      hints.push({ type: 'warn', text: `同名資材の単価が工種間で異なります（${cats}）` });
-    }
-    if (buks.length > 1) {
-      const cats = entries.map(e => e.cat).join('・');
-      hints.push({ type: 'warn', text: `同名資材の歩掛が工種間で異なります（${cats}）` });
-    }
-  });
-
-  // 9. 坪単価の妥当性（ナレッジDB比較 — DBが空ならスキップ）
-  // 非同期のため別途実装予定
-
-  // 10. 空の工種
-  activeCategories.filter(c => c.active && !c.rateMode).forEach(c => {
-    const catItems = (items[c.id] || []).filter(i => i.name);
-    if (catItems.length === 0) {
-      hints.push({ type: 'warn', text: `工種「${c.short}」に品目がありません` });
-    }
-  });
-
-  // 11. 利益率
-  let grandTotal = 0;
-  activeCategories.filter(c => c.active).forEach(c => { grandTotal += getCatAmount(c.id); });
-  grandTotal += _laborSellTotal;
-  if (grandTotal > 0) {
-    const laborRate = (project.laborRate || 72) / 100;
-    const profitRate = (1 - laborRate) * 100;
-    if (profitRate >= 20) {
-      hints.push({ type: 'ok', text: `利益率は適正です（${profitRate.toFixed(1)}%）` });
-    } else if (profitRate >= 10) {
-      hints.push({ type: 'warn', text: `利益率がやや低めです（${profitRate.toFixed(1)}%）` });
-    } else {
-      hints.push({ type: 'error', text: `利益率が低すぎます（${profitRate.toFixed(1)}%）` });
-    }
-  }
-
   // --- 描画 ---
+  _renderValidationHints(el, hints);
+  const cat = activeCategories.find(c => c.id === currentCat);
+  showToast(`「${cat ? cat.name : ''}」のチェックが完了しました（${hints.length}件）`);
+}
+
+// チェック結果の描画
+function _renderValidationHints(el, hints) {
   if (hints.length === 0) {
-    el.innerHTML = '<div style="color:var(--green);font-size:12px;padding:8px 0;">チェック項目に問題はありません</div>';
+    el.innerHTML = '<div style="color:var(--green);font-size:12px;padding:8px 0;">✅ チェック項目に問題はありません</div>';
     return;
   }
   el.innerHTML = hints.map(h => {

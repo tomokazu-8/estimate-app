@@ -409,6 +409,8 @@
                 <div style="display:flex;gap:6px;">
                   <button class="pbar-action-btn pbar-btn-outline" onclick="addItem('expense')">＋ 経費行</button>
                   <button class="pbar-action-btn pbar-btn-outline" onclick="addItem('labor')">＋ 労務費行</button>
+                  <span style="width:1px;height:20px;background:var(--border);margin:0 6px;"></span>
+                  <button class="pbar-action-btn pbar-btn-outline" onclick="runCategoryValidation()">工種別チェック</button>
                 </div>
                 <div id="itemCountLabel" style="font-size:12px;color:var(--text-sub);"></div>
               </div>
@@ -469,13 +471,13 @@
               </div>
             </div>
 
-            <!-- 妥当性チェック -->
+            <!-- 工種別チェック指摘内容 -->
             <div class="card">
               <div class="card-header" style="padding:12px 16px;">
-                <span class="card-title" style="font-size:13px;">妥当性チェック</span>
+                <span class="card-title" style="font-size:13px;">工種別チェック指摘内容</span>
               </div>
               <div id="validationHints" style="padding:10px 14px;">
-                <div style="color:var(--text-dim);font-size:12px;">見積データ入力後に自動チェックされます</div>
+                <div style="color:var(--text-dim);font-size:12px;">「工種別チェック」ボタンで実行</div>
               </div>
             </div>
           </div><!-- /items-right -->
