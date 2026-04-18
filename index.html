@@ -184,29 +184,27 @@
       <!-- ===== Panel: Project Info (2-column layout) ===== -->
       <div class="panel active" id="panel-project">
         <div style="max-width:960px;margin:0 auto;">
-          <!-- 物件入力用ヘッダー（3カラムに合わせて配置） -->
+          <!-- 物件入力用ヘッダー -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+            <div class="step-pills" style="justify-content:flex-start;">
+              <div class="step-pill step-pill-active" onclick="navigate('project')">1. 物件入力</div>
+              <div class="step-pill" onclick="navigate('ai')">2. AI作成</div>
+              <div class="step-pill" onclick="navigate('items')">3. 明細調整</div>
+              <div class="step-pill" onclick="navigate('confirm')">4. 確認・出力</div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button onclick="smartSave()" class="pbar-action-btn pbar-btn-outline">保存</button>
+              <button onclick="openSavedEstimatesModal()" class="pbar-action-btn pbar-btn-outline">保存済み</button>
+            </div>
+          </div>
+
+          <!-- 3カラム: ボタン | フォーム | 右カード -->
           <div style="display:grid;grid-template-columns:auto 6fr 4fr;gap:20px;align-items:start;">
 
           <!-- 左端: アクションボタン（1.5倍サイズ） -->
           <div style="display:flex;flex-direction:column;gap:12px;padding-top:4px;">
             <button onclick="resetToNewEstimate()" class="pbar-action-btn pbar-btn-outline" style="padding:16px 24px;font-size:15px;white-space:nowrap;">＋ 新規作成</button>
             <button onclick="openSavedEstimatesModal()" class="pbar-action-btn pbar-btn-outline" style="padding:16px 24px;font-size:15px;white-space:nowrap;">📂 過去の物件</button>
-          </div>
-
-          <!-- 中央ヘッダー: ステップpill左寄せ -->
-          <div>
-            <div class="step-pills" style="justify-content:flex-start;margin-bottom:20px;">
-              <div class="step-pill step-pill-active" onclick="navigate('project')">1. 物件入力</div>
-              <div class="step-pill" onclick="navigate('ai')">2. AI作成</div>
-              <div class="step-pill" onclick="navigate('items')">3. 明細調整</div>
-              <div class="step-pill" onclick="navigate('confirm')">4. 確認・出力</div>
-            </div>
-          </div>
-
-          <!-- 右ヘッダー: 保存ボタン右寄せ -->
-          <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:20px;">
-            <button onclick="smartSave()" class="pbar-action-btn pbar-btn-outline">保存</button>
-            <button onclick="openSavedEstimatesModal()" class="pbar-action-btn pbar-btn-outline">保存済み</button>
           </div>
 
           <!-- 中央: 案件基本情報 -->
