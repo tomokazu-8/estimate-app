@@ -208,10 +208,24 @@ tr:hover .row-delete { opacity:0.6; }
 
 /* Detail pane */
 #detailPane .detail-form { display:flex; flex-direction:column; gap:10px; }
-#detailPane .detail-form .form-group { display:flex; flex-direction:column; gap:2px; }
-#detailPane .detail-form .form-label { font-size:10px; }
-#detailPane .detail-form .form-input { font-size:12px; padding:8px 10px; border-radius:10px; }
+#detailPane .detail-form .form-group { display:flex; flex-direction:column; gap:3px; }
+#detailPane .detail-form .form-label { font-size:11px; color:var(--text-sub); }
+#detailPane .detail-form .form-input { font-size:13px; padding:8px 10px; border-radius:10px; }
+#detailPane .detail-form .form-select { font-size:13px; }
+#detailPane .detail-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+#detailPane .detail-grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+#detailPane .detail-separator { height:1px; background:var(--border-light); margin:4px 0; }
+#detailPane .detail-calc-value { font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:500; color:var(--text); padding:8px 10px; background:var(--bg); border:1px solid var(--border-light); border-radius:10px; }
 #detailPane .detail-item-name { font-size:13px; font-weight:600; color:var(--text); padding:8px 0; border-bottom:1px solid var(--border); margin-bottom:8px; word-break:break-all; }
+
+/* Batch mode: checkbox column hidden by default, shown in batch mode */
+#itemTable .col-check { display:none; }
+#itemTable.batch-mode .col-check { display:table-cell; }
+
+/* Row reorder buttons */
+.row-move { opacity:0; cursor:pointer; color:var(--text-sub); background:none; border:none; padding:1px 3px; font-size:11px; transition:opacity 0.15s; }
+tr:hover .row-move { opacity:0.5; }
+.row-move:hover { opacity:1 !important; color:var(--accent); }
 
 /* Hide detail columns in items main table (basic view) */
 .items-main .col-detail { display:none; }

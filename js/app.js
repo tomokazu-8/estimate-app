@@ -900,7 +900,7 @@ function renderItems() {
     const isSelected = _selectedItems.has(item.id);
     return `
     <tr data-id="${item.id}" class="${isAuto ? 'auto-calc' : ''}${isSelected ? ' row-selected' : ''}">
-      <td class="td-center" style="padding:0 4px;">
+      <td class="col-check td-center" style="padding:0 4px;">
         <input type="checkbox" id="chk-${item.id}" ${isSelected ? 'checked' : ''}
           onchange="toggleSelectItem(${item.id})" style="cursor:pointer;width:14px;height:14px;">
       </td>
@@ -929,6 +929,8 @@ function renderItems() {
       <td><input value="${esc(item.note)}" onchange="updateItem(${item.id},'note',this.value)" placeholder="${isLaborLockedRow ? '自動計算' : isAutoName(item.name) ? '例: 5.0%' : '備考'}" style="font-size:11px;color:var(--text-sub);" ${isLaborLockedRow ? 'readonly' : ''}></td>
       <td>
         <span style="display:flex;gap:1px;flex-wrap:nowrap;">
+          <button class="row-move" onclick="moveItemUp(${item.id})" title="上へ移動">▲</button>
+          <button class="row-move" onclick="moveItemDown(${item.id})" title="下へ移動">▼</button>
           <button class="row-delete" onclick="openSearchModal(${item.id})" title="材料DBから検索" style="opacity:0.5;color:var(--accent);">🔍</button>
           <button class="row-delete" onclick="insertItemAfter(${item.id})" title="この行の下に新規行を挿入" style="opacity:0.6;color:#059669;">＋</button>
           <button class="row-delete" onclick="copyItem(${item.id})" title="この行をコピー" style="opacity:0.6;color:#d97706;">⧉</button>
@@ -985,6 +987,41 @@ function _updateRightSummary() {
   }
 }
 
+// ===== BATCH MODE (一括操作モード切替) =====
+let _batchMode = false;
+function toggleBatchMode() {
+  _batchMode = !_batchMode;
+  const tbl = document.getElementById('itemTable');
+  if (tbl) tbl.classList.toggle('batch-mode', _batchMode);
+  const btn = document.getElementById('btnBatchMode');
+  if (btn) btn.className = _batchMode ? 'pbar-action-btn pbar-btn-dark' : 'pbar-action-btn pbar-btn-outline';
+  if (!_batchMode) {
+    clearSelection();
+    const tb = document.getElementById('batchToolbar');
+    if (tb) tb.style.display = 'none';
+  }
+}
+
+// ===== ROW REORDER (行入れ替え) =====
+function moveItemUp(id) {
+  const list = items[currentCat];
+  if (!list) return;
+  const idx = list.findIndex(i => i.id === id);
+  if (idx <= 0) return;
+  saveUndoState();
+  [list[idx - 1], list[idx]] = [list[idx], list[idx - 1]];
+  renderItems();
+}
+function moveItemDown(id) {
+  const list = items[currentCat];
+  if (!list) return;
+  const idx = list.findIndex(i => i.id === id);
+  if (idx < 0 || idx >= list.length - 1) return;
+  saveUndoState();
+  [list[idx], list[idx + 1]] = [list[idx + 1], list[idx]];
+  renderItems();
+}
+
 // ===== VIEW MODE (基本/拡張 切替) =====
 let _itemViewMode = 'basic';
 function setItemViewMode(mode) {
@@ -1036,6 +1073,13 @@ function renderDetailPane(itemId) {
   const qty = parseFloat(item.qty) || 0;
   const costAm = (costPr !== null && qty > 0) ? Math.round(costPr * qty) : null;
 
+  // 基準単価 or 定価（排他: 定価があれば基準価格は無効、逆も同様）
+  const hasListP = listP > 0;
+  const hasBaseP = baseP > 0;
+  // 原価単価 = effBase × costRate、見積単価 = effBase × sellRate（自動計算表示）
+  const sRate = parseFloat(item.sellRate) || 0;
+  const sellPr = (effBase > 0 && sRate > 0) ? Math.round(effBase * sRate) : null;
+
   pane.innerHTML = `
     <div class="detail-form">
       <div class="form-group">
@@ -1046,7 +1090,7 @@ function renderDetailPane(itemId) {
         <label class="form-label">規格</label>
         <input class="form-input" value="${esc(item.spec)}" onchange="updateDetailField(${itemId},'spec',this.value)">
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div class="detail-grid-2">
         <div class="form-group">
           <label class="form-label">数量</label>
           <input class="form-input num" value="${item.qty||''}" onchange="updateDetailField(${itemId},'qty',this.value)" type="number" step="any">
@@ -1058,17 +1102,22 @@ function renderDetailPane(itemId) {
           </select>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div class="detail-separator"></div>
+      <div class="detail-grid-2">
         <div class="form-group">
-          <label class="form-label">原価単価</label>
-          <input class="form-input num" value="${item.listPrice||''}" onchange="updateDetailField(${itemId},'listPrice',this.value)" type="number" step="any" placeholder="定価" ${dis}>
+          <label class="form-label">定価</label>
+          <input class="form-input num" value="${item.listPrice||''}"
+            onchange="updateDetailField(${itemId},'listPrice',this.value); if(this.value) updateDetailField(${itemId},'basePrice','')"
+            type="number" step="any" ${dis} ${hasBaseP && !hasListP ? 'placeholder="基準価格が優先"' : ''}>
         </div>
         <div class="form-group">
-          <label class="form-label">見積単価</label>
-          <input class="form-input num" value="${item.price||''}" onchange="updateDetailField(${itemId},'price',this.value)" type="number" step="any">
+          <label class="form-label">基準価格</label>
+          <input class="form-input num" value="${item.basePrice||''}"
+            onchange="updateDetailField(${itemId},'basePrice',this.value); if(this.value) updateDetailField(${itemId},'listPrice','')"
+            type="number" step="any" ${dis} ${hasListP && !hasBaseP ? 'placeholder="定価が優先"' : ''}>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div class="detail-grid-2">
         <div class="form-group">
           <label class="form-label">原価掛</label>
           <input class="form-input num" value="${item.costRate||''}" onchange="updateDetailField(${itemId},'costRate',this.value)" type="number" step="0.01" ${dis}>
@@ -1078,7 +1127,18 @@ function renderDetailPane(itemId) {
           <input class="form-input num" value="${item.sellRate||''}" onchange="updateDetailField(${itemId},'sellRate',this.value)" type="number" step="0.01" ${dis}>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+      <div class="detail-grid-2">
+        <div class="form-group">
+          <label class="form-label">原価単価 <span style="font-size:10px;color:var(--text-dim);">自動</span></label>
+          <div class="detail-calc-value">${costPr !== null ? '¥'+formatNum(costPr) : '—'}</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">見積単価 <span style="font-size:10px;color:var(--text-dim);">自動</span></label>
+          <div class="detail-calc-value">${sellPr !== null ? '¥'+formatNum(sellPr) : (item.price ? '¥'+formatNum(Math.round(parseFloat(item.price))) : '—')}</div>
+        </div>
+      </div>
+      <div class="detail-separator"></div>
+      <div class="detail-grid-3">
         <div class="form-group">
           <label class="form-label">歩掛1</label>
           <input class="form-input num" value="${item.bukariki1||''}" onchange="updateDetailField(${itemId},'bukariki1',this.value)" type="number" step="0.001" ${dis}>
@@ -1092,13 +1152,14 @@ function renderDetailPane(itemId) {
           <input class="form-input num" value="${item.bukariki3||''}" onchange="updateDetailField(${itemId},'bukariki3',this.value)" type="number" step="0.001" ${dis}>
         </div>
       </div>
+      <div class="detail-separator"></div>
       <div class="form-group">
         <label class="form-label">備考</label>
-        <textarea class="form-input" onchange="updateDetailField(${itemId},'note',this.value)" style="min-height:72px;resize:vertical;border-radius:10px;">${esc(item.note || '')}</textarea>
+        <textarea class="form-input" onchange="updateDetailField(${itemId},'note',this.value)" style="min-height:64px;resize:vertical;border-radius:10px;">${esc(item.note || '')}</textarea>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-top:4px;">
-        <button class="pbar-action-btn pbar-btn-outline" style="padding:8px;font-size:12px;" onclick="openSearchModal(${itemId})">AI補完</button>
-        <button class="pbar-action-btn pbar-btn-dark" style="padding:8px;font-size:12px;background:var(--accent);border-color:var(--accent);color:#fff;" onclick="renderDetailPane(${itemId})">変更を反映</button>
+      <div class="detail-grid-2" style="padding-top:4px;">
+        <button class="pbar-action-btn pbar-btn-outline" style="padding:8px;font-size:13px;" onclick="openSearchModal(${itemId})">AI補完</button>
+        <button class="pbar-action-btn" style="padding:8px;font-size:13px;background:var(--accent);border-color:var(--accent);color:#fff;" onclick="renderDetailPane(${itemId})">変更を反映</button>
       </div>
     </div>`;
 }
@@ -1108,18 +1169,24 @@ function updateDetailField(itemId, field, value) {
   // renderItems() -> renderDetailPane() は自動で呼ばれる
 }
 
-// 行クリックイベント（テーブルボディに委譲）
+// 行クリック・フォーカスイベント — inputにフォーカスしても行選択する
 document.addEventListener('DOMContentLoaded', () => {
+  // クリック: 行のどこをクリックしても選択（ボタン・チェックボックス除外）
   document.addEventListener('click', (e) => {
-    const tbody = document.getElementById('itemBody');
-    if (!tbody) return;
-    // itemBody 内のクリックだけ処理
     const tr = e.target.closest('#itemBody tr');
     if (!tr) return;
-    // input, button, select, checkbox は除外
-    if (e.target.closest('input, button, select')) return;
+    // 削除等のアクションボタンとチェックボックスは除外
+    if (e.target.closest('button, input[type="checkbox"]')) return;
     const id = parseInt(tr.dataset.id, 10);
     if (!isNaN(id)) selectDetailRow(id);
+  });
+  // フォーカス: input/selectにフォーカスしたときも行選択
+  document.addEventListener('focusin', (e) => {
+    const tr = e.target.closest('#itemBody tr');
+    if (!tr) return;
+    if (!e.target.closest('input, select, textarea')) return;
+    const id = parseInt(tr.dataset.id, 10);
+    if (!isNaN(id) && _selectedDetailId !== id) selectDetailRow(id);
   });
 });
 
