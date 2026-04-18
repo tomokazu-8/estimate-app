@@ -132,9 +132,9 @@ function tmRenderSidebar() {
 }
 
 // ===== SELECT DB =====
-function tmSelectDb(id) {
+async function tmSelectDb(id) {
   if (tmIsDirty && tmCurrentDbId) {
-    if (!confirm('保存していない変更があります。切り替えますか？')) return;
+    if (!(await customConfirm('保存していない変更があります。切り替えますか？', {confirmText:'切り替える'}))) return;
   }
   tmCurrentDbId = id;
   tmCurrentRows     = tmLoadDbData(id);
@@ -719,12 +719,12 @@ function tmParseBunruiSheet(data) {
   })).filter(r => r.shoId);
 }
 
-function tmSaveImportedTridge(name, memo, rows, skipped, koshu, kw, bunruiRows, settings, overrideType) {
+async function tmSaveImportedTridge(name, memo, rows, skipped, koshu, kw, bunruiRows, settings, overrideType) {
   // 同名トリッジの重複チェック
   const existing = tmDbList.find(d => d.name === name);
   let id;
   if (existing) {
-    const choice = confirm(`「${name}」は既に存在します。\nOK: 上書き更新 / キャンセル: 取込中止`);
+    const choice = await customConfirm(`「${name}」は既に存在します。\n上書き更新しますか？（キャンセルで取込中止）`, {confirmText:'上書き更新'});
     if (!choice) return;
     id = existing.id;
     // 既存データを上書き

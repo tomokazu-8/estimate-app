@@ -400,12 +400,12 @@ function applyOneKoshu(koshuId) {
 }
 
 // 工種を外す
-function removeOneKoshu(koshuId) {
+async function removeOneKoshu(koshuId) {
   const cat = activeCategories.find(c => c.id === koshuId);
   if (!cat) return;
   const catItems = (items[koshuId] || []).filter(i => i.name);
   if (catItems.length > 0) {
-    if (!confirm(`「${cat.name}」には${catItems.length}件の品目があります。工種を外しますか？\n（品目データは保持されます）`)) return;
+    if (!(await customConfirm(`「${cat.name}」には${catItems.length}件の品目があります。工種を外しますか？\n（品目データは保持されます）`, {variant:'danger', confirmText:'外す'}))) return;
   }
   activeCategories = activeCategories.filter(c => c.id !== koshuId);
   saveActiveCategories();
@@ -432,7 +432,7 @@ function addCustomKoshuFromPreset() {
   showToast(`カスタム工種「${name}」を追加しました`);
 }
 
-function applyKoshuPreset() {
+async function applyKoshuPreset() {
   if (!project.type) {
     showToast('「新築/改修」を選択してください');
     return;
@@ -440,7 +440,7 @@ function applyKoshuPreset() {
   const preset = getKoshuPreset(project.type, project.usage, project.struct);
   if (activeCategories.length > 0) {
     const existingItems = activeCategories.some(c => (items[c.id] || []).filter(i => i.name).length > 0);
-    if (existingItems && !confirm('既存の工種を置き換えます。品目データは保持されますが、工種構成が変わります。\nよろしいですか？')) return;
+    if (existingItems && !(await customConfirm('既存の工種を置き換えます。品目データは保持されますが、工種構成が変わります。\nよろしいですか？'))) return;
   }
   applyTridgeCategories(preset);
   koshuTridgeLoaded = true;
@@ -1584,7 +1584,7 @@ function _renderLaborDetail(pane, item, itemId, list) {
 }
 
 // ===== DBに登録（ユーザー品目DB） =====
-function registerItemToUserDB(itemId) {
+async function registerItemToUserDB(itemId) {
   const list = items[currentCat] || [];
   const item = list.find(i => i.id === itemId);
   if (!item || !item.name) { showToast('品名を入力してください'); return; }
@@ -1615,7 +1615,7 @@ function registerItemToUserDB(itemId) {
     source: 'user',
   };
 
-  const result = upsertUserMaterial(entry);
+  const result = await upsertUserMaterial(entry);
   if (result === 'added') showToast(`「${item.name}」をユーザーDBに登録しました`);
   else if (result === 'updated') showToast(`「${item.name}」を上書き更新しました`);
 }
@@ -1641,7 +1641,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-function addItem(rowType) {
+async function addItem(rowType) {
   if (!currentCat) { showToast('工種タブを選択してください'); return; }
   if (!rowType) rowType = 'material';
   try {
@@ -1664,7 +1664,7 @@ function addItem(rowType) {
     if (rowType !== 'material') {
       const existing = items[currentCat].find(i => i.name === overrides.name && (i.rowType || 'material') === rowType);
       if (existing) {
-        if (!confirm(`「${overrides.name}」は既にこの工種に存在します。追加しますか？`)) return;
+        if (!(await customConfirm(`「${overrides.name}」は既にこの工種に存在します。追加しますか？`))) return;
       }
     }
     const newItem = createBlankItem(overrides);
@@ -1851,9 +1851,9 @@ function _updateBatchToolbar() {
   }
 }
 
-function deleteSelectedItems() {
+async function deleteSelectedItems() {
   if (_selectedItems.size === 0) return;
-  if (!confirm(_selectedItems.size + '件の行を削除しますか？')) return;
+  if (!(await customConfirm(_selectedItems.size + '件の行を削除しますか？', {variant:'danger', confirmText:'削除'}))) return;
   saveUndoState();
   items[currentCat] = (items[currentCat] || []).filter(i => !_selectedItems.has(i.id));
   _selectedItems.clear();
@@ -1909,8 +1909,8 @@ function recalcAll() {
 }
 
 // 新規見積を作成（フォームをリセット）
-function resetToNewEstimate() {
-  if (!confirm('現在の入力内容をクリアして新規見積を作成しますか？\n（未保存のデータは失われます）')) return;
+async function resetToNewEstimate() {
+  if (!(await customConfirm('現在の入力内容をクリアして新規見積を作成しますか？\n（未保存のデータは失われます）', {title:'新規見積の作成', confirmText:'クリアして開始', variant:'danger'}))) return;
   // project をリセット
   Object.keys(project).forEach(k => { project[k] = ''; });
   project.date = new Date().toISOString().split('T')[0];
@@ -2410,7 +2410,7 @@ async function showKnowledgeDetail(id) {
 
 // ナレッジ削除
 async function deleteKnowledge(id) {
-  if (!confirm('この実績データを削除しますか？')) return;
+  if (!(await customConfirm('この実績データを削除しますか？', {variant:'danger', confirmText:'削除'}))) return;
   try {
     await knowledgeDB.remove(id);
     showToast('削除しました');
@@ -2443,7 +2443,7 @@ async function knowledgeImportFile(file) {
 async function knowledgeReplaceFile(file) {
   if (!file) return;
   const currentCount = await knowledgeDB.count();
-  if (currentCount > 0 && !confirm(`既存の ${currentCount} 件を全て削除して新しいデータに置き換えます。\nよろしいですか？`)) {
+  if (currentCount > 0 && !(await customConfirm(`既存の ${currentCount} 件を全て削除して新しいデータに置き換えます。\nよろしいですか？`, {variant:'danger', confirmText:'削除して置き換える'}))) {
     document.getElementById('knowledgeReplaceFile').value = '';
     return;
   }
@@ -2778,8 +2778,8 @@ async function applyAutoCreate(knowledgeId, areaRatio) {
   // 工種名の正規化（工事・工・設備 等の末尾語を除去してコア名を抽出）
   const normCatName = s => norm(s).replace(/工事$|工$|設備$/, '');
 
-  rec.categories.forEach(srcCat => {
-    if (!srcCat.items || srcCat.items.length === 0) return;
+  for (const srcCat of rec.categories) {
+    if (!srcCat.items || srcCat.items.length === 0) continue;
 
     const srcKey = normCatName(srcCat.name || '');
 
@@ -2793,7 +2793,7 @@ async function applyAutoCreate(knowledgeId, areaRatio) {
         return tKey && srcKey && (tKey.includes(srcKey) || srcKey.includes(tKey));
       });
     }
-    if (!targetCat || !targetCat.active) return;
+    if (!targetCat || !targetCat.active) continue;
 
     // items[catId] がなければ初期化
     if (!items[targetCat.id]) items[targetCat.id] = [];
@@ -2801,8 +2801,8 @@ async function applyAutoCreate(knowledgeId, areaRatio) {
     // 既存品目があれば確認
     const existing = items[targetCat.id].filter(i => i.name);
     if (existing.length > 0) {
-      if (!confirm(`「${targetCat.name}」には既に${existing.length}件の品目があります。上書きしますか？\n（キャンセルでこの工種をスキップ）`)) {
-        return;
+      if (!(await customConfirm(`「${targetCat.name}」には既に${existing.length}件の品目があります。上書きしますか？\n（キャンセルでこの工種をスキップ）`))) {
+        continue;
       }
       items[targetCat.id] = [];
     }
@@ -2827,7 +2827,7 @@ async function applyAutoCreate(knowledgeId, areaRatio) {
       }));
       addedItems++;
     });
-  });
+  }
 
   // 最初の工種を表示して明細入力パネルへ遷移
   const firstCat = activeCategories.find(c => c.active && !c.rateMode && items[c.id] && items[c.id].length > 0);

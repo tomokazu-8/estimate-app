@@ -15,6 +15,62 @@ function safeLocalStorageSet(key, value) {
   }
 }
 
+/**
+ * アプリ内モーダル形式の確認ダイアログ。native confirm() の代替。
+ * @param {string} message
+ * @param {{title?:string, confirmText?:string, cancelText?:string, variant?:'default'|'danger'}} [opts]
+ * @returns {Promise<boolean>}
+ */
+function customConfirm(message, opts = {}) {
+  const title = opts.title || '確認';
+  const confirmText = opts.confirmText || 'OK';
+  const cancelText = opts.cancelText || 'キャンセル';
+  const variant = opts.variant || 'default';
+  return new Promise(resolve => {
+    let overlay = document.getElementById('customConfirmModal');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'customConfirmModal';
+      overlay.className = 'modal-overlay';
+      overlay.innerHTML =
+        '<div class="modal" style="max-width:460px;">' +
+          '<div class="modal-header"><span class="modal-title" id="cc-title"></span></div>' +
+          '<div class="modal-body"><div id="cc-message" style="font-size:13px;line-height:1.7;white-space:pre-wrap;color:var(--text);"></div></div>' +
+          '<div class="modal-footer">' +
+            '<button id="cc-cancel" class="btn btn-secondary btn-sm"></button>' +
+            '<button id="cc-ok" class="btn btn-sm"></button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(overlay);
+    }
+    overlay.querySelector('#cc-title').textContent = title;
+    overlay.querySelector('#cc-message').textContent = message;
+    const cancelBtn = overlay.querySelector('#cc-cancel');
+    const okBtn = overlay.querySelector('#cc-ok');
+    cancelBtn.textContent = cancelText;
+    okBtn.textContent = confirmText;
+    okBtn.className = 'btn btn-sm ' + (variant === 'danger' ? 'btn-danger' : 'btn-primary');
+    const cleanup = (result) => {
+      overlay.classList.remove('show');
+      cancelBtn.onclick = null;
+      okBtn.onclick = null;
+      overlay.onclick = null;
+      document.removeEventListener('keydown', onKey);
+      resolve(result);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); cleanup(false); }
+      else if (e.key === 'Enter') { e.preventDefault(); cleanup(true); }
+    };
+    cancelBtn.onclick = () => cleanup(false);
+    okBtn.onclick = () => cleanup(true);
+    overlay.onclick = (e) => { if (e.target === overlay) cleanup(false); };
+    document.addEventListener('keydown', onKey);
+    overlay.classList.add('show');
+    setTimeout(() => okBtn.focus(), 50);
+  });
+}
+
 let MATERIAL_DB = [];  // Loaded in init (Tridgeから)
 let USER_MATERIAL_DB = []; // ユーザー登録品目（localStorage永続化）
 let BUKARIKI_DB = [];  // Loaded in init
@@ -83,7 +139,7 @@ function saveUserMaterialDB() {
  * ユーザーDBに品目を登録（重複チェック付き）
  * @returns 'added' | 'updated' | 'cancelled'
  */
-function upsertUserMaterial(entry) {
+async function upsertUserMaterial(entry) {
   const nName = norm(entry.name);
   const nSpec = norm(entry.spec);
 
@@ -92,7 +148,7 @@ function upsertUserMaterial(entry) {
     m => norm(m.name) === nName && norm(m.spec) === nSpec
   );
   if (exactIdx >= 0) {
-    if (!confirm(`「${entry.name} ${entry.spec}」は既に登録済みです。上書きしますか？`)) {
+    if (!(await customConfirm(`「${entry.name} ${entry.spec}」は既に登録済みです。上書きしますか？`))) {
       return 'cancelled';
     }
     USER_MATERIAL_DB[exactIdx] = { ...USER_MATERIAL_DB[exactIdx], ...entry, updatedAt: Date.now() };
@@ -104,7 +160,7 @@ function upsertUserMaterial(entry) {
   const sameNames = USER_MATERIAL_DB.filter(m => norm(m.name) === nName);
   if (sameNames.length > 0) {
     const specList = sameNames.map(m => m.spec || '（規格なし）').join('、');
-    if (!confirm(`同じ品名で別規格が${sameNames.length}件登録済みです:\n${specList}\n\n新しい規格として追加しますか？`)) {
+    if (!(await customConfirm(`同じ品名で別規格が${sameNames.length}件登録済みです:\n${specList}\n\n新しい規格として追加しますか？`))) {
       return 'cancelled';
     }
   }

@@ -26,8 +26,8 @@ function saveApiKey() {
   showToast('APIキーを保存しました');
 }
 
-function clearApiKey() {
-  if (!confirm('保存済みのAPIキーを削除しますか？')) return;
+async function clearApiKey() {
+  if (!(await customConfirm('保存済みのAPIキーを削除しますか？', {variant:'danger', confirmText:'削除'}))) return;
   localStorage.removeItem(ANTHROPIC_KEY_STORAGE);
   document.getElementById('apiSettingsModal').classList.remove('show');
   showToast('APIキーを削除しました');
@@ -416,7 +416,7 @@ function _renderPreviewCategory(catName, resolvedItems, catTotal, catKosu) {
 
 let _currentAiDraft = null; // panel-ai / modal 共用
 
-function applyAiDraft() {
+async function applyAiDraft() {
   const draft = _currentAiDraft || document.getElementById('aiDraftBody')._draft;
   if (!draft) { showToast('データがありません'); return; }
 
@@ -424,14 +424,14 @@ function applyAiDraft() {
   let addedItems = 0;
 
   let skippedCats = [];
-  (draft.categories || []).forEach(cat => {
+  for (const cat of (draft.categories || [])) {
     const targetCat = _matchCategory(cat.name);
-    if (!targetCat) { skippedCats.push(cat.name); return; }
+    if (!targetCat) { skippedCats.push(cat.name); continue; }
 
     if (!items[targetCat.id]) items[targetCat.id] = [];
     const existing = items[targetCat.id].filter(i => i.name);
     if (existing.length > 0) {
-      if (!confirm(`「${targetCat.name}」には既に${existing.length}件の品目があります。上書きしますか？\n（キャンセルでこの工種をスキップ）`)) return;
+      if (!(await customConfirm(`「${targetCat.name}」には既に${existing.length}件の品目があります。上書きしますか？\n（キャンセルでこの工種をスキップ）`))) continue;
       items[targetCat.id] = [];
     }
 
@@ -446,7 +446,7 @@ function applyAiDraft() {
       }));
       addedItems++;
     });
-  });
+  }
 
   // モーダルを閉じる（panel-ai からの場合はモーダルは未使用）
   const aiModal = document.getElementById('aiDraftModal');

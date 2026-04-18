@@ -50,8 +50,8 @@ function updateZairyoBadge() {
 
 // ===== 取り外し =====
 
-function ejectKoshuTridge() {
-  if (!confirm('工種Tridgeを取り外しますか？\n工種・労務・得意先マスタがクリアされます。\n現在の見積データ（品目）は保持されます。')) return;
+async function ejectKoshuTridge() {
+  if (!(await customConfirm('工種Tridgeを取り外しますか？\n工種・労務・得意先マスタがクリアされます。\n現在の見積データ（品目）は保持されます。', {variant:'danger', confirmText:'取り外す'}))) return;
   TRIDGE_CLIENTS.length = 0;
   koshuTridgeLoaded = false;
   localStorage.removeItem('activeCategories');
@@ -63,8 +63,8 @@ function ejectKoshuTridge() {
   showDbOverlay();
 }
 
-function ejectZairyoTridge() {
-  if (!confirm('資材Tridgeを取り外しますか？\n資材マスタ・カテゴリマスタがクリアされます。')) return;
+async function ejectZairyoTridge() {
+  if (!(await customConfirm('資材Tridgeを取り外しますか？\n資材マスタ・カテゴリマスタがクリアされます。', {variant:'danger', confirmText:'取り外す'}))) return;
   MATERIAL_DB.length = 0;
   BUKARIKI_DB.length = 0;
   BUNRUI_DB.rows = []; BUNRUI_DB.keywords = [];

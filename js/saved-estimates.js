@@ -436,13 +436,13 @@ function _renderGroup(baseNo, list) {
 // ===== 見積読み込み =====
 
 /** 保存済みレコードを取得して確認ダイアログを表示する共通処理 */
-function _findAndConfirm(id, message) {
+async function _findAndConfirm(id, message) {
   const list = getSavedEstimates();
   const rec  = list.find(e => e.id === id);
   if (!rec) return null;
   const no   = rec.project.number || rec.baseNo;
   const name = rec.project.name || '（物件名なし）';
-  if (!confirm(`「${no} ${name}」${message}\n現在の編集内容は破棄されます。よろしいですか？`)) return null;
+  if (!(await customConfirm(`「${no} ${name}」${message}\n現在の編集内容は破棄されます。よろしいですか？`, {confirmText:'開く'}))) return null;
   closeSavedEstimatesModal();
   return rec;
 }
@@ -461,8 +461,8 @@ function _applyEstimateRecord(rec) {
   if (typeof showPresetSuggestion === 'function') showPresetSuggestion();
 }
 
-function loadSavedEstimate(id) {
-  const rec = _findAndConfirm(id, 'を開きます。');
+async function loadSavedEstimate(id) {
+  const rec = await _findAndConfirm(id, 'を開きます。');
   if (!rec) return;
 
   _currentEstimateId = rec.id;
@@ -475,8 +475,8 @@ function loadSavedEstimate(id) {
 }
 
 // コピーして新規作成（別物件として新規採番）
-function copyEstimate(id) {
-  const rec = _findAndConfirm(id, 'をコピーして新規作成します。');
+async function copyEstimate(id) {
+  const rec = await _findAndConfirm(id, 'をコピーして新規作成します。');
   if (!rec) return;
 
   _currentEstimateId = null;
@@ -517,8 +517,8 @@ function _restoreProjectForm() {
 
 // ===== 削除 =====
 
-function deleteSavedEstimate(id) {
-  if (!confirm('この版を削除しますか？')) return;
+async function deleteSavedEstimate(id) {
+  if (!(await customConfirm('この版を削除しますか？', {variant:'danger', confirmText:'削除'}))) return;
   const list = getSavedEstimates().filter(e => e.id !== id);
   _persistEstimates(list);
   if (_currentEstimateId === id) {
@@ -563,10 +563,10 @@ function exportSavedEstimates() {
   showToast(`${list.length}件の見積をバックアップしました`);
 }
 
-function importSavedEstimates(fileInput, mode) {
+async function importSavedEstimates(fileInput, mode) {
   const file = fileInput instanceof HTMLInputElement ? fileInput.files[0] : fileInput;
   if (!file) return;
-  if (mode === 'replace' && !confirm('既存の保存済み見積を全て削除して、バックアップファイルの内容で置き換えます。\nよろしいですか？')) return;
+  if (mode === 'replace' && !(await customConfirm('既存の保存済み見積を全て削除して、バックアップファイルの内容で置き換えます。\nよろしいですか？', {variant:'danger', confirmText:'削除して置き換える'}))) return;
   const reader = new FileReader();
   reader.onload = e => {
     try {
