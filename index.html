@@ -180,6 +180,21 @@
 
     <div class="content" id="content">
 
+      <!-- 案件サマリー（全パネル共通・折りたたみ） -->
+      <div class="card" id="projectSummaryCard" style="margin-bottom:12px;">
+        <div class="card-header" style="cursor:pointer;" onclick="toggleProjectSummary()">
+          <div>
+            <span class="card-title">案件サマリー</span>
+            <p style="font-size:12px;color:var(--text-sub);margin-top:2px;">必要な基本情報だけ上部に固定。詳細は折りたたみで管理。</p>
+          </div>
+          <button class="pbar-action-btn pbar-btn-outline" style="padding:6px 12px;font-size:12px;" id="projectSummaryToggle">詳細を開く</button>
+        </div>
+        <div id="projectSummaryBody" style="display:none;padding:14px 18px;">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;" id="projectSummaryGrid">
+          </div>
+        </div>
+      </div>
+
       <!-- ===== Panel: Project Info ===== -->
       <div class="panel active" id="panel-project">
         <div class="card">
@@ -329,21 +344,6 @@
 
           <!-- Left: Table area -->
           <div class="items-main">
-            <!-- 案件サマリー（折りたたみ） -->
-            <div class="card" id="projectSummaryCard" style="margin-bottom:12px;">
-              <div class="card-header" style="cursor:pointer;" onclick="toggleProjectSummary()">
-                <div>
-                  <span class="card-title">案件サマリー</span>
-                  <p style="font-size:12px;color:var(--text-sub);margin-top:2px;">必要な基本情報だけ上部に固定。詳細は折りたたみで管理。</p>
-                </div>
-                <button class="pbar-action-btn pbar-btn-outline" style="padding:6px 12px;font-size:12px;" id="projectSummaryToggle">詳細を開く</button>
-              </div>
-              <div id="projectSummaryBody" style="display:none;padding:14px 18px;">
-                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;" id="projectSummaryGrid">
-                </div>
-              </div>
-            </div>
-
             <!-- 明細テーブルカード -->
             <div class="card" id="itemTableCard" style="margin-bottom:0;">
               <div class="card-header" style="border-bottom:1px solid var(--border-light);">
