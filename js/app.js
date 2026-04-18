@@ -183,6 +183,15 @@ function _updateProjectBar() {
     if (project.location) { locEl.textContent = project.location; locEl.style.display = 'inline-block'; }
     else { locEl.style.display = 'none'; }
   }
+  // 労務単価バッジ
+  const laborEl = document.getElementById('pbarLabor');
+  if (laborEl) {
+    const sell = LABOR_RATES.sell || 0;
+    if (sell > 0) {
+      laborEl.textContent = '労務 ¥' + formatNum(sell) + '/人工';
+      laborEl.style.display = 'inline-block';
+    } else { laborEl.style.display = 'none'; }
+  }
 }
 
 // ===== AI PROJECT SUMMARY (panel-ai) =====
