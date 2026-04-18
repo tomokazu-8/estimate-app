@@ -194,6 +194,9 @@ tr:hover .row-delete { opacity:0.6; }
 
 /* ===== ITEMS PANEL: 2-column layout ===== */
 #panel-items.active { display:block; margin:-20px -24px; height:calc(100% + 40px); }
+/* panel-items表示中は.contentのスクロールバーを消す（items内部で独自スクロール） */
+.content:has(#panel-items.active) { overflow:hidden; }
+.content.content-no-scroll { overflow:hidden !important; }
 .items-layout { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:0; height:100%; }
 .items-main { min-width:0; overflow-y:auto; display:flex; flex-direction:column; padding:16px 0 16px 16px; scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
 .items-main::-webkit-scrollbar { width:6px; }

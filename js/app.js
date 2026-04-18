@@ -102,6 +102,10 @@ function navigate(panel, el) {
     });
   }
 
+  // panel-items表示中は.contentのスクロールを無効化（内部で独自スクロール）
+  const contentEl = document.getElementById('content');
+  if (contentEl) contentEl.classList.toggle('content-no-scroll', panel === 'items');
+
   _updateStepIndicator(panel);
   _updateProjectBar();
 
