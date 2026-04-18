@@ -16,6 +16,67 @@ function safeLocalStorageSet(key, value) {
 }
 
 /**
+ * 3択以上のアプリ内ダイアログ。
+ * @param {string} message
+ * @param {{label:string, value:any, variant?:'primary'|'secondary'|'danger'}[]} buttons 右から左に配置
+ * @param {string} [title]
+ * @returns {Promise<any>} クリックしたボタンのvalue、Escで null
+ */
+function customChoice(message, buttons, title = '確認') {
+  return new Promise(resolve => {
+    let overlay = document.getElementById('customChoiceModal');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'customChoiceModal';
+      overlay.className = 'modal-overlay';
+      overlay.innerHTML =
+        '<div class="modal" style="max-width:480px;">' +
+          '<div class="modal-header"><span class="modal-title" id="cch-title"></span></div>' +
+          '<div class="modal-body"><div id="cch-message" style="font-size:13px;line-height:1.7;white-space:pre-wrap;color:var(--text);"></div></div>' +
+          '<div class="modal-footer" id="cch-footer" style="flex-wrap:wrap;"></div>' +
+        '</div>';
+      document.body.appendChild(overlay);
+    }
+    overlay.querySelector('#cch-title').textContent = title;
+    overlay.querySelector('#cch-message').textContent = message;
+    const footer = overlay.querySelector('#cch-footer');
+    footer.innerHTML = '';
+    const cleanup = (result) => {
+      overlay.classList.remove('show');
+      overlay.onclick = null;
+      document.removeEventListener('keydown', onKey);
+      resolve(result);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); cleanup(null); }
+    };
+    buttons.forEach(b => {
+      const btn = document.createElement('button');
+      const variant = b.variant || 'secondary';
+      btn.className = 'btn btn-sm btn-' + variant;
+      btn.textContent = b.label;
+      btn.onclick = () => cleanup(b.value);
+      footer.appendChild(btn);
+    });
+    overlay.onclick = (e) => { if (e.target === overlay) cleanup(null); };
+    document.addEventListener('keydown', onKey);
+    overlay.classList.add('show');
+  });
+}
+
+// ===== ダーティフラグ（未保存変更フラグ） =====
+let _isDirty = false;
+function markDirty() {
+  _isDirty = true;
+  document.querySelectorAll('.dirty-indicator').forEach(el => el.style.display = 'inline-block');
+}
+function markClean() {
+  _isDirty = false;
+  document.querySelectorAll('.dirty-indicator').forEach(el => el.style.display = 'none');
+}
+function isDirty() { return _isDirty; }
+
+/**
  * アプリ内モーダル形式の確認ダイアログ。native confirm() の代替。
  * @param {string} message
  * @param {{title?:string, confirmText?:string, cancelText?:string, variant?:'default'|'danger'}} [opts]

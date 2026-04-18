@@ -158,7 +158,8 @@ function _closeSaveChoiceModal() {
 }
 
 // ===== 上書き保存 =====
-function saveEstimate() {
+function saveEstimate(opts = {}) {
+  const silent = opts.silent === true;
   // 見積番号未設定なら自動採番
   if (!project.number) {
     generateEstimateNo();
@@ -187,7 +188,8 @@ function saveEstimate() {
 
   _persistEstimates(list);
   _updateEstimateHeader();
-  showToast(`見積を保存しました（${project.number}）`);
+  if (typeof markClean === 'function') markClean();
+  if (!silent) showToast(`見積を保存しました（${project.number}）`);
 }
 
 // ===== 別名で保存（枝番を上げて新版作成） =====
@@ -457,6 +459,7 @@ function _applyEstimateRecord(rec) {
   _updateEstimateHeader();
   if (typeof _updatePresetLabel === 'function') _updatePresetLabel();
   if (typeof showPresetSuggestion === 'function') showPresetSuggestion();
+  if (typeof markClean === 'function') markClean();
 }
 
 async function loadSavedEstimate(id) {
@@ -491,6 +494,7 @@ async function copyEstimate(id) {
 
   _restoreProjectForm();
   _updateEstimateHeader();
+  if (typeof markDirty === 'function') markDirty();
   showToast(`コピーしました → ${project.number}（保存はまだされていません）`);
 }
 

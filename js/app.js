@@ -72,11 +72,18 @@ document.addEventListener('DOMContentLoaded', () => {
   showDbOverlay();
   loadDefaultDB().then(async () => {
     loadFromLocalStorage(); updateDbStatus(); recalcAll();
+    markClean(); // 初期ロード直後はクリーン
     renderDBTable();
     // ナレッジDB空チェック → 復元バナー表示
     checkKnowledgeRestore();
     // 得意先サジェスト用リストをナレッジDBから読み込み
     loadClientList();
+  });
+  // ブラウザ離脱時のサイレント自動保存（ダーティかつ必要条件を満たす場合のみ）
+  window.addEventListener('beforeunload', () => {
+    if (!isDirty()) return;
+    if (!project || !project.name || !project.name.trim()) return;
+    try { saveEstimate({silent:true}); } catch(e) {}
   });
 });
 
@@ -84,13 +91,39 @@ document.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey) {
     if (!e.shiftKey && e.key === 'z') { e.preventDefault(); undoAction(); }
     if (e.key === 'y' || (e.shiftKey && e.key === 'Z')) { e.preventDefault(); redoAction(); }
+    if (e.key === 's') { e.preventDefault(); saveEstimate(); }
   }
 });
 
 // ===== NAVIGATION =====
-function navigate(panel, el) {
+async function navigate(panel, el) {
   // summary → confirm へのエイリアス（後方互換）
   if (panel === 'summary') panel = 'confirm';
+
+  // 現在表示中のパネルを特定
+  const currentPanel = document.querySelector('.panel.active')?.id?.replace('panel-', '') || '';
+
+  // ダーティ時の保存フロー（同一パネルへの再ナビは除外）
+  if (currentPanel && currentPanel !== panel && isDirty()) {
+    // 初回（未採番・未保存）かつ必要条件が揃っていれば、サイレント自動保存
+    const hasEstId = typeof _currentEstimateId !== 'undefined' && _currentEstimateId;
+    if (!hasEstId && project && project.name && project.name.trim()) {
+      try { saveEstimate({silent:true}); } catch(e) { console.warn('auto-save failed:', e); }
+    } else if (hasEstId) {
+      // 保存済み見積のダーティ変更 → 3択
+      const choice = await customChoice(
+        '変更を保存してから移動しますか？',
+        [
+          {label:'キャンセル', value:'cancel', variant:'secondary'},
+          {label:'保存せず進む', value:'skip', variant:'secondary'},
+          {label:'保存して進む', value:'save', variant:'primary'},
+        ],
+        '未保存の変更があります'
+      );
+      if (choice === 'cancel' || choice === null) return;
+      if (choice === 'save') { try { saveEstimate({silent:true}); } catch(e) {} }
+    }
+  }
 
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.sidebar-item').forEach(s => s.classList.remove('active'));
@@ -256,6 +289,7 @@ function saveUndoState() {
   _redoStack = []; // 新しい操作でRedoスタックをクリア
   document.getElementById('backBtn').style.display = '';
   document.getElementById('redoBtn').style.display = 'none';
+  markDirty();
 }
 
 function toggleTopbarHelp() {
@@ -333,6 +367,7 @@ function updateProject() {
   _updatePresetLabel();
   // プロジェクトバー更新
   _updateProjectBar();
+  markDirty();
 }
 
 function _updatePresetLabel() {
@@ -1940,6 +1975,7 @@ async function resetToNewEstimate() {
   _updateProjectBar();
   renderCatTabs();
   renderItems();
+  markClean(); // リセット直後はクリーン
   showToast('新規見積を作成しました');
 }
 

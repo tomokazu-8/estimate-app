@@ -373,6 +373,7 @@
                   <button class="pbar-action-btn pbar-btn-dark" id="btnBasicView" onclick="setItemViewMode('basic')">基本表示</button>
                   <button class="pbar-action-btn pbar-btn-outline" id="btnExpandView" onclick="setItemViewMode('expand')">拡張表示</button>
                   <button class="pbar-action-btn pbar-btn-outline" id="btnBatchMode" onclick="toggleBatchMode()">一括操作</button>
+                  <button class="pbar-action-btn pbar-btn-violet" onclick="saveEstimate()" title="現在の内容を上書き保存 (Ctrl+S)">💾 上書き保存<span class="dirty-indicator" style="display:none;margin-left:4px;color:#fbbf24;">●</span></button>
                 </div>
               </div>
               <!-- 一括操作ツールバー -->
@@ -675,7 +676,7 @@
               </div>
             </div>
             <div style="display:flex;gap:8px;align-items:center;">
-              <button onclick="smartSave()" class="btn btn-primary" style="font-size:13px;padding:10px 20px;">💾 保存</button>
+              <button onclick="saveEstimate()" class="btn btn-primary" style="font-size:13px;padding:10px 20px;" title="上書き保存 (Ctrl+S)">💾 上書き保存<span class="dirty-indicator" style="display:none;margin-left:4px;color:#fbbf24;">●</span></button>
               <button onclick="exportEstimate()" class="btn btn-success" style="font-size:13px;padding:10px 20px;font-weight:600;">📊 Excel出力</button>
             </div>
           </div>
