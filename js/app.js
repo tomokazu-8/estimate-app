@@ -371,7 +371,7 @@ function showPresetSuggestion() {
       return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border:1px solid ${applied ? 'var(--green)' : 'var(--border)'};border-radius:10px;background:${applied ? '#f0fdf4' : '#fff'};">
         <span style="font-size:13px;color:var(--text);">${esc(p.name)}</span>
         ${applied
-          ? '<span style="padding:2px 10px;border-radius:10px;font-size:11px;font-weight:500;background:#d1fae5;color:#166534;">適用済み</span>'
+          ? `<button onclick="removeOneKoshu('${esc(p.id)}')" style="padding:3px 12px;border-radius:10px;font-size:11px;font-weight:500;background:#d1fae5;color:#166534;border:1px solid #bbf7d0;cursor:pointer;">適用済み</button>`
           : `<button onclick="applyOneKoshu('${esc(p.id)}')" style="padding:3px 12px;border-radius:10px;font-size:11px;font-weight:500;background:var(--accent-light);color:var(--accent);border:none;cursor:pointer;">適用</button>`
         }
       </div>`;
@@ -397,6 +397,21 @@ function applyOneKoshu(koshuId) {
   renderCatTabs();
   showPresetSuggestion(); // リスト更新
   showToast(`「${master.name}」を追加しました`);
+}
+
+// 工種を外す
+function removeOneKoshu(koshuId) {
+  const cat = activeCategories.find(c => c.id === koshuId);
+  if (!cat) return;
+  const catItems = (items[koshuId] || []).filter(i => i.name);
+  if (catItems.length > 0) {
+    if (!confirm(`「${cat.name}」には${catItems.length}件の品目があります。工種を外しますか？\n（品目データは保持されます）`)) return;
+  }
+  activeCategories = activeCategories.filter(c => c.id !== koshuId);
+  saveActiveCategories();
+  renderCatTabs();
+  showPresetSuggestion();
+  showToast(`「${cat.name}」を外しました`);
 }
 
 // カスタム工種を追加（プリセットカードから）
