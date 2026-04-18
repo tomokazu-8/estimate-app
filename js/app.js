@@ -896,7 +896,7 @@ function renderItems() {
 
     const isSelected = _selectedItems.has(item.id);
     return `
-    <tr data-id="${item.id}" class="${isAuto ? 'auto-calc' : ''}${item.rowType === 'expense' ? ' row-expense' : ''}${item.rowType === 'labor' ? ' row-labor' : ''}${isSelected ? ' row-selected' : ''}">
+    <tr data-id="${item.id}" draggable="true" ondragstart="_onRowDragStart(event)" ondragover="_onRowDragOver(event)" ondrop="_onRowDrop(event)" ondragend="_onRowDragEnd(event)" class="${isAuto ? 'auto-calc' : ''}${item.rowType === 'expense' ? ' row-expense' : ''}${item.rowType === 'labor' ? ' row-labor' : ''}${isSelected ? ' row-selected' : ''}">
       <td class="col-check td-center" style="padding:0 4px;">
         <input type="checkbox" id="chk-${item.id}" ${isSelected ? 'checked' : ''}
           onchange="toggleSelectItem(${item.id})" style="cursor:pointer;width:14px;height:14px;">
@@ -1173,6 +1173,51 @@ function moveItemDown(id) {
   saveUndoState();
   [list[idx], list[idx + 1]] = [list[idx + 1], list[idx]];
   renderItems();
+}
+
+// ===== ROW DRAG & DROP =====
+let _dragRowId = null;
+function _onRowDragStart(e) {
+  // input/select/textarea内からのドラッグは無効（テキスト選択を優先）
+  if (e.target.closest('input, select, textarea, button')) { e.preventDefault(); return; }
+  const tr = e.target.closest('tr');
+  if (!tr) return;
+  _dragRowId = parseInt(tr.dataset.id, 10);
+  tr.classList.add('row-dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', _dragRowId);
+}
+function _onRowDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const tr = e.target.closest('#itemBody tr');
+  if (!tr) return;
+  // ドロップ先のハイライト
+  document.querySelectorAll('#itemBody tr.row-drop-target').forEach(r => r.classList.remove('row-drop-target'));
+  tr.classList.add('row-drop-target');
+}
+function _onRowDrop(e) {
+  e.preventDefault();
+  const tr = e.target.closest('#itemBody tr');
+  if (!tr) return;
+  const dropId = parseInt(tr.dataset.id, 10);
+  if (isNaN(_dragRowId) || isNaN(dropId) || _dragRowId === dropId) return;
+  const list = items[currentCat];
+  if (!list) return;
+  const fromIdx = list.findIndex(i => i.id === _dragRowId);
+  const toIdx = list.findIndex(i => i.id === dropId);
+  if (fromIdx < 0 || toIdx < 0) return;
+  saveUndoState();
+  const [moved] = list.splice(fromIdx, 1);
+  list.splice(toIdx, 0, moved);
+  recalcExpenseAndLaborRows(currentCat);
+  renderItems();
+}
+function _onRowDragEnd(e) {
+  _dragRowId = null;
+  document.querySelectorAll('#itemBody tr.row-dragging, #itemBody tr.row-drop-target').forEach(r => {
+    r.classList.remove('row-dragging', 'row-drop-target');
+  });
 }
 
 // ===== VIEW MODE (基本/拡張 切替) =====

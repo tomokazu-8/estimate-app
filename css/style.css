@@ -231,6 +231,12 @@ tr:hover .row-delete { opacity:0.6; }
 tr:hover .row-move { opacity:0.5; }
 .row-move:hover { opacity:1 !important; color:var(--accent); }
 
+/* Row drag & drop */
+#itemBody tr[draggable="true"] { cursor:grab; }
+#itemBody tr[draggable="true"]:active { cursor:grabbing; }
+#itemBody tr.row-dragging { opacity:0.4; }
+#itemBody tr.row-drop-target td { border-top:2px solid var(--accent) !important; }
+
 /* Hide detail columns in items main table (basic view) */
 .items-main .col-detail { display:none; }
 /* Show detail columns in expand view */
