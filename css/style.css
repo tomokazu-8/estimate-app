@@ -192,11 +192,12 @@ tr:hover .row-delete { opacity:0.6; }
 .panel { display:none; }
 .panel.active { display:block; }
 
-/* ===== ITEMS PANEL: 2-column layout ===== */
-#panel-items.active { display:block; margin:-20px -24px; height:calc(100% + 40px); }
-.items-layout { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:16px; height:100%; padding:16px; }
-.items-main { min-width:0; overflow-y:auto; display:flex; flex-direction:column; }
-.items-right { overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; gap:12px; }
+/* ===== ITEMS PANEL: 2-column layout, single scroll ===== */
+#panel-items.active { display:block; height:100%; }
+.content.content-no-scroll { overflow:hidden !important; padding:0 !important; }
+.items-layout { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:16px; padding:16px; overflow-y:auto; height:100%; align-content:start; }
+.items-main { min-width:0; display:flex; flex-direction:column; }
+.items-right { overflow-x:hidden; display:flex; flex-direction:column; gap:12px; }
 .items-right .card { margin-bottom:0; }
 
 /* Right summary cards (mockup style) */
