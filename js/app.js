@@ -934,13 +934,16 @@ function renderItems() {
   }).join('');
 
   // tfoot のcolspan を可視列数に合わせて更新
-  // 列構成: チェックボックス(1) + 品名〜見積単価(14) + 歩掛(0〜3) = 合計列の前まで
-  const baseCols = 15; // チェック + 品名〜見積単価（歩掛除く）
-  const bukCols  = (showBuk1 ? 1 : 0) + (showBuk2 ? 1 : 0) + (showBuk3 ? 1 : 0);
+  const isExpanded = _itemViewMode === 'expand';
+  const batchVisible = _batchMode ? 1 : 0;
+  // 基本表示: (check) + 品名 + 規格 + 数量 + 単位 + 見積単価 = 合計列の前まで
+  // 拡張表示: + 定価 + 基準 + 原価掛 + 見積掛 + 原価単価 + 原価金額 + 歩掛1〜3
+  const detailCols = isExpanded ? (9 + (showBuk1?1:0) + (showBuk2?1:0) + (showBuk3?1:0)) : 0;
+  const colsBefore = batchVisible + 4 + detailCols; // check? + 品名〜単位(4) + detail列
   const tfoot = document.querySelector('#itemTable tfoot tr');
   if (tfoot) {
     tfoot.innerHTML = `
-      <td colspan="${baseCols + bukCols}" style="text-align:right;padding-right:12px;font-weight:600;">合　計</td>
+      <td colspan="${colsBefore}" style="text-align:right;padding-right:12px;font-weight:600;">合　計</td>
       <td class="td-right" id="catTotal" style="font-weight:700;"></td>
       <td colspan="2"></td>`;
   }
