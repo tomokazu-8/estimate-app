@@ -197,10 +197,8 @@ tr:hover .row-delete { opacity:0.6; }
 #panel-items.active { display:block; height:100%; }
 .content.content-no-scroll { overflow:hidden !important; padding:0 !important; }
 .items-layout { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:0; height:100%; }
-.items-main { min-width:0; overflow-y:auto; display:flex; flex-direction:column; padding:16px 0 16px 16px; scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
-.items-main::-webkit-scrollbar { width:6px; }
-.items-main::-webkit-scrollbar-track { background:transparent; }
-.items-main::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+.items-main { min-width:0; overflow-y:scroll; display:flex; flex-direction:column; padding:16px 0 16px 16px; scrollbar-width:none; }
+.items-main::-webkit-scrollbar { display:none; }
 .items-main .table-wrap { overflow-x:hidden; }
 .items-main table { table-layout:auto; }
 .items-main > .card { border-right:none; border-radius:var(--radius) 0 0 var(--radius); }
