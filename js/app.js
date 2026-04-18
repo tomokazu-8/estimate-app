@@ -335,14 +335,21 @@ function updateProject() {
 }
 
 function _updatePresetLabel() {
-  const label = document.getElementById('presetLabel');
-  if (!label) return;
+  const container = document.getElementById('presetList');
+  if (!container) return;
   const preset = getKoshuPreset(project.type, project.usage, project.struct);
-  if (project.type && project.usage) {
-    label.textContent = `${project.type}・${project.usage}（${project.struct || '—'}）→ ${preset.length}工種`;
-  } else {
-    label.textContent = '— 構造・新築/改修・用途を選択すると自動で工種を設定します';
+  if (!project.type || !project.usage) {
+    container.innerHTML = '<div style="font-size:12px;color:var(--text-dim);">構造・新築/改修・用途を選択してください</div>';
+    return;
   }
+  container.innerHTML = `
+    <div style="font-size:12px;color:var(--text-sub);margin-bottom:6px;">${esc(project.type)}・${esc(project.usage)}（${esc(project.struct || '—')}）→ ${preset.length}工種</div>
+    ${preset.map(p => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border:1px solid var(--border);border-radius:10px;">
+        <span style="font-size:13px;color:var(--text);">${esc(p.name)}</span>
+        <span style="padding:2px 10px;border-radius:10px;font-size:11px;font-weight:500;background:var(--accent-light);color:var(--accent);">適用</span>
+      </div>
+    `).join('')}`;
 }
 
 function applyKoshuPreset() {
