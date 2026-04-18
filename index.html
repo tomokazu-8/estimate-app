@@ -181,105 +181,119 @@
 
     <div class="content" id="content">
 
-      <!-- ===== Panel: Project Info (2-column mockup layout) ===== -->
+      <!-- ===== Panel: Project Info (2-column layout) ===== -->
       <div class="panel active" id="panel-project">
         <div style="display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start;">
 
-          <!-- Left: 案件基本情報 -->
-          <div class="card" style="margin-bottom:0;">
-            <div class="card-header">
-              <div>
-                <span class="card-title">案件基本情報</span>
-                <p style="font-size:12px;color:var(--text-sub);margin-top:2px;">まずはAI作成に必要な条件だけ先に入力します。詳細情報は後から追記できます。</p>
+          <!-- Left: 案件基本情報 + 次のアクション -->
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div class="card" style="margin-bottom:0;">
+              <div class="card-header">
+                <div>
+                  <span class="card-title">案件基本情報</span>
+                  <p style="font-size:12px;color:var(--text-sub);margin-top:2px;">AI作成に必要な条件を入力してください</p>
+                </div>
               </div>
-            </div>
-            <div class="card-body">
-              <div class="form-grid">
-                <div class="form-group" style="grid-column:span 2">
-                  <label class="form-label">物件名 *</label>
-                  <input type="text" class="form-input" id="pj-name" placeholder="例：（仮称）○○邸新築工事" oninput="updateProject()">
-                </div>
-                <div class="form-group">
-                  <label class="form-label">得意先（元請） *</label>
-                  <input type="text" class="form-input" id="pj-client" placeholder="例：○○工務店" oninput="updateProject(); updatePersonList()" list="clientList" autocomplete="off">
-                  <datalist id="clientList"></datalist>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">見積日</label>
-                  <input type="date" class="form-input" id="pj-date" oninput="updateProject()">
-                </div>
-                <div class="form-group">
-                  <label class="form-label">担当者</label>
-                  <input type="text" class="form-input" id="pj-person" value="八木橋　友和" oninput="updateProject()" list="personList" autocomplete="off">
-                  <datalist id="personList"></datalist>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">見積番号</label>
-                  <div style="display:flex;align-items:center;gap:6px;">
-                    <input type="text" class="form-input" id="pj-number" placeholder="保存時に自動採番" readonly style="background:#f1f5f9;cursor:default;flex:1;">
-                    <button onclick="setEstimateNoCounter()" title="カウンター設定" style="padding:5px 8px;font-size:11px;cursor:pointer;border:1px solid #d1d5db;border-radius:4px;background:#f9fafb;">⚙</button>
+              <div class="card-body">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                  <div class="form-group" style="grid-column:span 2">
+                    <label class="form-label">物件名 *</label>
+                    <input type="text" class="form-input" id="pj-name" placeholder="例：（仮称）○○邸新築工事" oninput="updateProject()">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">得意先（元請） *</label>
+                    <input type="text" class="form-input" id="pj-client" placeholder="例：○○工務店" oninput="updateProject(); updatePersonList()" list="clientList" autocomplete="off">
+                    <datalist id="clientList"></datalist>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">見積日</label>
+                    <input type="date" class="form-input" id="pj-date" oninput="updateProject()">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">担当者</label>
+                    <input type="text" class="form-input" id="pj-person" value="八木橋　友和" oninput="updateProject()" list="personList" autocomplete="off">
+                    <datalist id="personList"></datalist>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">見積番号</label>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                      <input type="text" class="form-input" id="pj-number" placeholder="保存時に自動採番" readonly style="background:#f1f5f9;cursor:default;flex:1;">
+                      <button onclick="setEstimateNoCounter()" title="カウンター設定" style="padding:5px 8px;font-size:11px;cursor:pointer;border:1px solid #d1d5db;border-radius:4px;background:#f9fafb;">⚙</button>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">構造 *</label>
+                    <select class="form-select" id="pj-struct" onchange="updateProject(); searchSimilar();">
+                      <option value="">選択</option>
+                      <option value="木造">木造</option>
+                      <option value="S造">S造</option>
+                      <option value="RC造">RC造</option>
+                      <option value="RC+木造">RC+木造</option>
+                      <option value="SRC造">SRC造</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">用途</label>
+                    <select class="form-select" id="pj-usage" onchange="updateProject(); searchSimilar();">
+                      <option value="">選択</option>
+                      <option value="住宅">住宅</option>
+                      <option value="集合住宅">集合住宅</option>
+                      <option value="事務所">事務所</option>
+                      <option value="店舗">店舗</option>
+                      <option value="倉庫">倉庫</option>
+                      <option value="工場">工場</option>
+                      <option value="保育園">保育園</option>
+                      <option value="スポーツ施設">スポーツ施設</option>
+                      <option value="その他">その他</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">新築/改修 *</label>
+                    <select class="form-select" id="pj-type" onchange="updateProject(); searchSimilar();">
+                      <option value="">選択</option>
+                      <option value="新築">新築</option>
+                      <option value="改修">改修</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">階数</label>
+                    <input type="number" class="form-input" id="pj-floors" placeholder="例：2" min="1" max="50" oninput="updateProject()">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">延床面積（㎡）</label>
+                    <input type="number" class="form-input" id="pj-area-sqm" placeholder="例：120.5" step="0.1" oninput="syncArea('sqm'); updateProject(); searchSimilar();">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">延床面積（坪）</label>
+                    <input type="number" class="form-input" id="pj-area-tsubo" placeholder="例：36.4" step="0.1" oninput="syncArea('tsubo'); updateProject();">
+                  </div>
+                  <div class="form-group" style="grid-column:span 2">
+                    <label class="form-label">施工場所</label>
+                    <input type="text" class="form-input" id="pj-location" placeholder="例：東京都品川区" oninput="updateProject()">
+                  </div>
+                  <div class="form-group" style="grid-column:span 2">
+                    <label class="form-label">工事概要・メモ（任意）</label>
+                    <textarea id="pj-memo" rows="3" placeholder="例: 1階キッチン・風呂・トイレの改修工事。照明はLEDダウンライト中心。" oninput="updateProject()"
+                      style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;resize:vertical;font-family:inherit;line-height:1.5;"></textarea>
                   </div>
                 </div>
-                <div class="form-group">
-                  <label class="form-label">構造 *</label>
-                  <select class="form-select" id="pj-struct" onchange="updateProject(); searchSimilar();">
-                    <option value="">選択</option>
-                    <option value="木造">木造</option>
-                    <option value="S造">S造</option>
-                    <option value="RC造">RC造</option>
-                    <option value="RC+木造">RC+木造</option>
-                    <option value="SRC造">SRC造</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">用途</label>
-                  <select class="form-select" id="pj-usage" onchange="updateProject(); searchSimilar();">
-                    <option value="">選択</option>
-                    <option value="住宅">住宅</option>
-                    <option value="集合住宅">集合住宅</option>
-                    <option value="事務所">事務所</option>
-                    <option value="店舗">店舗</option>
-                    <option value="倉庫">倉庫</option>
-                    <option value="工場">工場</option>
-                    <option value="保育園">保育園</option>
-                    <option value="スポーツ施設">スポーツ施設</option>
-                    <option value="その他">その他</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">新築/改修 *</label>
-                  <select class="form-select" id="pj-type" onchange="updateProject(); searchSimilar();">
-                    <option value="">選択</option>
-                    <option value="新築">新築</option>
-                    <option value="改修">改修</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">階数</label>
-                  <input type="number" class="form-input" id="pj-floors" placeholder="例：2" min="1" max="50" oninput="updateProject()">
-                </div>
-                <div class="form-group">
-                  <label class="form-label">延床面積（㎡）</label>
-                  <input type="number" class="form-input" id="pj-area-sqm" placeholder="例：120.5" step="0.1" oninput="syncArea('sqm'); updateProject(); searchSimilar();">
-                </div>
-                <div class="form-group">
-                  <label class="form-label">延床面積（坪）</label>
-                  <input type="number" class="form-input" id="pj-area-tsubo" placeholder="例：36.4" step="0.1" oninput="syncArea('tsubo'); updateProject();">
-                </div>
-                <div class="form-group" style="grid-column:span 2">
-                  <label class="form-label">施工場所</label>
-                  <input type="text" class="form-input" id="pj-location" placeholder="例：東京都品川区" oninput="updateProject()">
-                </div>
-                <div class="form-group" style="grid-column:span 2">
-                  <label class="form-label">工事概要・メモ（任意）</label>
-                  <textarea id="pj-memo" rows="3" placeholder="例: 1階キッチン・風呂・トイレの改修工事。照明はLEDダウンライト中心。" oninput="updateProject()"
-                    style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;resize:vertical;font-family:inherit;line-height:1.5;"></textarea>
-                </div>
+              </div>
+            </div>
+
+            <!-- 次のアクション -->
+            <div class="card" style="margin-bottom:0;">
+              <div class="card-header">
+                <span class="card-title">次のアクション</span>
+              </div>
+              <div class="card-body" style="padding:12px 16px;display:flex;gap:10px;flex-wrap:wrap;">
+                <button onclick="navigate('ai')" class="pbar-action-btn pbar-btn-violet" style="flex:1;padding:12px;font-size:14px;">AIで見積作成へ進む</button>
+                <button onclick="autoCreateEstimate()" class="pbar-action-btn pbar-btn-outline" style="flex:1;padding:12px;font-size:13px;">過去データから作成</button>
+                <button onclick="navigate('items')" class="pbar-action-btn pbar-btn-outline" style="flex:1;padding:12px;font-size:13px;">手動で明細作成</button>
               </div>
             </div>
           </div>
 
-          <!-- Right: 労務設定 + 工種プリセット + 次のアクション -->
+          <!-- Right: 労務設定 + 工種プリセット -->
           <div style="display:flex;flex-direction:column;gap:16px;">
             <!-- 労務設定 -->
             <div class="card" style="margin-bottom:0;">
@@ -317,18 +331,6 @@
                   <div style="font-size:12px;color:var(--text-dim);" id="presetLabel">構造・新築/改修・用途を選択してください</div>
                 </div>
                 <button onclick="applyKoshuPreset()" class="pbar-action-btn pbar-btn-outline" style="width:100%;margin-top:12px;padding:8px;font-size:13px;">工種を適用</button>
-              </div>
-            </div>
-
-            <!-- 次のアクション -->
-            <div class="card" style="margin-bottom:0;">
-              <div class="card-header">
-                <span class="card-title">次のアクション</span>
-              </div>
-              <div class="card-body" style="padding:12px 16px;display:flex;flex-direction:column;gap:10px;">
-                <button onclick="navigate('ai')" class="pbar-action-btn pbar-btn-violet" style="width:100%;padding:12px;font-size:14px;">AIで見積作成へ進む</button>
-                <button onclick="autoCreateEstimate()" class="pbar-action-btn pbar-btn-outline" style="width:100%;padding:12px;font-size:13px;">過去データから作成</button>
-                <button onclick="navigate('items')" class="pbar-action-btn pbar-btn-outline" style="width:100%;padding:12px;font-size:13px;">手動で明細作成</button>
               </div>
             </div>
           </div>
