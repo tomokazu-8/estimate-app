@@ -610,112 +610,105 @@ function getCatAmount(catId) {
 
 
 // 労務費・雑材料・運搬費の自動計算行を自動追加・更新する
+// syncLaborItemPrices は廃止 — 経費・労務費は手動追加+自動再計算
 function syncLaborItemPrices() {
+  // 後方互換のため関数は残すが、自動追加はしない
+  // 既存の経費・労務費行の金額を再計算するのみ
   if (!currentCat) return;
-  const list = items[currentCat];
-  if (!list) return;
-  const cat = activeCategories.find(c => c.id === currentCat);
-  const lb = calcLaborBreakdown(currentCat);
+  recalcExpenseAndLaborRows(currentCat);
+}
 
-  // 材料品目がなければ何もしない
-  if (lb.materialTotal <= 0 && lb.totalKosu <= 0 && lb.撤去Kosu <= 0 && lb.開口Kosu <= 0) return;
+// ===== 経費・労務費行の再計算 =====
+function recalcExpenseAndLaborRows(catId) {
+  const list = items[catId] || [];
 
-  const n = getLaborNames(currentCat);
-  const miscRate = cat?.miscRate ?? 0.05;
-
-  // 追加/更新する自動計算行の定義（有効フラグで制御）
-  const autoRows = [];
-  if (n.enableMisc !== false && lb.materialTotal > 0) {
-    autoRows.push({ name: n.misc || '雑材料消耗品', price: Math.round(lb.materialTotal * miscRate),
-      note: (miscRate * 100).toFixed(1) + '%', locked: false });
-  }
-  if (n.enableLabor1 !== false && lb.totalKosu > 0) {
-    autoRows.push({ name: n.labor1, price: calcLaborSell(lb.totalKosu),
-      note: lb.totalKosu.toFixed(2) + '人工', locked: true });
-  }
-  if (n.enableLabor2 !== false && lb.撤去Kosu > 0) {
-    autoRows.push({ name: n.labor2, price: calcLaborSell(lb.撤去Kosu),
-      note: lb.撤去Kosu.toFixed(2) + '人工', locked: true });
-  }
-  if (n.enableLabor3 !== false && lb.開口Kosu > 0) {
-    autoRows.push({ name: n.labor3, price: calcLaborSell(lb.開口Kosu),
-      note: lb.開口Kosu.toFixed(2) + '人工', locked: true });
-  }
-  if (n.enableTransport !== false && lb.materialTotal > 0) {
-    const transport = calcTransportForCat(cat, lb.materialTotal);
-    autoRows.push({ name: n.transport || '運搬費', price: transport,
-      note: (transport / lb.materialTotal * 100).toFixed(1) + '%', locked: false });
-  }
-
-  autoRows.forEach(({ name, price, note, locked }) => {
-    const exists = list.find(i => i.name === name);
-    if (!exists) {
-      list.push(createBlankItem({ name, qty: 1, price, amount: price, note }));
-    } else if (locked) {
-      exists.price  = price;
-      exists.amount = price;
-      exists.note   = note;
+  list.forEach((item, idx) => {
+    const rt = item.rowType || 'material';
+    if (rt === 'expense') {
+      _recalcExpenseRow(item, list, idx);
+    } else if (rt === 'labor') {
+      _recalcLaborRow(item, list, idx);
     }
   });
 }
 
-// ===== LABOR SECTION RENDERING (本丸EX準拠) =====
-function renderLaborSection() {
-  const lb = calcLaborBreakdown(currentCat);
-  
-  if (lb.materialTotal <= 0 && lb.totalKosu <= 0) {
-    document.getElementById('laborSection').style.display = 'none';
-    _laborSellTotal = 0;
+// 経費行の再計算
+function _recalcExpenseRow(item, list, idx) {
+  const method = item.expenseMethod || 'material_rate';
+  const rate = parseFloat(item.expenseRate) || 0;
+
+  if (method === 'fixed') {
+    // 固定金額: price はユーザー入力のまま
+    item.amount = parseFloat(item.price) || 0;
+    item.note = '固定金額';
     return;
   }
-  document.getElementById('laborSection').style.display = '';
-  
-  const rows = [];
-  const lr = AUTO_CALC.laborCostRatio;
-  const n = getLaborNames(currentCat);
-  const laborSellStr = '¥' + formatNum(LABOR_RATES.sell);
 
-  if (n.enableLabor1 !== false && lb.totalKosu > 0) {
-    const sell = calcLaborSell(lb.totalKosu);
-    rows.push({ name: n.labor1, basis: lb.totalKosu.toFixed(2) + '人工 × ' + laborSellStr, sell, cost: Math.round(sell * lr) });
+  // 計算ベースを決定
+  let base = 0;
+  if (method === 'material_rate') {
+    // この行より上の資材行の合計
+    for (let i = 0; i < idx; i++) {
+      if ((list[i].rowType || 'material') === 'material') base += parseFloat(list[i].amount) || 0;
+    }
+    item.note = '資材合計×' + rate + '%';
+  } else if (method === 'total_rate') {
+    // この行より上の全行（経費・労務費含む）の合計
+    for (let i = 0; i < idx; i++) base += parseFloat(list[i].amount) || 0;
+    item.note = '全体合計×' + rate + '%';
+  } else if (method === 'above_rate') {
+    // この行より上の全行の合計
+    for (let i = 0; i < idx; i++) base += parseFloat(list[i].amount) || 0;
+    item.note = '上記合計×' + rate + '%';
   }
-  if (n.enableLabor2 !== false && lb.撤去Kosu > 0) {
-    const sell = calcLaborSell(lb.撤去Kosu);
-    rows.push({ name: n.labor2, basis: lb.撤去Kosu.toFixed(2) + '人工 × ' + laborSellStr, sell, cost: Math.round(sell * lr) });
+
+  item.price = Math.round(base * rate / 100);
+  item.amount = item.price;
+  item.qty = 1;
+  item.unit = '式';
+}
+
+// 労務費行の再計算
+function _recalcLaborRow(item, list, idx) {
+  // この行より上の資材行から歩掛を集計
+  let totalKosu = 0;
+  const details = [];
+
+  for (let i = 0; i < idx; i++) {
+    const row = list[i];
+    if ((row.rowType || 'material') !== 'material') continue;
+    const qty = parseFloat(row.qty) || 0;
+    if (qty <= 0) continue;
+
+    const buk1Raw = row.bukariki1 !== undefined ? row.bukariki1 : (row.bukariki ?? '');
+    const buk = resolveBukariki(row.name, row.spec, buk1Raw);
+    const kosu = qty * buk.value;
+    totalKosu += kosu;
+    if (buk.value > 0) {
+      details.push({ name: row.name, qty, bukariki: buk.value, kosu });
+    }
   }
-  if (n.enableLabor3 !== false && lb.開口Kosu > 0) {
-    const sell = calcLaborSell(lb.開口Kosu);
-    rows.push({ name: n.labor3, basis: lb.開口Kosu.toFixed(2) + '人工 × ' + laborSellStr, sell, cost: Math.round(sell * lr) });
-  }
-  if (n.enableMisc !== false && lb.materialTotal > 0) {
-    const _miscCat = activeCategories.find(c => c.id === currentCat);
-    const rate = _miscCat?.miscRate ?? 0.05;
-    const sell = Math.round(lb.materialTotal * rate);
-    rows.push({ name: n.misc || '雑材料消耗品', basis: '材料費 × ' + (rate*100).toFixed(0) + '%', sell, cost: Math.round(sell * lr) });
-  }
-  if (n.enableTransport !== false && lb.materialTotal > 0) {
-    const t = calcTransport(lb.materialTotal);
-    rows.push({ name: n.transport || '運搬費', basis: '材料費規模別', sell: t, cost: Math.round(t * lr) });
-  }
-  
-  // Render table
-  let sellSum = 0, costSum = 0;
-  document.getElementById('laborBody').innerHTML = rows.map((r, i) => {
-    sellSum += r.sell; costSum += r.cost;
-    const ratio = r.sell > 0 ? (r.cost / r.sell * 100).toFixed(0) + '%' : '-';
-    return '<tr style="border-bottom:1px solid #e5e7eb;">' +
-      '<td class="td-center" style="font-size:11px;color:#6b7280;">'+(i+1)+'</td>' +
-      '<td style="font-weight:500;padding:6px 8px;">'+r.name+'</td>' +
-      '<td style="font-size:11px;color:#6b7280;padding:6px 4px;">'+r.basis+'</td>' +
-      '<td class="td-right" style="padding:6px 8px;">¥'+formatNum(r.sell)+'</td>' +
-      '<td class="td-right" style="padding:6px 8px;color:#6b7280;">¥'+formatNum(r.cost)+'</td>' +
-      '<td class="td-right" style="padding:6px 4px;font-size:11px;">'+ratio+'</td></tr>';
-  }).join('');
-  
-  document.getElementById('laborSellTotal').textContent = '¥' + formatNum(sellSum);
-  document.getElementById('laborCostTotal').textContent = '¥' + formatNum(costSum);
-  document.getElementById('laborRatioTotal').textContent = sellSum > 0 ? (costSum/sellSum*100).toFixed(0)+'%' : '-';
-  _laborSellTotal = sellSum;
+
+  item.price = Math.round(totalKosu * LABOR_RATES.sell);
+  item.amount = item.price;
+  item.qty = 1;
+  item.unit = '式';
+  item.note = totalKosu.toFixed(2) + '人工';
+  item._laborDetails = details; // 詳細表示用（内部データ）
+  item._laborKosu = totalKosu;
+}
+
+// ===== LABOR SECTION (廃止 → _laborSellTotal の計算のみ残す) =====
+function renderLaborSection() {
+  // laborSectionカードは削除済み。経費・労務費行の合計を _laborSellTotal に反映
+  const list = items[currentCat] || [];
+  _laborSellTotal = 0;
+  list.forEach(item => {
+    const rt = item.rowType || 'material';
+    if (rt === 'expense' || rt === 'labor') {
+      _laborSellTotal += parseFloat(item.amount) || 0;
+    }
+  });
 }
 
 function showLaborDetail() {
@@ -900,7 +893,7 @@ function renderItems() {
 
     const isSelected = _selectedItems.has(item.id);
     return `
-    <tr data-id="${item.id}" class="${isAuto ? 'auto-calc' : ''}${isSelected ? ' row-selected' : ''}">
+    <tr data-id="${item.id}" class="${isAuto ? 'auto-calc' : ''}${item.rowType === 'expense' ? ' row-expense' : ''}${item.rowType === 'labor' ? ' row-labor' : ''}${isSelected ? ' row-selected' : ''}">
       <td class="col-check td-center" style="padding:0 4px;">
         <input type="checkbox" id="chk-${item.id}" ${isSelected ? 'checked' : ''}
           onchange="toggleSelectItem(${item.id})" style="cursor:pointer;width:14px;height:14px;">
@@ -1062,9 +1055,14 @@ function renderDetailPane(itemId) {
     _selectedDetailId = null;
     return;
   }
-  const isAuto = isAutoName(item.name);
+
+  const rt = item.rowType || 'material';
+  if (rt === 'expense') { _renderExpenseDetail(pane, item, itemId, list); return; }
+  if (rt === 'labor') { _renderLaborDetail(pane, item, itemId, list); return; }
+
+  // === パターンA: 資材行 ===
+  const isAuto = isAutoName(item.name, item);
   const dis = isAuto ? 'disabled style="background:var(--bg);color:var(--text-dim);"' : '';
-  // 原価計算（表示用）
   const listP = parseFloat(item.listPrice) || 0;
   const baseP = parseFloat(item.basePrice) || 0;
   const effBase = listP > 0 ? listP : baseP;
@@ -1169,6 +1167,114 @@ function updateDetailField(itemId, field, value) {
   // renderItems() -> renderDetailPane() は自動で呼ばれる
 }
 
+// === パターンB: 経費行の詳細パネル ===
+function _renderExpenseDetail(pane, item, itemId, list) {
+  const idx = list.indexOf(item);
+  const method = item.expenseMethod || 'material_rate';
+  const rate = item.expenseRate || '';
+  const isFixed = method === 'fixed';
+
+  // 算出根拠を計算
+  let base = 0;
+  if (method === 'material_rate') {
+    for (let i = 0; i < idx; i++) { if ((list[i].rowType || 'material') === 'material') base += parseFloat(list[i].amount) || 0; }
+  } else if (method === 'total_rate' || method === 'above_rate') {
+    for (let i = 0; i < idx; i++) base += parseFloat(list[i].amount) || 0;
+  }
+  const methodLabel = EXPENSE_METHODS.find(m => m.id === method)?.label || '';
+  const basisText = isFixed ? '手動入力金額' : `${methodLabel} ¥${formatNum(Math.round(base))} × ${rate}%`;
+
+  pane.innerHTML = `
+    <div class="detail-form">
+      <div class="form-group">
+        <label class="form-label">経費項目名</label>
+        <input class="form-input" value="${esc(item.name)}" onchange="updateDetailField(${itemId},'name',this.value)">
+      </div>
+      <div class="detail-separator"></div>
+      <div class="form-group">
+        <label class="form-label">算出方法</label>
+        <select class="form-select" onchange="updateDetailField(${itemId},'expenseMethod',this.value)" style="border-radius:10px;padding:8px 10px;">
+          ${EXPENSE_METHODS.map(m => `<option value="${m.id}"${m.id === method ? ' selected' : ''}>${m.label}</option>`).join('')}
+        </select>
+      </div>
+      ${isFixed ? `
+      <div class="form-group">
+        <label class="form-label">金額</label>
+        <input class="form-input num" value="${item.price||''}" onchange="updateDetailField(${itemId},'price',this.value)" type="number" step="any">
+      </div>` : `
+      <div class="form-group">
+        <label class="form-label">経費率（%）</label>
+        <input class="form-input num" value="${rate}" onchange="updateDetailField(${itemId},'expenseRate',this.value)" type="number" step="0.1">
+      </div>`}
+      <div class="detail-separator"></div>
+      <div class="form-group">
+        <label class="form-label">算出根拠</label>
+        <div class="detail-calc-value" style="font-size:11px;">${basisText}</div>
+      </div>
+      <div class="detail-grid-2">
+        <div class="form-group">
+          <label class="form-label">見積金額</label>
+          <div class="detail-calc-value">¥${formatNum(Math.round(parseFloat(item.amount) || 0))}</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">原価金額</label>
+          <div class="detail-calc-value">¥${formatNum(Math.round((parseFloat(item.amount) || 0) * (AUTO_CALC.laborCostRatio || 0.72)))}</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+// === パターンC: 労務費行の詳細パネル ===
+function _renderLaborDetail(pane, item, itemId, list) {
+  const laborType = item.laborType || item.name || '';
+  const kosu = item._laborKosu || 0;
+  const details = item._laborDetails || [];
+
+  pane.innerHTML = `
+    <div class="detail-form">
+      <div class="form-group">
+        <label class="form-label">労務費名称</label>
+        <select class="form-select" onchange="updateDetailField(${itemId},'laborType',this.value);updateDetailField(${itemId},'name',this.value)" style="border-radius:10px;padding:8px 10px;">
+          ${LABOR_TYPE_OPTIONS.map(t => `<option${t === laborType ? ' selected' : ''}>${t}</option>`).join('')}
+          <option value="_custom"${!LABOR_TYPE_OPTIONS.includes(laborType) && laborType ? ' selected' : ''}>手動入力</option>
+        </select>
+      </div>
+      ${!LABOR_TYPE_OPTIONS.includes(laborType) && laborType !== '_custom' ? `
+      <div class="form-group">
+        <label class="form-label">カスタム名称</label>
+        <input class="form-input" value="${esc(laborType)}" onchange="updateDetailField(${itemId},'laborType',this.value);updateDetailField(${itemId},'name',this.value)">
+      </div>` : ''}
+      <div class="detail-separator"></div>
+      <div class="form-group">
+        <label class="form-label">歩掛合計</label>
+        <div class="detail-calc-value">${kosu.toFixed(2)} 人工</div>
+      </div>
+      <div class="detail-separator"></div>
+      <div class="form-group">
+        <label class="form-label">歩掛の内訳</label>
+        <div style="max-height:160px;overflow-y:auto;font-size:11px;color:var(--text-sub);line-height:1.8;">
+          ${details.length > 0 ? details.map(d =>
+            `<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border-light);padding:2px 0;">
+              <span>${esc(d.name)}</span>
+              <span style="font-family:'JetBrains Mono',monospace;">${d.qty}×${d.bukariki.toFixed(3)}=${d.kosu.toFixed(2)}</span>
+            </div>`
+          ).join('') : '<div style="color:var(--text-dim);text-align:center;padding:8px 0;">この行より上に資材行がありません</div>'}
+        </div>
+      </div>
+      <div class="detail-separator"></div>
+      <div class="detail-grid-2">
+        <div class="form-group">
+          <label class="form-label">見積金額</label>
+          <div class="detail-calc-value">¥${formatNum(Math.round(parseFloat(item.amount) || 0))}</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">原価金額</label>
+          <div class="detail-calc-value">¥${formatNum(Math.round(kosu * LABOR_RATES.cost))}</div>
+        </div>
+      </div>
+    </div>`;
+}
+
 // ===== DBに登録（ユーザー品目DB） =====
 function registerItemToUserDB(itemId) {
   const list = items[currentCat] || [];
@@ -1227,27 +1333,73 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-function addItem() {
+function addItem(rowType) {
   if (!currentCat) { showToast('工種タブを選択してください'); return; }
+  // タイプ未指定なら選択メニュー表示
+  if (!rowType) {
+    _showAddItemMenu();
+    return;
+  }
   try {
     saveUndoState();
     if (!items[currentCat]) items[currentCat] = [];
-    const newItem = createBlankItem();
+    const overrides = { rowType };
+    if (rowType === 'expense') {
+      overrides.name = '経費';
+      overrides.qty = 1;
+      overrides.unit = '式';
+      overrides.expenseMethod = 'material_rate';
+      overrides.expenseRate = 5;
+    } else if (rowType === 'labor') {
+      overrides.name = '電工労務費';
+      overrides.qty = 1;
+      overrides.unit = '式';
+      overrides.laborType = '電工労務費';
+    }
+    // 同名チェック（経費・労務費）
+    if (rowType !== 'material') {
+      const existing = items[currentCat].find(i => i.name === overrides.name && (i.rowType || 'material') === rowType);
+      if (existing) {
+        if (!confirm(`「${overrides.name}」は既にこの工種に存在します。追加しますか？`)) return;
+      }
+    }
+    const newItem = createBlankItem(overrides);
     items[currentCat].push(newItem);
+    recalcExpenseAndLaborRows(currentCat);
     renderItems();
     setTimeout(() => {
       const rows = document.querySelectorAll('#itemBody tr');
       if (rows.length) {
         const lastRow = rows[rows.length - 1];
         lastRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-        const nameInput = lastRow.querySelector('input:not([type="checkbox"])');
-        if (nameInput) nameInput.focus();
+        selectDetailRow(newItem.id);
       }
     }, 50);
   } catch(e) {
     console.error('addItem error:', e);
     showToast('エラー: ' + e.message);
   }
+}
+
+// 行追加メニュー表示
+function _showAddItemMenu() {
+  // シンプルなドロップダウンメニュー
+  const existing = document.getElementById('addItemMenu');
+  if (existing) { existing.remove(); return; }
+  const btn = document.querySelector('[onclick="addItem()"]');
+  if (!btn) { addItem('material'); return; }
+  const rect = btn.getBoundingClientRect();
+  const menu = document.createElement('div');
+  menu.id = 'addItemMenu';
+  menu.style.cssText = `position:fixed;top:${rect.bottom+4}px;left:${rect.left}px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.15);z-index:500;min-width:180px;padding:6px;`;
+  menu.innerHTML = `
+    <div class="add-menu-item" onclick="document.getElementById('addItemMenu').remove();addItem('material')">📦 資材行</div>
+    <div class="add-menu-item" onclick="document.getElementById('addItemMenu').remove();addItem('expense')">📊 経費行</div>
+    <div class="add-menu-item" onclick="document.getElementById('addItemMenu').remove();addItem('labor')">👷 労務費行</div>`;
+  document.body.appendChild(menu);
+  setTimeout(() => document.addEventListener('click', function _close(e) {
+    if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', _close); }
+  }), 10);
 }
 
 // addAutoCalcRows is in calc-engine.js

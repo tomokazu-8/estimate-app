@@ -172,9 +172,9 @@ function getKoshuPreset(type, usage, struct) {
   return ids.map(id => KOSHU_MASTER.find(m => m.id === id)).filter(Boolean);
 }
 
-// 自動計算行の名称リスト（labor.js / calc-engine.js / app.js で共有）
-// 自動計算行の判定（LABOR_ROW_NAMESの現在値も含める）
-function isAutoName(name) {
+// 自動計算行の判定（rowTypeベース + 旧名称との後方互換）
+function isAutoName(name, item) {
+  if (item && (item.rowType === 'expense' || item.rowType === 'labor')) return true;
   const staticNames = [
     '雑材料消耗品', '電工労務費', '器具取付費', '器具取付け費', '器具取付け接続費',
     '埋込器具用天井材開口費', '天井材開口費', '天井及び壁材開口費', '運搬費', '機器取付費',
@@ -184,8 +184,9 @@ function isAutoName(name) {
   return _allLaborNames().has(name);
 }
 
-// 労務費・経費から自動算出され価格が固定される行（手動変更不可）
-function isLaborLocked(name) {
+// 労務費・経費行の判定（価格が自動算出される行）
+function isLaborLocked(name, item) {
+  if (item && (item.rowType === 'expense' || item.rowType === 'labor')) return true;
   const staticNames = [
     '電工労務費', '器具取付費', '機器取付費',
     '機器取付け及び試験調整費', '埋込器具用天井材開口費',
@@ -194,6 +195,20 @@ function isLaborLocked(name) {
   if (staticNames.includes(name)) return true;
   return _allLaborNames().has(name);
 }
+
+// 労務費名称の選択肢
+const LABOR_TYPE_OPTIONS = [
+  '電工労務費', '器具取付け接続費', '既設器具撤去処分費',
+  '天井材開口費', '機器取付け接続費',
+];
+
+// 経費の算出方法
+const EXPENSE_METHODS = [
+  { id: 'material_rate', label: '資材合計に対する率' },
+  { id: 'total_rate',    label: '全体合計に対する率' },
+  { id: 'above_rate',    label: 'この行より上の合計に対する率' },
+  { id: 'fixed',         label: '固定金額（手動入力）' },
+];
 
 // ===== AUTO-CALC RULES =====
 const AUTO_CALC = {
@@ -302,19 +317,26 @@ let customCatCounter = parseInt(localStorage.getItem('customCatCounter') || '10'
 
 // ===== SHARED UTILITIES (used by app.js, tridge-manager.js, etc.) =====
 // 品目オブジェクトの雛型を生成（全フィールドのデフォルト値を一元管理）
+// rowType: 'material'(資材,デフォルト), 'expense'(経費), 'labor'(労務費)
 function createBlankItem(overrides) {
   return Object.assign({
     id: itemIdCounter++,
+    rowType: 'material',  // 'material' | 'expense' | 'labor'
     name: '', spec: '', qty: '', unit: '式', price: '', amount: 0, note: '',
     bukariki1: '', bukariki2: '', bukariki3: '',
     listPrice: '', basePrice: '', costRate: '', sellRate: '',
+    // 経費行用
+    expenseMethod: 'material_rate', // 'material_rate'|'total_rate'|'above_rate'|'fixed'
+    expenseRate: '',
+    // 労務費行用
+    laborType: '', // 労務費名称
   }, overrides);
 }
 
-// 指定工種の材料費小計（自動計算行を除く品目の amount 合計）
+// 指定工種の材料費小計（資材行のみの amount 合計）
 function calcMaterialTotal(catId) {
   return (items[catId] || [])
-    .filter(i => !isAutoName(i.name))
+    .filter(i => (i.rowType || 'material') === 'material' && !isAutoName(i.name, i))
     .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
 }
 
