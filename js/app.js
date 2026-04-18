@@ -65,6 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCatTabs();
   _updateProjectBar();
   _updateStepIndicator('project');
+  loadUserMaterialDB();
   showDbOverlay();
   loadDefaultDB().then(async () => {
     loadFromLocalStorage(); updateDbStatus(); recalcAll();
@@ -1158,8 +1159,8 @@ function renderDetailPane(itemId) {
         <textarea class="form-input" onchange="updateDetailField(${itemId},'note',this.value)" style="min-height:64px;resize:vertical;border-radius:10px;">${esc(item.note || '')}</textarea>
       </div>
       <div class="detail-grid-2" style="padding-top:4px;">
-        <button class="pbar-action-btn pbar-btn-outline" style="padding:8px;font-size:13px;" onclick="openSearchModal(${itemId})">AI補完</button>
-        <button class="pbar-action-btn" style="padding:8px;font-size:13px;background:var(--accent);border-color:var(--accent);color:#fff;" onclick="renderDetailPane(${itemId})">変更を反映</button>
+        <button class="pbar-action-btn pbar-btn-outline" style="padding:8px;font-size:13px;" onclick="openSearchModal(${itemId})">DB検索</button>
+        <button class="pbar-action-btn" style="padding:8px;font-size:13px;background:var(--accent);border-color:var(--accent);color:#fff;" onclick="registerItemToUserDB(${itemId})">DBに登録</button>
       </div>
     </div>`;
 }
@@ -1167,6 +1168,43 @@ function renderDetailPane(itemId) {
 function updateDetailField(itemId, field, value) {
   updateItem(itemId, field, value);
   // renderItems() -> renderDetailPane() は自動で呼ばれる
+}
+
+// ===== DBに登録（ユーザー品目DB） =====
+function registerItemToUserDB(itemId) {
+  const list = items[currentCat] || [];
+  const item = list.find(i => i.id === itemId);
+  if (!item || !item.name) { showToast('品名を入力してください'); return; }
+
+  // カテゴリ自動判定
+  const autoCategory = detectMaterialCategory(item.name, item.spec);
+  const catLabel = CAT_LABELS[autoCategory] || '副材・消耗品';
+
+  // カテゴリ確認ダイアログ
+  const allCats = MATERIAL_CATEGORIES.map(c => c.id + ':' + (CAT_LABELS[c.id] || c.id));
+  const catChoice = prompt(
+    `カテゴリを確認してください（自動判定: ${catLabel}）\n\n変更する場合はIDを入力:\n${allCats.join('\n')}`,
+    autoCategory
+  );
+  if (catChoice === null) return; // キャンセル
+  const finalCategory = catChoice || autoCategory;
+
+  const entry = {
+    name: item.name,
+    spec: item.spec || '',
+    unit: item.unit || '',
+    listPrice: parseFloat(item.listPrice) || 0,
+    basePrice: parseFloat(item.basePrice) || 0,
+    costRate: parseFloat(item.costRate) || 0,
+    sellRate: parseFloat(item.sellRate) || 0,
+    bukariki1: parseFloat(item.bukariki1) || 0,
+    category: finalCategory,
+    source: 'user',
+  };
+
+  const result = upsertUserMaterial(entry);
+  if (result === 'added') showToast(`「${item.name}」をユーザーDBに登録しました`);
+  else if (result === 'updated') showToast(`「${item.name}」を上書き更新しました`);
 }
 
 // 行クリック・フォーカスイベント — inputにフォーカスしても行選択する

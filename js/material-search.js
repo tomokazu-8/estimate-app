@@ -64,16 +64,27 @@ function searchMaterial() {
   const query = norm(document.getElementById('searchQuery').value).trim();
   const catFilter = document.getElementById('searchCatFilter').value;
 
-  let results = MATERIAL_DB;
+  // Tridge DB + ユーザーDB を統合して検索
+  const userEntries = (USER_MATERIAL_DB || []).map(u => ({
+    n: u.name, s: u.spec, u: u.unit,
+    ep: u.basePrice || u.listPrice || 0,
+    cp: (u.basePrice || u.listPrice || 0) * (u.costRate || 0.75),
+    r: u.costRate || 0, c: u.category || 'misc',
+    _userDB: true,
+  }));
+  let allDB = [...MATERIAL_DB, ...userEntries];
+  let results = allDB;
   if (catFilter) results = results.filter(m => m.c === catFilter);
   results = filterMaterialsByTerms(results, query, 100);
 
-  document.getElementById('searchCount').textContent = `${results.length}件表示（全${MATERIAL_DB.length}品目）`;
+  const totalCount = allDB.length;
+  document.getElementById('searchCount').textContent = `${results.length}件表示（全${totalCount}品目${userEntries.length > 0 ? '・ユーザー登録'+userEntries.length+'件含む' : ''}）`;
   document.getElementById('searchBody').innerHTML = results.map((m, i) => {
     const catLabel = CAT_LABELS[m.c] || m.c;
+    const srcBadge = m._userDB ? '<span class="tag tag-green" style="margin-right:3px;font-size:9px;">自分</span>' : '';
     return `<tr>
       <td style="font-size:11px;">
-        <span class="tag tag-blue" style="margin-right:4px;font-size:9px;">${esc(catLabel)}</span>${esc(m.n)}
+        ${srcBadge}<span class="tag tag-blue" style="margin-right:4px;font-size:9px;">${esc(catLabel)}</span>${esc(m.n)}
       </td>
       <td style="font-size:11px;color:var(--text-sub);" title="${esc(m.s)}">${esc(m.s)}</td>
       <td class="td-center" style="font-size:11px;">${m.u}</td>
@@ -113,7 +124,14 @@ function showSuggestions(itemId, query) {
   const el = document.getElementById('suggest-' + itemId);
   if (!el) return;
 
-  const matches = filterMaterialsByTerms(MATERIAL_DB, query, 8);
+  // Tridge DB + ユーザーDB を統合してサジェスト
+  const userEntries = (USER_MATERIAL_DB || []).map(u => ({
+    n: u.name, s: u.spec, u: u.unit,
+    ep: u.basePrice || u.listPrice || 0,
+    cp: (u.basePrice || u.listPrice || 0) * (u.costRate || 0.75),
+    r: u.costRate || 0, c: u.category || 'misc',
+  }));
+  const matches = filterMaterialsByTerms([...userEntries, ...MATERIAL_DB], query, 8);
   if (!query || query.length < 2 || matches.length === 0) {
     el.classList.remove('show');
     return;

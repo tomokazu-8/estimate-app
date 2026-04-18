@@ -15,7 +15,8 @@ function safeLocalStorageSet(key, value) {
   }
 }
 
-let MATERIAL_DB = [];  // Loaded in init
+let MATERIAL_DB = [];  // Loaded in init (Tridgeから)
+let USER_MATERIAL_DB = []; // ユーザー登録品目（localStorage永続化）
 let BUKARIKI_DB = [];  // Loaded in init
 let BUNRUI_DB = { rows: [], keywords: [] };  // 分類マスタ（Tridgeから読み込み）
 let LABOR_RATES = { sell: 19000, cost: 12000 };
@@ -58,6 +59,62 @@ function detectMaterialCategory(name, spec) {
     if (cat.keywords.some(k => n.includes(norm(k)))) return cat.id;
   }
   return 'misc'; // デフォルト
+}
+
+// ===== USER MATERIAL DB (ユーザー登録品目) =====
+const USER_MATERIAL_DB_KEY = 'userMaterialDB';
+
+function loadUserMaterialDB() {
+  try {
+    const raw = localStorage.getItem(USER_MATERIAL_DB_KEY);
+    if (raw) {
+      USER_MATERIAL_DB = JSON.parse(raw);
+    }
+  } catch (e) {
+    console.warn('USER_MATERIAL_DB load failed:', e);
+  }
+}
+
+function saveUserMaterialDB() {
+  safeLocalStorageSet(USER_MATERIAL_DB_KEY, JSON.stringify(USER_MATERIAL_DB));
+}
+
+/**
+ * ユーザーDBに品目を登録（重複チェック付き）
+ * @returns 'added' | 'updated' | 'cancelled'
+ */
+function upsertUserMaterial(entry) {
+  const nName = norm(entry.name);
+  const nSpec = norm(entry.spec);
+
+  // 完全一致チェック（品名+規格）
+  const exactIdx = USER_MATERIAL_DB.findIndex(
+    m => norm(m.name) === nName && norm(m.spec) === nSpec
+  );
+  if (exactIdx >= 0) {
+    if (!confirm(`「${entry.name} ${entry.spec}」は既に登録済みです。上書きしますか？`)) {
+      return 'cancelled';
+    }
+    USER_MATERIAL_DB[exactIdx] = { ...USER_MATERIAL_DB[exactIdx], ...entry, updatedAt: Date.now() };
+    saveUserMaterialDB();
+    return 'updated';
+  }
+
+  // 品名一致・規格違いチェック
+  const sameNames = USER_MATERIAL_DB.filter(m => norm(m.name) === nName);
+  if (sameNames.length > 0) {
+    const specList = sameNames.map(m => m.spec || '（規格なし）').join('、');
+    if (!confirm(`同じ品名で別規格が${sameNames.length}件登録済みです:\n${specList}\n\n新しい規格として追加しますか？`)) {
+      return 'cancelled';
+    }
+  }
+
+  // 新規追加
+  entry.createdAt = Date.now();
+  entry.updatedAt = Date.now();
+  USER_MATERIAL_DB.push(entry);
+  saveUserMaterialDB();
+  return 'added';
 }
 
 // ===== 物件タイプ別 工種プリセット =====
