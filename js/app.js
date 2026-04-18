@@ -1915,6 +1915,37 @@ function syncLaborSettingsFromForm() {
   setLaborRates(sell, cost);
   project.laborSell = sell || '';
   project.laborCost = cost || '';
+  // ％値を更新
+  const pctInput = document.getElementById('pj-labor-cost-pct');
+  if (pctInput && sell > 0) pctInput.value = (cost / sell * 100).toFixed(1);
+  _updateProjectBar();
+  recalcAll();
+}
+
+// 原価単価を金額入力から同期
+function syncLaborCostFromAmount() {
+  const sell = parseFloat(document.getElementById('pj-labor-sell').value) || 0;
+  const cost = parseFloat(document.getElementById('pj-labor-cost').value) || 0;
+  setLaborRates(sell, cost);
+  project.laborSell = sell || '';
+  project.laborCost = cost || '';
+  const pctInput = document.getElementById('pj-labor-cost-pct');
+  if (pctInput && sell > 0) pctInput.value = (cost / sell * 100).toFixed(1);
+  _updateProjectBar();
+  recalcAll();
+}
+
+// 原価単価を％入力から同期
+function syncLaborCostFromPct() {
+  const sell = parseFloat(document.getElementById('pj-labor-sell').value) || 0;
+  const pct = parseFloat(document.getElementById('pj-labor-cost-pct').value) || 0;
+  const cost = Math.round(sell * pct / 100);
+  const costInput = document.getElementById('pj-labor-cost');
+  if (costInput) costInput.value = cost || '';
+  setLaborRates(sell, cost);
+  project.laborSell = sell || '';
+  project.laborCost = cost || '';
+  _updateProjectBar();
   recalcAll();
 }
 
@@ -1922,8 +1953,10 @@ function syncLaborSettingsFromForm() {
 function syncLaborSettingsToForm() {
   const sellInput = document.getElementById('pj-labor-sell');
   const costInput = document.getElementById('pj-labor-cost');
+  const pctInput = document.getElementById('pj-labor-cost-pct');
   if (sellInput) sellInput.value = LABOR_RATES.sell || '';
   if (costInput) costInput.value = LABOR_RATES.cost || '';
+  if (pctInput && LABOR_RATES.sell > 0) pctInput.value = (LABOR_RATES.cost / LABOR_RATES.sell * 100).toFixed(1);
 }
 
 // ===== SUMMARY BAR =====

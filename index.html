@@ -311,7 +311,13 @@
                   </div>
                   <div class="form-group">
                     <label class="form-label">労務 原価単価（円/人工）</label>
-                    <input type="number" class="form-input" id="pj-labor-cost" step="1000" oninput="syncLaborSettingsFromForm()" placeholder="例：20300">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+                      <input type="number" class="form-input" id="pj-labor-cost" step="100" oninput="syncLaborCostFromAmount()" placeholder="例：20300">
+                      <div style="position:relative;">
+                        <input type="number" class="form-input" id="pj-labor-cost-pct" step="0.1" oninput="syncLaborCostFromPct()" placeholder="%" style="padding-right:24px;">
+                        <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--text-dim);">%</span>
+                      </div>
+                    </div>
                   </div>
                   <div class="form-group">
                     <label class="form-label">消費税率（%）</label>
