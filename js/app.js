@@ -338,21 +338,83 @@ function updateProject() {
 }
 
 function _updatePresetLabel() {
-  const container = document.getElementById('presetList');
-  if (!container) return;
-  const preset = getKoshuPreset(project.type, project.usage, project.struct);
-  if (!project.type || !project.usage) {
-    container.innerHTML = '<div style="font-size:12px;color:var(--text-dim);">構造・新築/改修・用途を選択してください</div>';
+  // プリセット案表示ボタンの状態更新のみ
+  const btn = document.getElementById('presetSuggestBtn');
+  if (btn) {
+    if (project.type && project.struct) {
+      btn.textContent = 'プリセット案を表示';
+      btn.disabled = false;
+    } else {
+      btn.textContent = '構造・新築/改修を選択してください';
+      btn.disabled = true;
+    }
+  }
+}
+
+// プリセット案を表示
+function showPresetSuggestion() {
+  if (!project.type || !project.struct) {
+    showToast('構造と新築/改修を選択してください');
     return;
   }
+  const preset = getKoshuPreset(project.type, project.usage, project.struct);
+  const container = document.getElementById('presetList');
+  if (!container) return;
+
+  // 既に適用済みの工種をチェック
+  const appliedIds = new Set(activeCategories.map(c => c.id));
+
   container.innerHTML = `
-    <div style="font-size:12px;color:var(--text-sub);margin-bottom:6px;">${esc(project.type)}・${esc(project.usage)}（${esc(project.struct || '—')}）→ ${preset.length}工種</div>
-    ${preset.map(p => `
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border:1px solid var(--border);border-radius:10px;">
+    <div style="font-size:12px;color:var(--text-sub);margin-bottom:8px;">${esc(project.type)}・${esc(project.usage || '—')}（${esc(project.struct)}）→ ${preset.length}工種</div>
+    ${preset.map(p => {
+      const applied = appliedIds.has(p.id);
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border:1px solid ${applied ? 'var(--green)' : 'var(--border)'};border-radius:10px;background:${applied ? '#f0fdf4' : '#fff'};">
         <span style="font-size:13px;color:var(--text);">${esc(p.name)}</span>
-        <span style="padding:2px 10px;border-radius:10px;font-size:11px;font-weight:500;background:var(--accent-light);color:var(--accent);">適用</span>
-      </div>
-    `).join('')}`;
+        ${applied
+          ? '<span style="padding:2px 10px;border-radius:10px;font-size:11px;font-weight:500;background:#d1fae5;color:#166534;">適用済み</span>'
+          : `<button onclick="applyOneKoshu('${esc(p.id)}')" style="padding:3px 12px;border-radius:10px;font-size:11px;font-weight:500;background:var(--accent-light);color:var(--accent);border:none;cursor:pointer;">適用</button>`
+        }
+      </div>`;
+    }).join('')}`;
+}
+
+// 個別の工種を適用
+function applyOneKoshu(koshuId) {
+  const master = KOSHU_MASTER.find(m => m.id === koshuId);
+  if (!master) return;
+  // 既に存在するかチェック
+  if (activeCategories.find(c => c.id === koshuId)) {
+    showToast(`「${master.name}」は既に適用されています`);
+    return;
+  }
+  activeCategories.push({
+    id: master.id, name: master.name, short: master.short,
+    rateMode: master.rateMode || false, miscRate: master.miscRate ?? 0.05,
+    active: true, custom: false, ratePct: 0, rateIncludeLabor: false,
+  });
+  if (!items[koshuId]) items[koshuId] = [];
+  saveActiveCategories();
+  renderCatTabs();
+  showPresetSuggestion(); // リスト更新
+  showToast(`「${master.name}」を追加しました`);
+}
+
+// カスタム工種を追加（プリセットカードから）
+function addCustomKoshuFromPreset() {
+  const input = document.getElementById('customKoshuInput');
+  if (!input || !input.value.trim()) { showToast('工種名を入力してください'); return; }
+  const name = input.value.trim();
+  const id = 'custom_' + (++customCatCounter);
+  activeCategories.push({
+    id, name, short: name,
+    rateMode: false, miscRate: 0.05,
+    active: true, custom: true, ratePct: 0, rateIncludeLabor: false,
+  });
+  if (!items[id]) items[id] = [];
+  saveActiveCategories();
+  renderCatTabs();
+  input.value = '';
+  showToast(`カスタム工種「${name}」を追加しました`);
 }
 
 function applyKoshuPreset() {
