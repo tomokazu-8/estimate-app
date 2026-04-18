@@ -106,6 +106,10 @@ function navigate(panel, el) {
   const contentEl = document.getElementById('content');
   if (contentEl) contentEl.classList.toggle('content-no-scroll', panel === 'items');
 
+  // panel-project表示中はプロジェクトバーの情報部分を隠す（ステップpillのみ表示）
+  const pbarTop = document.querySelector('.project-bar-top');
+  if (pbarTop) pbarTop.style.display = panel === 'project' ? 'none' : '';
+
   _updateStepIndicator(panel);
   _updateProjectBar();
 
