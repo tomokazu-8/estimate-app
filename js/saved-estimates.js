@@ -457,6 +457,8 @@ function _applyEstimateRecord(rec) {
   recalcAll();
   renderCatTabs();
   _updateEstimateHeader();
+  if (typeof _updatePresetLabel === 'function') _updatePresetLabel();
+  if (typeof showPresetSuggestion === 'function') showPresetSuggestion();
 }
 
 function loadSavedEstimate(id) {

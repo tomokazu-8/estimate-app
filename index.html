@@ -197,14 +197,15 @@
               <button onclick="openSavedEstimatesModal()" class="pbar-action-btn pbar-btn-outline">保存済み</button>
             </div>
           </div>
-          <!-- アクションバー -->
-          <div style="display:flex;gap:10px;margin-bottom:20px;">
-            <button onclick="resetToNewEstimate()" class="pbar-action-btn pbar-btn-outline" style="padding:10px 20px;font-size:13px;">＋ 新規作成</button>
-            <button onclick="openSavedEstimatesModal()" class="pbar-action-btn pbar-btn-outline" style="padding:10px 20px;font-size:13px;">📂 過去の物件を参照</button>
-          </div>
-          <div style="display:grid;grid-template-columns:65fr 35fr;gap:28px;align-items:start;">
+          <div style="display:grid;grid-template-columns:auto 1fr 35fr;gap:20px;align-items:start;">
 
-          <!-- Left: 案件基本情報 -->
+          <!-- 左端: アクションボタン -->
+          <div style="display:flex;flex-direction:column;gap:10px;padding-top:4px;">
+            <button onclick="resetToNewEstimate()" class="pbar-action-btn pbar-btn-outline" style="padding:10px 16px;font-size:12px;white-space:nowrap;">＋ 新規作成</button>
+            <button onclick="openSavedEstimatesModal()" class="pbar-action-btn pbar-btn-outline" style="padding:10px 16px;font-size:12px;white-space:nowrap;">📂 過去の物件</button>
+          </div>
+
+          <!-- 中央: 案件基本情報 -->
           <div style="display:flex;flex-direction:column;gap:24px;">
             <div class="card" style="margin-bottom:0;">
               <div class="card-header">
