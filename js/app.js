@@ -932,7 +932,6 @@ function renderItems() {
         <span style="display:flex;gap:1px;flex-wrap:nowrap;">
           <button class="row-move" onclick="moveItemUp(${item.id})" title="上へ移動">▲</button>
           <button class="row-move" onclick="moveItemDown(${item.id})" title="下へ移動">▼</button>
-          <button class="row-delete" onclick="openSearchModal(${item.id})" title="材料DBから検索" style="opacity:0.5;color:var(--accent);">🔍</button>
           <button class="row-delete" onclick="insertItemAfter(${item.id})" title="この行の下に新規行を挿入" style="opacity:0.6;color:#059669;">＋</button>
           <button class="row-delete" onclick="copyItem(${item.id})" title="この行をコピー" style="opacity:0.6;color:#d97706;">⧉</button>
           <button class="row-delete" onclick="deleteItem(${item.id})">✕</button>
