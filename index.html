@@ -184,24 +184,25 @@
       <!-- ===== Panel: Project Info (2-column layout) ===== -->
       <div class="panel active" id="panel-project">
         <div style="max-width:960px;margin:0 auto;">
-          <!-- 物件入力用ヘッダー -->
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+          <!-- 3カラム: ボタン | フォーム | 右カード（ヘッダーも同一グリッド） -->
+          <div style="display:grid;grid-template-columns:auto 6fr 4fr;gap:20px 20px;align-items:start;">
+
+          <!-- 1行目: 空 | ステップpill | 保存ボタン -->
+          <div></div>
+          <div style="margin-bottom:12px;">
             <div class="step-pills" style="justify-content:flex-start;">
               <div class="step-pill step-pill-active" onclick="navigate('project')">1. 物件入力</div>
               <div class="step-pill" onclick="navigate('ai')">2. AI作成</div>
               <div class="step-pill" onclick="navigate('items')">3. 明細調整</div>
               <div class="step-pill" onclick="navigate('confirm')">4. 確認・出力</div>
             </div>
-            <div style="display:flex;gap:8px;">
-              <button onclick="smartSave()" class="pbar-action-btn pbar-btn-outline">保存</button>
-              <button onclick="openSavedEstimatesModal()" class="pbar-action-btn pbar-btn-outline">保存済み</button>
-            </div>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:12px;">
+            <button onclick="smartSave()" class="pbar-action-btn pbar-btn-outline">保存</button>
+            <button onclick="openSavedEstimatesModal()" class="pbar-action-btn pbar-btn-outline">保存済み</button>
           </div>
 
-          <!-- 3カラム: ボタン | フォーム | 右カード -->
-          <div style="display:grid;grid-template-columns:auto 6fr 4fr;gap:20px;align-items:start;">
-
-          <!-- 左端: アクションボタン（1.5倍サイズ） -->
+          <!-- 2行目: ボタン | フォーム | 右カード -->
           <div style="display:flex;flex-direction:column;gap:12px;padding-top:4px;">
             <button onclick="resetToNewEstimate()" class="pbar-action-btn pbar-btn-outline" style="padding:16px 24px;font-size:15px;white-space:nowrap;">＋ 新規作成</button>
             <button onclick="openSavedEstimatesModal()" class="pbar-action-btn pbar-btn-outline" style="padding:16px 24px;font-size:15px;white-space:nowrap;">📂 過去の物件</button>
