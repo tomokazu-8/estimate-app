@@ -196,7 +196,7 @@ tr:hover .row-delete { opacity:0.6; }
 #panel-items.active { display:block; margin:-20px -24px; height:calc(100% + 40px); }
 .items-layout { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:16px; height:100%; padding:16px; }
 .items-main { min-width:0; overflow-y:auto; display:flex; flex-direction:column; }
-.items-right { overflow-y:auto; display:flex; flex-direction:column; gap:12px; }
+.items-right { overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; gap:12px; }
 .items-right .card { margin-bottom:0; }
 
 /* Right summary cards (mockup style) */
@@ -207,15 +207,18 @@ tr:hover .row-delete { opacity:0.6; }
 .rsum-sub { font-size:11px; color:var(--text-dim); margin-top:2px; }
 
 /* Detail pane */
-#detailPane .detail-form { display:flex; flex-direction:column; gap:10px; }
-#detailPane .detail-form .form-group { display:flex; flex-direction:column; gap:3px; }
+#detailPane { overflow:hidden; }
+#detailPane .detail-form { display:flex; flex-direction:column; gap:8px; max-width:100%; }
+#detailPane .detail-form .form-group { display:flex; flex-direction:column; gap:2px; min-width:0; }
 #detailPane .detail-form .form-label { font-size:11px; color:var(--text-sub); }
-#detailPane .detail-form .form-input { font-size:13px; padding:8px 10px; border-radius:10px; }
-#detailPane .detail-form .form-select { font-size:13px; }
-#detailPane .detail-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-#detailPane .detail-grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
-#detailPane .detail-separator { height:1px; background:var(--border-light); margin:4px 0; }
-#detailPane .detail-calc-value { font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:500; color:var(--text); padding:8px 10px; background:var(--bg); border:1px solid var(--border-light); border-radius:10px; }
+#detailPane .detail-form .form-input { font-size:12px; padding:6px 8px; border-radius:8px; width:100%; min-width:0; box-sizing:border-box; }
+#detailPane .detail-form input.num { font-size:12px; padding:6px 6px; }
+#detailPane .detail-form .form-select { font-size:13px; width:100%; min-width:0; box-sizing:border-box; }
+#detailPane .detail-form textarea.form-input { resize:vertical; }
+#detailPane .detail-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+#detailPane .detail-grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px; }
+#detailPane .detail-separator { height:1px; background:var(--border-light); margin:2px 0; }
+#detailPane .detail-calc-value { font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:500; color:var(--text); padding:6px 8px; background:var(--bg); border:1px solid var(--border-light); border-radius:8px; min-width:0; overflow:hidden; text-overflow:ellipsis; }
 #detailPane .detail-item-name { font-size:13px; font-weight:600; color:var(--text); padding:8px 0; border-bottom:1px solid var(--border); margin-bottom:8px; word-break:break-all; }
 
 /* Batch mode: checkbox column hidden by default, shown in batch mode */

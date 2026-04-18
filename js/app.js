@@ -1158,8 +1158,8 @@ function renderDetailPane(itemId) {
         <textarea class="form-input" onchange="updateDetailField(${itemId},'note',this.value)" style="min-height:64px;resize:vertical;border-radius:10px;">${esc(item.note || '')}</textarea>
       </div>
       <div class="detail-grid-2" style="padding-top:4px;">
-        <button class="pbar-action-btn pbar-btn-outline" style="padding:8px;font-size:13px;" onclick="openSearchModal(${itemId})">DB検索</button>
-        <button class="pbar-action-btn" style="padding:8px;font-size:13px;background:var(--accent);border-color:var(--accent);color:#fff;" onclick="registerItemToUserDB(${itemId})">DBに登録</button>
+        <button class="pbar-action-btn pbar-btn-outline" style="padding:7px 4px;font-size:12px;width:100%;" onclick="openSearchModal(${itemId})">DB検索</button>
+        <button class="pbar-action-btn" style="padding:7px 4px;font-size:12px;width:100%;background:var(--accent);border-color:var(--accent);color:#fff;" onclick="registerItemToUserDB(${itemId})">DBに登録</button>
       </div>
     </div>`;
 }
