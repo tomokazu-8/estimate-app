@@ -75,8 +75,6 @@ document.addEventListener('DOMContentLoaded', () => {
     renderDBTable();
     // ナレッジDB空チェック → 復元バナー表示
     checkKnowledgeRestore();
-    // 保存済み見積空チェック → トースト通知
-    checkEstimatesRestore();
     // 得意先サジェスト用リストをナレッジDBから読み込み
     loadClientList();
   });

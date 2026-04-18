@@ -186,7 +186,6 @@ function saveEstimate() {
   }
 
   _persistEstimates(list);
-  autoBackupEstimates(list);
   _updateEstimateHeader();
   showToast(`見積を保存しました（${project.number}）`);
 }
@@ -217,7 +216,6 @@ function saveAsNewBranch() {
   if (list.length > MAX_SAVED_ESTIMATES) list.splice(MAX_SAVED_ESTIMATES);
 
   _persistEstimates(list);
-  autoBackupEstimates(list);
   _updateEstimateHeader();
   showToast(`別名で保存しました（${project.number}）`);
 }
@@ -546,63 +544,3 @@ function onEstListFinalToggle(checked) {
   renderSavedEstimatesList();
 }
 
-// ===== バックアップ =====
-
-/** 自動バックアップ（最終保存日時のみ記録、ダウンロードはしない） */
-function autoBackupEstimates(list) {
-  if (!list || list.length === 0) return;
-  localStorage.setItem('estimates_last_backup', new Date().toISOString());
-}
-
-function exportSavedEstimates() {
-  const list = getSavedEstimates();
-  if (list.length === 0) { showToast('保存済み見積がありません'); return; }
-  const json = JSON.stringify(list, null, 2);
-  const date = new Date().toISOString().split('T')[0];
-  downloadBlob(new Blob([json], { type: 'application/json' }), `estimates_backup_${date}.json`);
-  showToast(`${list.length}件の見積をバックアップしました`);
-}
-
-async function importSavedEstimates(fileInput, mode) {
-  const file = fileInput instanceof HTMLInputElement ? fileInput.files[0] : fileInput;
-  if (!file) return;
-  if (mode === 'replace' && !(await customConfirm('既存の保存済み見積を全て削除して、バックアップファイルの内容で置き換えます。\nよろしいですか？', {variant:'danger', confirmText:'削除して置き換える'}))) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const incoming = JSON.parse(e.target.result);
-      if (!Array.isArray(incoming)) throw new Error('フォーマットが正しくありません');
-      const migrated = incoming.map(migrateEstimate);
-
-      let result;
-      if (mode === 'replace') {
-        result = migrated.slice(0, MAX_SAVED_ESTIMATES);
-        showToast(`${result.length}件で置き換えました`);
-      } else {
-        const existing    = getSavedEstimates();
-        const existingIds = new Set(existing.map(r => r.id));
-        const newEntries  = migrated.filter(r => r.id && !existingIds.has(r.id));
-        result = [...newEntries, ...existing].slice(0, MAX_SAVED_ESTIMATES);
-        showToast(`${newEntries.length}件を追加しました（既存: ${existing.length}件、重複スキップ: ${incoming.length - newEntries.length}件）`);
-      }
-      safeLocalStorageSet(SAVED_ESTIMATES_KEY, JSON.stringify(result));
-      renderSavedEstimatesList();
-    } catch(err) {
-      showToast('復元に失敗しました: ' + err.message);
-    }
-  };
-  reader.readAsText(file);
-  // 同じファイルを再選択できるようリセット
-  if (fileInput instanceof HTMLInputElement) fileInput.value = '';
-}
-
-// ===== 起動時チェック =====
-function checkEstimatesRestore() {
-  const list       = getSavedEstimates();
-  const lastBackup = localStorage.getItem('estimates_last_backup');
-  if (list.length === 0 && lastBackup) {
-    setTimeout(() => {
-      showToast('保存済み見積が見つかりません。「📂 保存済み」→「📤 復元」でバックアップから復元できます');
-    }, 2000);
-  }
-}
