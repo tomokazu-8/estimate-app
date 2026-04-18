@@ -1042,6 +1042,65 @@ function runCategoryValidation() {
   showToast(`「${cat ? cat.name : ''}」のチェックが完了しました（${hints.length}件）`);
 }
 
+// 全体チェック（確認・出力画面のボタンで実行）
+function runGlobalValidation() {
+  const el = document.getElementById('globalValidationHints');
+  if (!el) return;
+  const hints = [];
+
+  // 8. 同じ資材が工種間で金額・歩掛が異なる
+  const allMaterials = {};
+  activeCategories.filter(c => c.active).forEach(c => {
+    (items[c.id] || []).forEach(i => {
+      if ((i.rowType || 'material') !== 'material' || !i.name) return;
+      const key = norm(i.name + (i.spec || ''));
+      if (!allMaterials[key]) allMaterials[key] = { name: i.name, entries: [] };
+      allMaterials[key].entries.push({ cat: c.short, price: parseFloat(i.price) || 0, buk: parseFloat(i.bukariki1) || 0 });
+    });
+  });
+  Object.values(allMaterials).forEach(({ name, entries }) => {
+    if (entries.length < 2) return;
+    const prices = [...new Set(entries.map(e => e.price))];
+    const buks = [...new Set(entries.map(e => e.buk))];
+    const cats = entries.map(e => e.cat).join('・');
+    if (prices.length > 1) {
+      hints.push({ type: 'warn', text: `「${name}」の単価が工種間で異なります（${cats}）` });
+    }
+    if (buks.length > 1) {
+      hints.push({ type: 'warn', text: `「${name}」の歩掛が工種間で異なります（${cats}）` });
+    }
+  });
+
+  // 9. 坪単価の妥当性（ナレッジDB比較 — 将来実装）
+
+  // 10. 空の工種
+  activeCategories.filter(c => c.active && !c.rateMode).forEach(c => {
+    const catItems = (items[c.id] || []).filter(i => i.name);
+    if (catItems.length === 0) {
+      hints.push({ type: 'warn', text: `工種「${c.short}」に品目がありません` });
+    }
+  });
+
+  // 11. 利益率
+  let grandTotal = 0;
+  activeCategories.filter(c => c.active).forEach(c => { grandTotal += getCatAmount(c.id); });
+  grandTotal += _laborSellTotal;
+  if (grandTotal > 0) {
+    const laborRate = (project.laborRate || 72) / 100;
+    const profitRate = (1 - laborRate) * 100;
+    if (profitRate >= 20) {
+      hints.push({ type: 'ok', text: `利益率は適正です（${profitRate.toFixed(1)}%）` });
+    } else if (profitRate >= 10) {
+      hints.push({ type: 'warn', text: `利益率がやや低めです（${profitRate.toFixed(1)}%）` });
+    } else {
+      hints.push({ type: 'error', text: `利益率が低すぎます（${profitRate.toFixed(1)}%）` });
+    }
+  }
+
+  _renderValidationHints(el, hints);
+  showToast(`全体チェックが完了しました（${hints.length}件）`);
+}
+
 // チェック結果の描画
 function _renderValidationHints(el, hints) {
   if (hints.length === 0) {
