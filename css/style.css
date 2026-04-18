@@ -232,8 +232,10 @@ tr:hover .row-move { opacity:0.5; }
 .row-move:hover { opacity:1 !important; color:var(--accent); }
 
 /* Row drag & drop */
-#itemBody tr[draggable="true"] { cursor:grab; }
-#itemBody tr[draggable="true"]:active { cursor:grabbing; }
+.drag-handle { cursor:grab; color:var(--text-dim); font-size:14px; user-select:none; opacity:0.3; transition:opacity 0.15s; }
+tr:hover .drag-handle { opacity:0.7; }
+.drag-handle:hover { opacity:1 !important; color:var(--accent); }
+.drag-handle:active { cursor:grabbing; }
 #itemBody tr.row-dragging { opacity:0.4; }
 #itemBody tr.row-drop-target td { border-top:2px solid var(--accent) !important; }
 

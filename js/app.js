@@ -896,7 +896,10 @@ function renderItems() {
 
     const isSelected = _selectedItems.has(item.id);
     return `
-    <tr data-id="${item.id}" draggable="true" ondragstart="_onRowDragStart(event)" ondragover="_onRowDragOver(event)" ondrop="_onRowDrop(event)" ondragend="_onRowDragEnd(event)" class="${isAuto ? 'auto-calc' : ''}${item.rowType === 'expense' ? ' row-expense' : ''}${item.rowType === 'labor' ? ' row-labor' : ''}${isSelected ? ' row-selected' : ''}">
+    <tr data-id="${item.id}" ondragover="_onRowDragOver(event)" ondrop="_onRowDrop(event)" ondragend="_onRowDragEnd(event)" class="${isAuto ? 'auto-calc' : ''}${item.rowType === 'expense' ? ' row-expense' : ''}${item.rowType === 'labor' ? ' row-labor' : ''}${isSelected ? ' row-selected' : ''}">
+      <td class="col-drag" style="padding:0 2px;width:20px;text-align:center;">
+        <span class="drag-handle" draggable="true" ondragstart="_onRowDragStart(event)" title="ドラッグで並び替え">⠿</span>
+      </td>
       <td class="col-check td-center" style="padding:0 4px;">
         <input type="checkbox" id="chk-${item.id}" ${isSelected ? 'checked' : ''}
           onchange="toggleSelectItem(${item.id})" style="cursor:pointer;width:14px;height:14px;">
@@ -942,7 +945,7 @@ function renderItems() {
   // 基本表示: (check) + 品名 + 規格 + 数量 + 単位 + 見積単価 = 合計列の前まで
   // 拡張表示: + 定価 + 基準 + 原価掛 + 見積掛 + 原価単価 + 原価金額 + 歩掛1〜3
   const detailCols = isExpanded ? (9 + (showBuk1?1:0) + (showBuk2?1:0) + (showBuk3?1:0)) : 0;
-  const colsBefore = batchVisible + 4 + detailCols; // check? + 品名〜単位(4) + detail列
+  const colsBefore = 1 + batchVisible + 4 + detailCols; // drag(1) + check? + 品名〜単位(4) + detail列
   const tfoot = document.querySelector('#itemTable tfoot tr');
   if (tfoot) {
     tfoot.innerHTML = `
@@ -1178,8 +1181,8 @@ function moveItemDown(id) {
 // ===== ROW DRAG & DROP =====
 let _dragRowId = null;
 function _onRowDragStart(e) {
-  // input/select/textarea内からのドラッグは無効（テキスト選択を優先）
-  if (e.target.closest('input, select, textarea, button')) { e.preventDefault(); return; }
+  // ハンドル(.drag-handle)からのみドラッグ開始
+  if (!e.target.classList.contains('drag-handle')) { e.preventDefault(); return; }
   const tr = e.target.closest('tr');
   if (!tr) return;
   _dragRowId = parseInt(tr.dataset.id, 10);
