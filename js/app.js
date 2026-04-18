@@ -171,18 +171,17 @@ function _updateProjectBar() {
     if (project.number) { noEl.textContent = project.number; noEl.style.display = 'inline-block'; }
     else { noEl.style.display = 'none'; }
   }
-  // タグ表示
-  const tagsEl = document.getElementById('pbarTags');
-  if (tagsEl) {
-    const tags = [];
-    if (project.client) tags.push('得意先：' + esc(project.client));
-    const structType = [project.struct, project.type].filter(Boolean).join(' / ');
-    if (structType) tags.push(structType);
-    const sqm = parseFloat(project.areaSqm) || 0;
-    const tsubo = parseFloat(project.areaTsubo) || 0;
-    if (sqm > 0) tags.push(sqm + '㎡ / ' + tsubo.toFixed(1) + '坪');
-    if (project.location) tags.push(esc(project.location));
-    tagsEl.innerHTML = tags.map(t => `<span class="pbar-tag">${t}</span>`).join('');
+  // 得意先バッジ
+  const clientEl = document.getElementById('pbarClient');
+  if (clientEl) {
+    if (project.client) { clientEl.textContent = project.client; clientEl.style.display = 'inline-block'; }
+    else { clientEl.style.display = 'none'; }
+  }
+  // 施工場所バッジ
+  const locEl = document.getElementById('pbarLocation');
+  if (locEl) {
+    if (project.location) { locEl.textContent = project.location; locEl.style.display = 'inline-block'; }
+    else { locEl.style.display = 'none'; }
   }
 }
 
