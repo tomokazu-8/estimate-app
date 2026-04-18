@@ -65,6 +65,9 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCatTabs();
   _updateProjectBar();
   _updateStepIndicator('project');
+  // 初期表示はproject画面 → プロジェクトバー情報部分を非表示
+  const pbarTopInit = document.querySelector('.project-bar-top');
+  if (pbarTopInit) pbarTopInit.style.display = 'none';
   loadUserMaterialDB();
   showDbOverlay();
   loadDefaultDB().then(async () => {
