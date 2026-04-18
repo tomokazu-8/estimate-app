@@ -194,7 +194,7 @@ tr:hover .row-delete { opacity:0.6; }
 
 /* ===== ITEMS PANEL: 2-column layout ===== */
 #panel-items.active { display:block; margin:-20px -24px; height:calc(100% + 40px); }
-.items-layout { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:16px; height:100%; padding:16px; }
+.items-layout { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:16px; height:100%; padding:16px; }
 .items-main { min-width:0; overflow-y:auto; display:flex; flex-direction:column; }
 .items-right { overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; gap:12px; }
 .items-right .card { margin-bottom:0; }
