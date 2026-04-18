@@ -183,7 +183,21 @@
 
       <!-- ===== Panel: Project Info (2-column layout) ===== -->
       <div class="panel active" id="panel-project">
-        <div style="max-width:960px;margin:0 auto;display:grid;grid-template-columns:65fr 35fr;gap:28px;align-items:start;">
+        <div style="max-width:960px;margin:0 auto;">
+          <!-- 物件入力用ヘッダー（ステップpill + ボタン） -->
+          <div id="projectPageHeader" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+            <div class="step-pills">
+              <div class="step-pill step-pill-active" onclick="navigate('project')">1. 物件入力</div>
+              <div class="step-pill" onclick="navigate('ai')">2. AI作成</div>
+              <div class="step-pill" onclick="navigate('items')">3. 明細調整</div>
+              <div class="step-pill" onclick="navigate('confirm')">4. 確認・出力</div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button onclick="smartSave()" class="pbar-action-btn pbar-btn-outline">保存</button>
+              <button onclick="openSavedEstimatesModal()" class="pbar-action-btn pbar-btn-outline">保存済み</button>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:65fr 35fr;gap:28px;align-items:start;">
 
           <!-- Left: 案件基本情報 + 次のアクション -->
           <div style="display:flex;flex-direction:column;gap:24px;">
@@ -327,7 +341,8 @@
             </div>
           </div>
 
-        </div>
+          </div><!-- /grid -->
+        </div><!-- /max-width -->
       </div>
 
       <!-- ===== Panel: Item Entry (2-column: table + right sidebar) ===== -->

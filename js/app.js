@@ -65,9 +65,9 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCatTabs();
   _updateProjectBar();
   _updateStepIndicator('project');
-  // 初期表示はproject画面 → プロジェクトバー情報部分を非表示
-  const pbarTopInit = document.querySelector('.project-bar-top');
-  if (pbarTopInit) pbarTopInit.style.display = 'none';
+  // 初期表示はproject画面 → プロジェクトバー全体を非表示
+  const pbarInit = document.getElementById('projectBar');
+  if (pbarInit) pbarInit.style.display = 'none';
   loadUserMaterialDB();
   showDbOverlay();
   loadDefaultDB().then(async () => {
@@ -109,9 +109,9 @@ function navigate(panel, el) {
   const contentEl = document.getElementById('content');
   if (contentEl) contentEl.classList.toggle('content-no-scroll', panel === 'items');
 
-  // panel-project表示中はプロジェクトバーの情報部分を隠す（ステップpillのみ表示）
-  const pbarTop = document.querySelector('.project-bar-top');
-  if (pbarTop) pbarTop.style.display = panel === 'project' ? 'none' : '';
+  // panel-project表示中はプロジェクトバー全体を隠す（独自ヘッダーを使用）
+  const pbar = document.getElementById('projectBar');
+  if (pbar) pbar.style.display = panel === 'project' ? 'none' : '';
 
   _updateStepIndicator(panel);
   _updateProjectBar();
