@@ -199,7 +199,8 @@ tr:hover .row-delete { opacity:0.6; }
 .items-layout { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:0; height:100%; }
 .items-main { min-width:0; overflow-y:scroll; display:flex; flex-direction:column; padding:16px 0 16px 16px; scrollbar-width:none; }
 .items-main::-webkit-scrollbar { display:none; }
-.items-main .table-wrap { overflow-x:hidden; overflow-y:auto; }
+.items-main .table-wrap { overflow-x:hidden; overflow-y:auto; width:100%; }
+.items-main table { width:100% !important; }
 /* 基本表示で品名・規格列が残りスペースを埋めるよう強制 */
 .items-main .col-name { width:auto; min-width:180px; }
 .items-main .col-spec { width:auto; min-width:120px; }
