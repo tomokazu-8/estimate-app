@@ -40,15 +40,17 @@ function _allocateNewNo() {
 }
 
 /** 自動採番: 初回のみ開始番号を確認（保存時に呼ばれる） */
-function generateEstimateNo() {
+function generateEstimateNo(opts = {}) {
+  const silent = opts.silent === true;
   let counter = parseInt(localStorage.getItem(ESTIMATE_NO_KEY) || '0', 10);
-  if (counter === 0) {
+  if (counter === 0 && !silent) {
     const input = prompt('見積番号の開始番号を入力してください（例: 358）\n※前回の最後の番号の次から始まります', '1');
     if (input === null) return;
     counter = parseInt(input, 10) - 1;
     if (isNaN(counter) || counter < 0) counter = 0;
     localStorage.setItem(ESTIMATE_NO_KEY, String(counter));
   }
+  // silent時はカウンター未設定でも1から開始（歯車⚙で後から変更可能）
   const no = _allocateNewNo();
   const parsed = parseEstimateNo(no);
   _currentBaseNo  = parsed.base;
@@ -162,7 +164,7 @@ function saveEstimate(opts = {}) {
   const silent = opts.silent === true;
   // 見積番号未設定なら自動採番
   if (!project.number) {
-    generateEstimateNo();
+    generateEstimateNo({silent});
     if (!project.number) return; // キャンセルされた
   }
 
