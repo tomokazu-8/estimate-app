@@ -14,7 +14,7 @@ function _resetEstimateState() {
   _currentBaseNo = '';
   _currentBranch = 0;
   _currentIsFinal = false;
-  const badge = document.getElementById('finalBadge');
+  const badge = document.getElementById('sbFinalBadge');
   if (badge) badge.style.display = 'none';
 }
 
@@ -276,7 +276,7 @@ function toggleCurrentFinal() {
 
 // ===== トップバーのヘッダー表示更新 =====
 function _updateEstimateHeader() {
-  const badge = document.getElementById('finalBadge');
+  const badge = document.getElementById('sbFinalBadge');
   if (badge) {
     badge.style.display = _currentIsFinal ? 'inline-flex' : 'none';
   }

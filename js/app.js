@@ -65,9 +65,6 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCatTabs();
   _updateProjectBar();
   _updateStepIndicator('project');
-  // 初期表示はproject画面 → プロジェクトバー全体を非表示
-  const pbarInit = document.getElementById('projectBar');
-  if (pbarInit) pbarInit.style.display = 'none';
   loadUserMaterialDB();
   showDbOverlay();
   loadDefaultDB().then(async () => {
@@ -140,10 +137,6 @@ async function navigate(panel, el) {
   const contentEl = document.getElementById('content');
   if (contentEl) contentEl.classList.toggle('content-no-scroll', panel === 'items');
 
-  // panel-project表示中はプロジェクトバー全体を隠す（独自ヘッダーを使用）
-  const pbar = document.getElementById('projectBar');
-  if (pbar) pbar.style.display = panel === 'project' ? 'none' : '';
-
   _updateStepIndicator(panel);
   _updateProjectBar();
 
@@ -195,31 +188,31 @@ function _renderProjectSummary() {
 function _updateProjectBar() {
   const name = project.name || '新規見積';
   document.getElementById('pbarName').textContent = name;
-  // 見積番号バッジ
+  // 見積番号
   const noEl = document.getElementById('pbarEstNo');
   if (noEl) {
-    if (project.number) { noEl.textContent = project.number; noEl.style.display = 'inline-block'; }
+    if (project.number) { noEl.textContent = 'No.' + project.number; noEl.style.display = ''; }
     else { noEl.style.display = 'none'; }
   }
-  // 得意先バッジ
+  // 得意先
   const clientEl = document.getElementById('pbarClient');
   if (clientEl) {
-    if (project.client) { clientEl.textContent = project.client; clientEl.style.display = 'inline-block'; }
+    if (project.client) { clientEl.textContent = project.client; clientEl.style.display = ''; }
     else { clientEl.style.display = 'none'; }
   }
-  // 施工場所バッジ
+  // 施工場所
   const locEl = document.getElementById('pbarLocation');
   if (locEl) {
-    if (project.location) { locEl.textContent = project.location; locEl.style.display = 'inline-block'; }
+    if (project.location) { locEl.textContent = project.location; locEl.style.display = ''; }
     else { locEl.style.display = 'none'; }
   }
-  // 労務単価バッジ
+  // 労務単価
   const laborEl = document.getElementById('pbarLabor');
   if (laborEl) {
     const sell = LABOR_RATES.sell || 0;
     if (sell > 0) {
       laborEl.textContent = '労務 ¥' + formatNum(sell) + '/人工';
-      laborEl.style.display = 'inline-block';
+      laborEl.style.display = '';
     } else { laborEl.style.display = 'none'; }
   }
 }
@@ -279,9 +272,15 @@ function saveUndoState() {
   _undoStack.push(_captureState());
   if (_undoStack.length > 50) _undoStack.shift();
   _redoStack = []; // 新しい操作でRedoスタックをクリア
-  document.getElementById('backBtn').style.display = '';
-  document.getElementById('redoBtn').style.display = 'none';
+  _updateUndoRedoButtons();
   markDirty();
+}
+
+function _updateUndoRedoButtons() {
+  const back = document.getElementById('backBtn');
+  const redo = document.getElementById('redoBtn');
+  if (back) back.disabled = _undoStack.length === 0;
+  if (redo) redo.disabled = _redoStack.length === 0;
 }
 
 function toggleTopbarHelp() {
@@ -313,8 +312,7 @@ function undoAction() {
   }
   renderItems();
   renderCatTabs();
-  document.getElementById('backBtn').style.display = _undoStack.length > 0 ? '' : 'none';
-  document.getElementById('redoBtn').style.display = '';
+  _updateUndoRedoButtons();
   showToast('元に戻しました');
 }
 
@@ -330,8 +328,7 @@ function redoAction() {
   }
   renderItems();
   renderCatTabs();
-  document.getElementById('backBtn').style.display = '';
-  document.getElementById('redoBtn').style.display = _redoStack.length > 0 ? '' : 'none';
+  _updateUndoRedoButtons();
   showToast('やり直しました');
 }
 
