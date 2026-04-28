@@ -153,23 +153,15 @@ async function navigate(panel, el) {
   if (panel === 'ai') _populateAiProjectSummary();
 }
 
-// ===== STEP INDICATOR (sidebar flow cards + project bar pills) =====
+// ===== STEP INDICATOR (sidebar flow cards) =====
 const _stepPanels = ['project', 'ai', 'items', 'confirm'];
 function _updateStepIndicator(activePanel) {
-  // Sidebar flow cards
   const steps = document.querySelectorAll('#flowCards .flow-step');
   const activeIdx = _stepPanels.indexOf(activePanel);
   steps.forEach((step, i) => {
     step.classList.remove('flow-active', 'flow-done');
     if (i === activeIdx) step.classList.add('flow-active');
     else if (i < activeIdx) step.classList.add('flow-done');
-  });
-  // Project bar pills
-  const pills = document.querySelectorAll('#stepPills .step-pill');
-  pills.forEach((pill, i) => {
-    pill.classList.remove('step-pill-active', 'step-pill-done');
-    if (i === activeIdx) pill.classList.add('step-pill-active');
-    else if (i < activeIdx) pill.classList.add('step-pill-done');
   });
 }
 

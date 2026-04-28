@@ -166,13 +166,6 @@
           <button id="redoBtn" class="btn btn-secondary btn-sm" onclick="redoAction()" style="display:none;" title="やり直し (Ctrl+Y)">↪</button>
         </div>
       </div>
-      <!-- Step pills -->
-      <div class="step-pills" id="stepPills">
-        <div class="step-pill step-pill-active" data-panel="project" onclick="navigate('project')">1. 物件入力</div>
-        <div class="step-pill" data-panel="ai" onclick="navigate('ai')">2. AI作成</div>
-        <div class="step-pill" data-panel="items" onclick="navigate('items')">3. 明細調整</div>
-        <div class="step-pill" data-panel="confirm" onclick="navigate('confirm')">4. 確認・出力</div>
-      </div>
     </div>
 
     <div class="content" id="content">
@@ -181,15 +174,7 @@
       <div class="panel active" id="panel-project">
         <div class="project-grid">
 
-          <!-- 1行目: ステップpill | 保存ボタン -->
-          <div class="pp-steps">
-            <div class="step-pills" style="justify-content:flex-start;">
-              <div class="step-pill step-pill-active" onclick="navigate('project')">1. 物件入力</div>
-              <div class="step-pill" onclick="navigate('ai')">2. AI作成</div>
-              <div class="step-pill" onclick="navigate('items')">3. 明細調整</div>
-              <div class="step-pill" onclick="navigate('confirm')">4. 確認・出力</div>
-            </div>
-          </div>
+          <!-- 1行目: 保存ボタン -->
           <div class="pp-actions">
             <button onclick="smartSave()" class="pbar-action-btn pbar-btn-outline">保存</button>
             <button onclick="openSavedEstimatesModal()" class="pbar-action-btn pbar-btn-outline">保存済み</button>
