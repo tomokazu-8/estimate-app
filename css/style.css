@@ -89,6 +89,16 @@ body { font-family:'Noto Sans JP','IBM Plex Sans',sans-serif; background:var(--b
 .sidebar-status-btn { margin-top:10px; width:100%; padding:8px; border-radius:12px; background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.7); border:none; font-size:12px; cursor:pointer; font-family:inherit; transition:background 0.15s; }
 .sidebar-status-btn:hover { background:rgba(255,255,255,0.12); }
 
+/* Sidebar dev panel (デモデータ用、本番では非表示にする) */
+.sidebar-dev-card { margin-top:10px; background:rgba(251,191,36,0.05); border:1px dashed rgba(251,191,36,0.3); border-radius:12px; padding:10px; }
+.sidebar-dev-label { font-size:10px; font-weight:600; color:#fbbf24; margin-bottom:6px; letter-spacing:0.5px; }
+.sidebar-dev-btn { display:block; width:100%; padding:6px 8px; margin-bottom:4px; border-radius:8px; background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.7); border:1px solid rgba(255,255,255,0.05); font-size:11px; font-family:inherit; cursor:pointer; text-align:left; transition:all 0.15s; }
+.sidebar-dev-btn:hover { background:rgba(255,255,255,0.12); color:#fff; }
+.sidebar-dev-btn:last-child { margin-bottom:0; }
+.sidebar-dev-btn-danger { background:rgba(239,68,68,0.1); color:#fca5a5; border-color:rgba(239,68,68,0.2); }
+.sidebar-dev-btn-danger:hover { background:rgba(239,68,68,0.2); color:#fff; }
+.sidebar-dev-divider { height:1px; background:rgba(255,255,255,0.06); margin:5px 0; }
+
 /* ===== MAIN AREA ===== */
 .main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
 

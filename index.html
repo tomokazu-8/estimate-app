@@ -163,6 +163,17 @@
         </div>
         <button onclick="navigate('tridge'); tmInit();" class="sidebar-status-btn">設定・データ管理</button>
       </div>
+      <!-- 開発用パネル -->
+      <div class="sidebar-dev-card">
+        <div class="sidebar-dev-label">🧪 開発用デモデータ</div>
+        <button onclick="demoLoadTridge()" class="sidebar-dev-btn">デモTridge装着</button>
+        <div class="sidebar-dev-divider"></div>
+        <button onclick="demoLoadProject('pattern-a')" class="sidebar-dev-btn" title="木造新築住宅（小規模）">A: 木造新築住宅</button>
+        <button onclick="demoLoadProject('pattern-b')" class="sidebar-dev-btn" title="RC造改修事務所（中規模）">B: RC改修事務所</button>
+        <button onclick="demoLoadProject('pattern-c')" class="sidebar-dev-btn" title="S造新築工場（大規模）">C: S造新築工場</button>
+        <div class="sidebar-dev-divider"></div>
+        <button onclick="demoClearAll()" class="sidebar-dev-btn sidebar-dev-btn-danger">全データクリア</button>
+      </div>
     </div>
   </nav>
 
@@ -1144,6 +1155,7 @@
 <script src="js/app.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="js/tridge-manager.js"></script>
+<script src="js/demo-data.js"></script>
 
 </body>
 </html>
