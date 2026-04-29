@@ -52,7 +52,7 @@ body { font-family:'Noto Sans JP','IBM Plex Sans',sans-serif; background:var(--b
 .sb-project-actions { display:flex; gap:6px; margin-top:10px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.06); }
 .sb-action-btn { flex:1; padding:5px 8px; border-radius:8px; background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.7); border:1px solid rgba(255,255,255,0.05); font-size:11px; font-family:inherit; cursor:pointer; transition:all 0.15s; }
 .sb-action-btn:hover:not(:disabled) { background:rgba(255,255,255,0.12); color:#fff; }
-.sb-action-btn:disabled { opacity:0.35; cursor:not-allowed; }
+.sb-action-btn:disabled { opacity:0.35; cursor:default; }
 
 .sidebar-flow { padding:16px; }
 .sidebar-flow-card { background:rgba(15,23,42,0.7); border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:14px; }
