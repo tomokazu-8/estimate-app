@@ -223,23 +223,31 @@ function _populateAiProjectSummary() {
   if (!el) return;
   const p = project;
   if (!p.name && !p.struct) {
-    el.innerHTML = '<span style="color:var(--text-dim);">物件情報を入力してからAI作成を実行してください。</span>';
+    el.innerHTML = '<div class="ai-cond-empty">物件情報を入力してからAI作成を実行してください。</div>';
     return;
   }
   const rows = [];
-  if (p.name) rows.push(`<strong>${esc(p.name)}</strong>`);
-  const meta = [];
-  if (p.client) meta.push(esc(p.client));
-  if (p.struct) meta.push(esc(p.struct));
-  if (p.type) meta.push(esc(p.type));
-  if (p.usage) meta.push(esc(p.usage));
+  const push = (label, value) => {
+    if (value === undefined || value === null || value === '') return;
+    rows.push(`<div class="ai-cond-row"><div class="ai-cond-label">${esc(label)}</div><div class="ai-cond-value">${esc(String(value))}</div></div>`);
+  };
+  push('物件名', p.name);
+  push('得意先', p.client);
+  push('構造', p.struct);
+  push('用途', p.usage);
+  push('区分', p.type);
   const tsubo = parseFloat(p.areaTsubo) || 0;
   const sqm = parseFloat(p.areaSqm) || 0;
-  if (sqm > 0) meta.push(sqm + '㎡ / ' + tsubo.toFixed(1) + '坪');
-  if (p.floors) meta.push(p.floors + '階');
-  if (meta.length) rows.push(meta.join(' / '));
-  if (p.memo) rows.push('<span style="color:var(--text-dim);font-size:12px;">' + esc(p.memo) + '</span>');
-  el.innerHTML = rows.join('<br>');
+  if (sqm > 0 || tsubo > 0) {
+    const parts = [];
+    if (sqm > 0) parts.push(sqm + '㎡');
+    if (tsubo > 0) parts.push(tsubo.toFixed(1) + '坪');
+    push('面積', parts.join(' / '));
+  }
+  if (p.floors) push('階数', p.floors + '階');
+  if (p.location) push('施工場所', p.location);
+  if (p.memo) push('メモ', p.memo);
+  el.innerHTML = rows.join('');
 }
 
 // ===== CONFIRM SUMMARY (panel-confirm) =====

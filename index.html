@@ -490,40 +490,61 @@
 
       <!-- ===== Panel: AI Creation ===== -->
       <div class="panel" id="panel-ai">
-        <div class="card" style="margin-bottom:16px;">
-          <div class="card-header">
-            <span class="card-title">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 2a4 4 0 0 1 4 4v1a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg>
-              物件条件
-            </span>
-          </div>
-          <div class="card-body" id="aiProjectSummary" style="font-size:13px;color:var(--text-sub);">
-            物件情報を入力してからAI作成を実行してください。
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
-          <div class="card" style="margin-bottom:0;">
-            <div class="card-body" style="text-align:center;padding:28px 20px;">
-              <div style="font-size:32px;margin-bottom:8px;">✨</div>
-              <div style="font-size:15px;font-weight:700;margin-bottom:6px;">AI提案作成</div>
-              <div style="font-size:12px;color:var(--text-sub);margin-bottom:16px;">Claude AIが物件条件に基づき<br>品目・数量・歩掛を提案します</div>
-              <button onclick="aiDraftEstimate()" class="btn btn-primary" style="font-size:14px;padding:10px 28px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;">AI提案作成（30秒〜1分）</button>
+        <div class="ai-layout">
+          <!-- 左: 入力済み条件 -->
+          <aside class="card ai-conditions" style="margin-bottom:0;">
+            <div class="card-header">
+              <span class="card-title">入力済み条件</span>
             </div>
-          </div>
-          <div class="card" style="margin-bottom:0;">
-            <div class="card-body" style="text-align:center;padding:28px 20px;">
-              <div style="font-size:32px;margin-bottom:8px;">🗄️</div>
-              <div style="font-size:15px;font-weight:700;margin-bottom:6px;">実績データから作成</div>
-              <div style="font-size:12px;color:var(--text-sub);margin-bottom:16px;">ナレッジDBの類似物件を<br>面積比スケーリングで流用</div>
-              <button onclick="autoCreateEstimate()" class="btn btn-secondary" style="font-size:14px;padding:10px 28px;">実績データから作成</button>
+            <div class="card-body" id="aiProjectSummary">
+              <div class="ai-cond-empty">物件情報を入力してからAI作成を実行してください。</div>
             </div>
-          </div>
-        </div>
-        <div id="aiResultsArea" style="display:none;">
-          <!-- AI結果がここにインライン表示される -->
-        </div>
-        <div id="aiGoToItems" style="display:none;text-align:center;padding:16px;">
-          <button onclick="navigate('items')" class="btn btn-primary" style="font-size:14px;padding:10px 32px;">明細調整へ進む →</button>
+          </aside>
+
+          <!-- 右: 作成方法 + ステータス -->
+          <section class="ai-main">
+            <div class="card" style="margin-bottom:0;">
+              <div class="card-header">
+                <div>
+                  <span class="card-title">作成方法を選択</span>
+                  <p style="font-size:12px;color:var(--text-sub);margin-top:2px;">AI生成か、実績データ参照か、どちらでも開始できます。</p>
+                </div>
+              </div>
+              <div class="card-body ai-methods">
+                <div class="ai-method ai-method-violet">
+                  <div class="ai-method-title">AIで見積作成</div>
+                  <p class="ai-method-desc">物件条件・用途・面積・工種プリセットから明細の初案を生成します。</p>
+                  <button id="aiDraftBtn" onclick="aiDraftEstimate()" class="ai-method-btn ai-method-btn-violet">AIで生成する</button>
+                </div>
+                <div class="ai-method">
+                  <div class="ai-method-title">実績データから作成</div>
+                  <p class="ai-method-desc">ナレッジDBから近い案件を参照し、たたき台を作成します。</p>
+                  <button onclick="autoCreateEstimate()" class="ai-method-btn ai-method-btn-outline">類似物件を選ぶ</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="card" id="aiStatusCard" style="margin-bottom:0;">
+              <div class="card-header">
+                <div>
+                  <span class="card-title">AI生成ステータス</span>
+                  <p style="font-size:12px;color:var(--text-sub);margin-top:2px;">生成中の状態と、明細への反映内容をここで明示します。</p>
+                </div>
+              </div>
+              <div class="card-body" id="aiResultsArea">
+                <div class="ai-status-placeholder">
+                  <div class="ai-status-icon">AI</div>
+                  <div class="ai-status-title">生成待機中</div>
+                  <div class="ai-status-desc">AI生成後は、工種ごとに明細案が作成され、次の「明細調整」画面へ引き継がれます。</div>
+                  <div class="ai-status-time">想定処理時間：30秒〜1分</div>
+                </div>
+              </div>
+            </div>
+
+            <div id="aiGoToItems" style="display:none;text-align:center;padding:16px;">
+              <button onclick="navigate('items')" class="btn btn-primary" style="font-size:14px;padding:10px 32px;">明細調整へ進む →</button>
+            </div>
+          </section>
         </div>
       </div>
 
